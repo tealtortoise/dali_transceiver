@@ -541,9 +541,9 @@ bool IRAM_ATTR input_timer_isr(gptimer_handle_t timer, const gptimer_alarm_event
         uint8_t secondbyte;
         secondbyte = (value & 0xff00) >> 8;
         firstbyte = (value & 0xff0000) >> 16;
-        if (times < 204) {
-            ESP_DRAM_LOGI(TAG, "Received Timer ISR first %d second %d , time (us) %llu", firstbyte, secondbyte, count - startcount);
-        }
+        // if (times < 204) {
+            // ESP_DRAM_LOGI(TAG, "Received Timer ISR first %d second %d , time (us) %llu", firstbyte, secondbyte, count - startcount);
+        // }
         gpio_set_intr_type(RX_GPIO, GPIO_INTR_POSEDGE);
         if (error != 0) {
             ESP_DRAM_LOGI(TAG, "Error %d", error);

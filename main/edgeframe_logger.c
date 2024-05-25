@@ -47,12 +47,10 @@ static volatile DRAM_ATTR uint64_t edgeframe_startcount;
 
 static volatile DRAM_ATTR edgeframe_isr_ctx passctx;
 
-static volatile DRAM_ATTR edgeframe_isr_ctx ctx;
+// static volatile DRAM_ATTR edgeframe_isr_ctx globalctx;
 
 #define EDGEFRAME_STATE_IDLE 0
 #define EDGEFRAME_STATE_LOGGING 1
-#define EDGEFRAME_STATE_ENDING 2
-#define EDGEFRAME_STATE_ENDED 3
 
 #define EDGETYPE_RISING 1
 #define EDGETYPE_FALLING 0
@@ -60,15 +58,20 @@ static volatile DRAM_ATTR edgeframe_isr_ctx ctx;
 
 bool IRAM_ATTR timeout_isr(gptimer_handle_t timer, const gptimer_alarm_event_data_t *edata, void *user_ctx) {
     BaseType_t high_task_awoken = pdFALSE;
-    gptimer_get_raw_count(ctx.timer, &edgeframe_tempcount);
-    // edgeframe_isr_ctx ctx = *(edgeframe_isr_ctx*) user_ctx;
+    edgeframe_isr_ctx ctx = *(edgeframe_isr_ctx*) user_ctx;
 
+    gptimer_get_raw_count(ctx.timer, &edgeframe_tempcount);
     // edgeframe_isr_ctx ctx = passctx;
     edgeframe_template.length = edgeframe_isr_numedges + 1;
+
+    // add stop condition
     edgeframe_template.edges[edgeframe_isr_numedges].edgetype = EDGETYPE_NONE;
     edgeframe_template.edges[edgeframe_isr_numedges].time = edgeframe_tempcount - edgeframe_startcount;
+
     xQueueSendFromISR(ctx.queue, &edgeframe_template, &high_task_awoken);
-    ESP_DRAM_LOGI(ETAG, "sent queue frame length %d", edgeframe_template.length);
+    // ESP_DRAM_LOGI(ETAG, "sent queue frame length %d", edgeframe_template.length);
+
+    // reset state machine
     edgeframe_template.length = 0;
     edgeframe_isr_numedges = 0;
     edgeframe_isr_state = EDGEFRAME_STATE_IDLE;
@@ -82,7 +85,7 @@ static const DRAM_ATTR gptimer_event_callbacks_t cbs__ = {
 };
 
 void IRAM_ATTR input_edgelog_isr(void *params) {
-    // edgeframe_isr_ctx* ctxp = (edgeframe_isr_ctx*) params;
+    edgeframe_isr_ctx ctx = *(edgeframe_isr_ctx*) params;
     // edgeframe_isr_ctx ctx = *ctxp;
     // return;
     // edgeframe_isr_ctx ctx = passctx;
@@ -98,7 +101,6 @@ void IRAM_ATTR input_edgelog_isr(void *params) {
             edgeframe_template.edges[0].edgetype = 1 - (uint8_t) ctx.invert;
             edgeframe_template.edges[0].time = 0;
             edgeframe_isr_numedges = 1;
-
             edgeframe_isr_state = EDGEFRAME_STATE_LOGGING;
             break;
         }
@@ -126,7 +128,7 @@ void IRAM_ATTR input_edgelog_isr(void *params) {
 }
 
 
-gptimer_handle_t configure_edgeframe_timer(){
+gptimer_handle_t configure_edgeframe_timer(edgeframe_isr_ctx *ctx){
     gptimer_handle_t gptimer = NULL;
     gptimer_config_t timer_config = {
         .clk_src = GPTIMER_CLK_SRC_DEFAULT,
@@ -138,7 +140,7 @@ gptimer_handle_t configure_edgeframe_timer(){
     gptimer_event_callbacks_t cbs = {
         .on_alarm = timeout_isr,
     };
-    ESP_ERROR_CHECK(gptimer_register_event_callbacks(gptimer, &cbs, NULL));
+    ESP_ERROR_CHECK(gptimer_register_event_callbacks(gptimer, &cbs, ctx));
 
     ESP_LOGI(ETAG, "Edgeframe timer Enable");
     ESP_ERROR_CHECK(gptimer_enable(gptimer));
@@ -148,11 +150,15 @@ gptimer_handle_t configure_edgeframe_timer(){
 QueueHandle_t start_edgelogger(uint8_t gpio, bool invert) {
     QueueHandle_t edgeframe_queue = xQueueCreate(4, sizeof(edgeframe));
     assert(edgeframe_queue);
-    ctx.gpio_pin = gpio;
-    ctx.queue = edgeframe_queue;
-    ctx.timer = configure_edgeframe_timer();
-    ctx.timeout = 1600;
-    ctx.invert = invert;
+    // size_t *ctxdram = heap_caps_malloc(sizeof(edgeframe_isr_ctx), MALLOC_CAP_INTERNAL);
+
+    edgeframe_isr_ctx *ctx = heap_caps_malloc(sizeof(edgeframe_isr_ctx), MALLOC_CAP_INTERNAL);
+
+    ctx->gpio_pin = gpio;
+    ctx->queue = edgeframe_queue;
+    ctx->timeout = 1600;
+    ctx->invert = invert;
+    ctx->timer = configure_edgeframe_timer(ctx);
 
     gpio_set_intr_type(gpio, GPIO_INTR_POSEDGE);
     gpio_pin_glitch_filter_config_t glitch_config = {
@@ -161,8 +167,8 @@ QueueHandle_t start_edgelogger(uint8_t gpio, bool invert) {
     };
     gpio_glitch_filter_handle_t glitch_filter;
     gpio_new_pin_glitch_filter(&glitch_config, &glitch_filter);
-    passctx = ctx;
-    ESP_ERROR_CHECK(gpio_isr_handler_add(gpio, input_edgelog_isr, NULL));
+
+    ESP_ERROR_CHECK(gpio_isr_handler_add(gpio, input_edgelog_isr, (edgeframe_isr_ctx*) ctx));
     return edgeframe_queue;
 }
 
