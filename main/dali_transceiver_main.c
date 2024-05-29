@@ -3,6 +3,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
+// #define LOG_LOCAL_LEVEL ESP_LOG_DEBUG
 #include "esp_log.h"
 #include "driver/rmt_tx.h"
 #include "driver/rmt_rx.h"
@@ -11,12 +12,15 @@
 #include "driver/gptimer.h"
 #include "driver/ledc.h"
 #include "edgeframe_logger.c"
+#include "dali_transmit.c"
+#include "0-10v.c"
 
 #define RESOLUTION_HZ     10000000
-#define PWM_RESOLUTION 10
 
 #define TX_GPIO       18
+#define STROBE_GPIO 17
 #define RX_GPIO       6
+#define PWM_010v_GPIO   15
 
 #define RECEIVE_DOUBLE_BIT_THRESHOLD 6000
 
@@ -25,6 +29,7 @@
 
 #define DALI_SECONDBYTE_COMMAND_RESET 0x20
 #define DALI_SECONDBYTE_COMMAND_OFF 0x00
+
 
 // Type of Addresses Byte Description
 // Short address 0AAAAAAS (AAAAAA = 0 to 63, S = 0/1)
@@ -185,15 +190,29 @@
 
 static const char *TAG = "example";
 
+// esp_log_level_set(TAG, ESP_LOG_DEBUG);
+
 void configure_gpio(){
-    gpio_config_t gpio_17config = {
+    gpio_config_t strobe_gpio_config = {
         .pin_bit_mask = 1ULL << 17,
         .mode = GPIO_MODE_OUTPUT,
         .pull_up_en = GPIO_PULLUP_DISABLE,
         .pull_down_en = GPIO_PULLDOWN_DISABLE,
         .intr_type = GPIO_INTR_DISABLE,
     };
-    ESP_ERROR_CHECK(gpio_config(&gpio_17config));
+    ESP_ERROR_CHECK(gpio_config(&strobe_gpio_config));
+    ESP_ERROR_CHECK(gpio_set_drive_capability(STROBE_GPIO, GPIO_DRIVE_CAP_3));
+
+    gpio_config_t gpio_txconfig = {
+        .pin_bit_mask = 1ULL << TX_GPIO,
+        .mode = GPIO_MODE_OUTPUT,
+        .pull_up_en = GPIO_PULLUP_DISABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .intr_type = GPIO_INTR_DISABLE,
+    };
+    ESP_ERROR_CHECK(gpio_config(&gpio_txconfig));
+    ESP_ERROR_CHECK(gpio_set_drive_capability(TX_GPIO, GPIO_DRIVE_CAP_3));
+    gpio_set_level(TX_GPIO, 0);
 
     gpio_config_t gpio_6config = {
         .pin_bit_mask = 1ULL << RX_GPIO,
@@ -208,21 +227,17 @@ void configure_gpio(){
 
 static volatile uint8_t state = 0;
 
-bool IRAM_ATTR timer_group0_isr(gptimer_handle_t timer, const gptimer_alarm_event_data_t *edata, void *user_ctx){
-    
+bool IRAM_ATTR strobetimer_isr(gptimer_handle_t timer, const gptimer_alarm_event_data_t *edata, void *user_ctx){
     if (state) {
-        // gpio_set_level(17, 0);
         state = 0;
     } else {
-        // gpio_set_level(17, 1);
         state = 1;
     }
-    
-    gpio_set_level(17, state);
+    gpio_set_level(STROBE_GPIO, state);
     return false;
 }
 
-gptimer_handle_t configure_timer(){
+gptimer_handle_t configure_strobetimer(){
     gptimer_handle_t gptimer = NULL;
     gptimer_config_t timer_config = {
         .clk_src = GPTIMER_CLK_SRC_DEFAULT,
@@ -232,14 +247,14 @@ gptimer_handle_t configure_timer(){
     ESP_ERROR_CHECK(gptimer_new_timer(&timer_config, &gptimer));
 
     gptimer_alarm_config_t alarm_config = {
-        .alarm_count = 10000000, // 2s
+        .alarm_count = 8000000, // 2s
         // .alarm_count = 0x7ff0, // 2s
         .reload_count = 0,
         .flags.auto_reload_on_alarm = true,
 
     };
     gptimer_event_callbacks_t cbs = {
-        .on_alarm = timer_group0_isr,
+        .on_alarm = strobetimer_isr,
     };
     ESP_ERROR_CHECK(gptimer_register_event_callbacks(gptimer, &cbs, NULL));
     ESP_ERROR_CHECK(gptimer_enable(gptimer));
@@ -248,36 +263,6 @@ gptimer_handle_t configure_timer(){
     return gptimer;
 }
 
-void configure_ledc(){
-    ledc_timer_config_t ledc_timer = {
-        .duty_resolution = PWM_RESOLUTION, // resolution of PWM duty
-        .freq_hz = 10000,                      // frequency of PWM signal
-        .speed_mode = LEDC_LOW_SPEED_MODE,   // timer mode
-        .timer_num = LEDC_TIMER_0,             // timer index
-        // .clk_cfg = LEDC_USE_RC_FAST_CLK,             // Auto select the source clock
-    };
-
-    ESP_ERROR_CHECK(ledc_timer_config(&ledc_timer));
-
-    ledc_channel_config_t ledc_channel = {
-        .channel    = LEDC_CHANNEL_0,
-        .duty       = 1 << (PWM_RESOLUTION - 2),
-        .intr_type = LEDC_INTR_DISABLE,
-        .gpio_num   = 15,
-        .speed_mode = LEDC_LOW_SPEED_MODE,
-        // .hpoint     = 0,
-        .timer_sel  = LEDC_TIMER_0
-    };
-    ESP_ERROR_CHECK(ledc_channel_config(&ledc_channel));
-}
-
-// void set_gpio_task(void *pvParameter){
-//     while (1){
-//         gpio_set_level(17, state);
-//         ESP_LOGI(TAG, "gpio17 %d", state);
-//         vTaskDelay(pdMS_TO_TICKS(500));
-//     }
-// }
 
 static DRAM_ATTR rmt_channel_handle_t rx_channel;
 
@@ -594,6 +579,55 @@ gptimer_handle_t configure_tart_timer(gptimer_handle_t strobetimer){
     return gptimer;
 }
 
+rmt_transmit_config_t configure_rmt_tx(rmt_channel_handle_t *tx_channel, rmt_encoder_handle_t *dali_encoder) {
+
+    ESP_LOGI(TAG, "create RMT TX channel");
+    rmt_tx_channel_config_t tx_channel_cfg = {
+        // .clk_src = RMT_CLK_SRC_RC_FAST,
+        .clk_src = RMT_CLK_SRC_DEFAULT,
+        .flags = {
+            .invert_out = 0,
+            .with_dma = 0,
+            .io_loop_back = 0,
+            .io_od_mode = 0,   // open drain mode is disabled
+        },
+        .resolution_hz = RESOLUTION_HZ,
+        .mem_block_symbols = 64, // amount of RMT symbols that the channel can store at a time
+        .trans_queue_depth = 4,  // number of transactions that allowed to pending in the background, this example won't queue multiple transactions, so queue depth > 1 is sufficient
+        .gpio_num = TX_GPIO,
+    };
+    // rmt_channel_handle_t tx_channel = NULL;
+    ESP_ERROR_CHECK(rmt_new_tx_channel(&tx_channel_cfg, tx_channel));
+
+    rmt_transmit_config_t transmit_config = {
+        .loop_count = 0, // no loop
+        .flags = {
+            .eot_level = 0, // send EOT signal at the end of sending a frame
+            .queue_nonblocking = 0, // block waiting for the transmission to be done
+        },
+    };
+
+    ESP_LOGI(TAG, "install IR dali encoder");
+    dali_encoder_config_t dali_encoder_cfg = {
+        .resolution = RESOLUTION_HZ,
+    };
+    // rmt_encoder_handle_t dali_encoder = NULL;
+    ESP_ERROR_CHECK(rmt_new_dali_encoder(&dali_encoder_cfg, dali_encoder));
+
+    rmt_tx_event_callbacks_t txcbs = {
+        .on_trans_done = example_rmt_tx_done_callback,
+    };
+
+    ESP_ERROR_CHECK(rmt_tx_register_event_callbacks(*tx_channel, &txcbs, rx_channel));
+
+    ESP_LOGI(TAG, "enable RMT TX channel");
+
+    ESP_ERROR_CHECK(rmt_enable(*tx_channel));
+    dali_forward_frame_t frame = {.firstbyte = 0, .secondbyte = 0};
+    // ESP_ERROR_CHECK(rmt_transmit(*tx_channel, *dali_encoder, &frame, sizeof(frame), &transmit_config));
+    return transmit_config;
+}
+
 #define EDGEDECODE_STATE_INIT 0
 #define EDGEDECODE_STATE_CHECKSTART 1
 #define EDGEDECODE_STATE_BITREADY 2
@@ -612,6 +646,7 @@ bool check_if_full_period(uint16_t time) {
 }
 
 void edgeframe_queue_log_task(QueueHandle_t *queue) {
+    bool debug = false;
     edgeframe receivedframe;
     while (1) {
         bool received = xQueueReceive(*queue, &receivedframe, 101);
@@ -620,20 +655,27 @@ void edgeframe_queue_log_task(QueueHandle_t *queue) {
             uint8_t state = 0;
             uint32_t output = 0;
             uint8_t output_bit_pos = 23;
+            uint16_t first_bit_time = 99999;
+            uint16_t baud_time=0;
+            uint16_t baud_counter_bits_count = 0;
+            uint16_t baud_counter_bits = 0;
             edge_t edge;
             uint16_t last_valid_bit_time;
             uint16_t last_valid_bit_elapsed;
             uint16_t last_edge_elapsed = 0;
             bool error = false;
             for (uint8_t i = 0; i<receivedframe.length; i++) {
-                ESP_LOGI(TAG, "Level %d at %u us (%u us) state %d",
-                    receivedframe.edges[i].edgetype,
-                    receivedframe.edges[i].time,
-                    receivedframe.edges[i].time - last_edge_elapsed,
-                    state);
+                if(debug) {
+                    ESP_LOGI(TAG, "Level %d at %u us (%u us) state %d",
+                        receivedframe.edges[i].edgetype,
+                        receivedframe.edges[i].time,
+                        receivedframe.edges[i].time - last_edge_elapsed,
+                        state);
+                }
                 last_edge_elapsed = receivedframe.edges[i].time;
                 if (error || state == EDGEDECODE_STATE_END) break;
                 edge = receivedframe.edges[i];
+                if (edge.edgetype == EDGETYPE_RISING) baud_time = edge.time - first_bit_time;
                 switch (state) {
                     case EDGEDECODE_STATE_INIT: {
                         state = EDGEDECODE_STATE_CHECKSTART;
@@ -643,6 +685,8 @@ void edgeframe_queue_log_task(QueueHandle_t *queue) {
                         if (edge.edgetype == EDGETYPE_RISING && check_if_half_period(edge.time)) {
                             state = EDGEDECODE_STATE_BITREADY;
                             last_valid_bit_time = edge.time;
+
+                            first_bit_time = edge.time;
                         }
                         else
                         {
@@ -659,29 +703,36 @@ void edgeframe_queue_log_task(QueueHandle_t *queue) {
                         }
                         last_valid_bit_elapsed = edge.time - last_valid_bit_time;
                         if (check_if_half_period(last_valid_bit_elapsed)) {
-                            ESP_LOGI(TAG, "...Half bit %u", i);
+                            if (debug) ESP_LOGD(TAG, "...Half bit %u", i);
                             // do nothing
                         }
                         else if (check_if_full_period(last_valid_bit_elapsed))
                         {
-                            ESP_LOGI(TAG, "...Full bit %u edge %d bitpos %d", i, edge.edgetype, output_bit_pos);
+                            if (debug) ESP_LOGD(TAG, "...Full bit %u edge %d bitpos %d", i, edge.edgetype, output_bit_pos);
                             if (edge.edgetype == EDGETYPE_RISING) {
                                 output = output | (1 << output_bit_pos);
                             }
                             last_valid_bit_time = edge.time;
                             output_bit_pos -= 1;
                         }
+                        else if (last_valid_bit_elapsed < 40) {
+                            // assume glitch
+                        }
                         else
                         {
                             ESP_LOGE(TAG, "No bit error %u elapsed %u", i, last_valid_bit_elapsed);
-                            error = true;
+                            // error = true;
                         }
+
                         break;
                     }
                 }
             }
-            ESP_LOGI(TAG, "Final output %lu", output);
+            int baud_bits_sub = (output >> (output_bit_pos+1)) & 1 ? 0 : 1;
+            ESP_LOGD(TAG, "Final output %lu", output);
             ESP_LOGI(TAG, "Final output  >> 8 %lu", output >> 8);
+            if (baud_time) ESP_LOGI(TAG, "Baud rate %u", 500000 * (46 - output_bit_pos * 2 + baud_bits_sub) / baud_time);
+            // if (baud_time) ESP_LOGI(TAG, "Baud rate %u", 1000000 * (baud_counter_bits) / baud_time);
             uint8_t firstbyte = (output & 0xFF0000) >> 16;
             uint8_t secondbyte = (output & 0xFF00) >> 8;
             ESP_LOGI(TAG, "First %d, second %d", firstbyte, secondbyte);
@@ -697,6 +748,7 @@ void edgeframe_queue_log_task(QueueHandle_t *queue) {
             }
             bitstring[16 + spaceadd] = 0;
             ESP_LOGI(TAG, "Bitstring %s", bitstring);
+            ESP_LOGI(TAG, "");
                 // ESP_LOGI(TAG, "Level %d after %u us",
                     // receivedframe.edges[i].edgetype,
                     // receivedframe.edges[i].time);
@@ -720,8 +772,8 @@ void app_main(void)
     // rmt_channel_handle_t rx_channel = NULL;
     // ESP_ERROR_CHECK(rmt_new_rx_channel(&rx_channel_cfg, &rx_channel));
     //
-    QueueHandle_t receive_queue = xQueueCreate(3, sizeof(receive_event_t));
-    assert(receive_queue);
+    // QueueHandle_t receive_queue = xQueueCreate(3, sizeof(receive_event_t));
+    // assert(receive_queue);
 
     // rmt_rx_event_callbacks_t cbs = {
     //     .on_recv_done = example_rmt_rx_done_callback,
@@ -735,86 +787,31 @@ void app_main(void)
 
 
     // ESP_ERROR_CHECK(rmt_receive(rx_channel, raw_symbols, sizeof(raw_symbols), &receive_config));
+    // ESP_ERROR_CHECK(rmt_enable(rx_channel));
 
     configure_gpio();
 
-    gptimer_handle_t strobetimer = configure_timer();
+    gptimer_handle_t strobetimer = configure_strobetimer();
     ESP_ERROR_CHECK(gptimer_start(strobetimer));
-    configure_ledc();
-
+    ledc_channel_t pwm0_10v_channel1;
+    setup_pwm_0_10v();
+    ESP_ERROR_CHECK(configure_pwm_0_10v(PWM_010v_GPIO, 1<<14, &pwm0_10v_channel1));
+    while (1){
+        for (int i=0; i<255; i++) {
+            update_0_10v_level(pwm0_10v_channel1, i *i);
+            vTaskDelay(pdMS_TO_TICKS(20));
+        }
+    }
     int level;
     uint64_t strobecount;
 
-    level = gpio_get_level(RX_GPIO);
-    gptimer_get_raw_count(strobetimer, &strobecount);
-    ESP_LOGI(TAG, "loop log %lu, %u: count %llu", times, level, strobecount);
-
-    gptimer_handle_t tart_timer = configure_tart_timer(strobetimer);
-    // ESP_ERROR_CHECK(gptimer_start(tart_timer));
-    vTaskDelay(2);
-    tarttimerh = tart_timer;
-    uint64_t count;
-    ESP_ERROR_CHECK(gptimer_get_raw_count(tart_timer, &count));
-    ESP_LOGI(TAG, "raw count %llu", count);
-    // gptimer_enable(tart_timer);
-    // ESP_LOGI(TAG, "Tart timer %lu", tart_timer);
+    rmt_channel_handle_t tx_channel;
+    rmt_encoder_handle_t dali_encoder;
+    rmt_transmit_config_t transmit_config = configure_rmt_tx(&tx_channel, &dali_encoder);
 
     ESP_ERROR_CHECK(gpio_install_isr_service(0));
     QueueHandle_t edgeframe_queue = start_edgelogger(RX_GPIO, true);
-    // gpio_set_intr_type(RX_GPIO, GPIO_INTR_POSEDGE);
-    // gpio_set_i
-    // ESP_ERROR_CHECK(gpio_isr_handler_add(RX_GPIO, input_isr, tart_timer));
-
-
-
-    level = gpio_get_level(RX_GPIO);
-    gptimer_get_raw_count(strobetimer, &strobecount);
-    ESP_LOGI(TAG, "loop log %lu, %u: count %llu", times, level, strobecount);
-
-
-    ESP_LOGI(TAG, "create RMT TX channel");
-    rmt_tx_channel_config_t tx_channel_cfg = {
-        // .clk_src = RMT_CLK_SRC_RC_FAST,
-        .clk_src = RMT_CLK_SRC_DEFAULT,
-        .flags = {
-            .invert_out = 1,
-            .with_dma = 0,
-            .io_loop_back = 0,
-            .io_od_mode = 0,   // open drain mode is disabled
-        },
-        .resolution_hz = RESOLUTION_HZ,
-        .mem_block_symbols = 64, // amount of RMT symbols that the channel can store at a time
-        .trans_queue_depth = 4,  // number of transactions that allowed to pending in the background, this example won't queue multiple transactions, so queue depth > 1 is sufficient
-        .gpio_num = TX_GPIO,
-    };
-    rmt_channel_handle_t tx_channel = NULL;
-    ESP_ERROR_CHECK(rmt_new_tx_channel(&tx_channel_cfg, &tx_channel));
-
-    rmt_transmit_config_t transmit_config = {
-        .loop_count = 0, // no loop
-        .flags = {
-            .eot_level = 1, // send EOT signal at the end of sending a frame
-            .queue_nonblocking = 0, // block waiting for the transmission to be done
-        },
-    };
-
-    ESP_LOGI(TAG, "install IR dali encoder");
-    dali_encoder_config_t dali_encoder_cfg = {
-        .resolution = RESOLUTION_HZ,
-    };
-    rmt_encoder_handle_t dali_encoder = NULL;
-    ESP_ERROR_CHECK(rmt_new_dali_encoder(&dali_encoder_cfg, &dali_encoder));
-
-    rmt_tx_event_callbacks_t txcbs = {
-        .on_trans_done = example_rmt_tx_done_callback,
-    };
-
-    ESP_ERROR_CHECK(rmt_tx_register_event_callbacks(tx_channel, &txcbs, rx_channel));
-
-    ESP_LOGI(TAG, "enable RMT TX channel");
-
-    ESP_ERROR_CHECK(rmt_enable(tx_channel));
-    // ESP_ERROR_CHECK(rmt_enable(rx_channel));
+    xTaskCreate(edgeframe_queue_log_task, "edgeframe_queue_log_task", 9128, &edgeframe_queue, 1, NULL);
 
     level = gpio_get_level(RX_GPIO);
     gptimer_get_raw_count(strobetimer, &strobecount);
@@ -855,26 +852,113 @@ void app_main(void)
         .firstbyte = 0xFF, // 76
         .secondbyte = 0xFF, //156
     };
+    dali_forward_frame_t queryshortaddress = {
+        .firstbyte = 0b10111011, // 76
+        .secondbyte = 0x00, //156
+    };
+    dali_forward_frame_t query_dtr = {
+        .firstbyte = DALI_FIRSTBYTE_BROADCAST_COMMAND, // 76
+        .secondbyte = 0b10011000, //156
+    };
+    dali_forward_frame_t query_dtr_49 = {
+        .firstbyte = (49 << 1) + 1,
+        .secondbyte = 0b10011000,
+    };
+    dali_forward_frame_t storedtr0asshortaddress = {
+        //YAAA AAA1 1000 0000
+        .firstbyte = DALI_FIRSTBYTE_BROADCAST_COMMAND,
+        .secondbyte = 0b10000000,
+    };
 
+
+
+    // // gpio_set_level(TX_GPIO, 0);
+    // ESP_ERROR_CHECK(rmt_transmit(tx_channel, dali_encoder, &set_level_template, sizeof(queryshortaddress), &transmit_config));
+    // vTaskDelay(pdMS_TO_TICKS(300));
+    // ESP_ERROR_CHECK(rmt_transmit(tx_channel, dali_encoder, &set_level_template, sizeof(queryshortaddress), &transmit_config));
+    // vTaskDelay(pdMS_TO_TICKS(300));
+    // ESP_ERROR_CHECK(rmt_transmit(tx_channel, dali_encoder, &set_level_template, sizeof(queryshortaddress), &transmit_config));
+    // while (1) {
+    // vTaskDelay(pdMS_TO_TICKS(300));
+    // }
     // xTaskCreate((TaskFunction_t *) rmt_queue_log_task, "rmt_queue_log_task", 9128, &receive_queue, 1, NULL);
-    xTaskCreate(edgeframe_queue_log_task, "edgeframe_queue_log_task", 9128, &edgeframe_queue, 1, NULL);
     // xTaskCreate((TaskFunction_t *) add_dummy_queue_items, "add_dummy_queue_items", 2048, &receive_queue, 2, NULL);
-
-
-    // uint64_t count;
-    // ESP_ERROR_CHECK(gptimer_get_raw_count(tart_timer, &count));
-    // ESP_LOGI(TAG, "tart count %llu", count);
-    // passs conf = {
-    //     .rc = &receive_config,
-    //     .rs = raw_symbols,
-    //     .rxc = rx_channel,
-    // };
-    // rmt_receive(conf.rxc, conf.rs, sizeof(conf.rs), conf.rc);
 
     level = gpio_get_level(RX_GPIO);
     gptimer_get_raw_count(strobetimer, &strobecount);
     ESP_LOGI(TAG, "loop log %lu, %u: count %llu", times, level, strobecount);
 
+    set_level_template.firstbyte = (49 << 1);
+    set_level_template.secondbyte = 0;
+    ESP_LOGI(TAG, "Set address 49 to level %d", 0);
+    ESP_ERROR_CHECK(rmt_transmit(tx_channel, dali_encoder, &set_level_template, sizeof(queryshortaddress), &transmit_config));
+    vTaskDelay(pdMS_TO_TICKS(600));
+    set_level_template.firstbyte = (49 << 1);
+    set_level_template.secondbyte = 0;
+    ESP_LOGI(TAG, "Set address 49 to level %d", 0);
+    ESP_ERROR_CHECK(rmt_transmit(tx_channel, dali_encoder, &set_level_template, sizeof(queryshortaddress), &transmit_config));
+    vTaskDelay(pdMS_TO_TICKS(600));
+    while (1) {
+        // ESP_LOGI(TAG, "Set dtr0 %d", 49);
+        // set_dtr0.secondbyte = (49 << 1) + 1;
+        // ESP_ERROR_CHECK(rmt_transmit(tx_channel, dali_encoder, &set_dtr0, sizeof(queryshortaddress), &transmit_config));
+        // vTaskDelay(pdMS_TO_TICKS(1000));
+        //
+        // ESP_LOGI(TAG, "Query dtr");
+        // ESP_ERROR_CHECK(rmt_transmit(tx_channel, dali_encoder, &query_dtr, sizeof(queryshortaddress), &transmit_config));
+        // vTaskDelay(pdMS_TO_TICKS(1000));
+        //
+        // ESP_LOGI(TAG, "set dtr0 as short address twice %d", 49);
+        // ESP_ERROR_CHECK(rmt_transmit(tx_channel, dali_encoder, &storedtr0asshortaddress, sizeof(queryshortaddress), &transmit_config));
+        // vTaskDelay(pdMS_TO_TICKS(20));
+        // ESP_ERROR_CHECK(rmt_transmit(tx_channel, dali_encoder, &storedtr0asshortaddress, sizeof(queryshortaddress), &transmit_config));
+        // vTaskDelay(pdMS_TO_TICKS(1000));
+        //
+        // ESP_LOGI(TAG, "Query dtr 49");
+        // ESP_ERROR_CHECK(rmt_transmit(tx_channel, dali_encoder, &query_dtr_49, sizeof(queryshortaddress), &transmit_config));
+        // vTaskDelay(pdMS_TO_TICKS(1000));
+        //
+        // set_level_template.firstbyte = DALI_FIRSTBYTE_BROADCAST_LEVEL;
+        // set_level_template.secondbyte = 10;
+        // ESP_LOGI(TAG, "Set level %d", 10);
+        // ESP_ERROR_CHECK(rmt_transmit(tx_channel, dali_encoder, &set_level_template, sizeof(queryshortaddress), &transmit_config));
+        // vTaskDelay(pdMS_TO_TICKS(1000));
+        set_level_template.firstbyte = (49 << 1) + 1;
+        set_level_template.firstbyte = DALI_FIRSTBYTE_BROADCAST_LEVEL;
+        set_level_template.secondbyte = 100;
+        ESP_LOGI(TAG, "Set address all to level %d", 100);
+        ESP_ERROR_CHECK(rmt_transmit(tx_channel, dali_encoder, &set_level_template, sizeof(queryshortaddress), &transmit_config));
+        vTaskDelay(pdMS_TO_TICKS(300));
+
+        for (int i = 0; i< 64; i++) {
+
+            set_level_template.firstbyte = (i << 1);
+            // set_level_template.firstbyte = DALI_FIRSTBYTE_BROADCAST_LEVEL;
+            set_level_template.secondbyte = 1;
+            ESP_LOGI(TAG, "Set address %d to level 1", i);
+            ESP_ERROR_CHECK(rmt_transmit(tx_channel, dali_encoder, &set_level_template, sizeof(queryshortaddress), &transmit_config));
+            vTaskDelay(pdMS_TO_TICKS(300));
+        }
+
+        for (int i=0; i<150;i=i+20) {
+            set_level_template.firstbyte = (49 << 1) + 1;
+            set_level_template.firstbyte = DALI_FIRSTBYTE_BROADCAST_LEVEL;
+            set_level_template.secondbyte = i;
+            ESP_LOGI(TAG, "Set address 49 to level %d", i);
+            ESP_ERROR_CHECK(rmt_transmit(tx_channel, dali_encoder, &set_level_template, sizeof(queryshortaddress), &transmit_config));
+            vTaskDelay(pdMS_TO_TICKS(300));
+
+            set_level_template.firstbyte = (39 << 1);
+            set_level_template.secondbyte = 3;
+            ESP_LOGI(TAG, "Set address 39 to level %d", 3);
+            ESP_ERROR_CHECK(rmt_transmit(tx_channel, dali_encoder, &set_level_template, sizeof(queryshortaddress), &transmit_config));
+            vTaskDelay(pdMS_TO_TICKS(400));
+
+            ESP_LOGI(TAG, "Query level");
+            ESP_ERROR_CHECK(rmt_transmit(tx_channel, dali_encoder, &querylevel, sizeof(test), &transmit_config));
+            vTaskDelay(pdMS_TO_TICKS(400));
+        }
+    }
     while (1) {
         for (int i=0; i<7;i=i+1){
 
@@ -889,8 +973,6 @@ void app_main(void)
             // gptimer_get_raw_count(strobetimer, &strobecount);
             // ESP_LOGI(TAG, "loop log %lu, %u: count %llu", times, level, strobecount);
             vTaskDelay(pdMS_TO_TICKS(1000));
-            ESP_ERROR_CHECK(ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, i << (PWM_RESOLUTION - 8)));
-            ESP_ERROR_CHECK(ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0));
             // ESP_ERROR_CHECK(rmt_disable(rx_channel));
 
             // rmt_receive(rx_channel, raw_symbols, sizeof(raw_symbols), &receive_config);

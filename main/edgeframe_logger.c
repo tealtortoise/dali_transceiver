@@ -85,12 +85,9 @@ static const DRAM_ATTR gptimer_event_callbacks_t cbs__ = {
 };
 
 void IRAM_ATTR input_edgelog_isr(void *params) {
+
     edgeframe_isr_ctx ctx = *(edgeframe_isr_ctx*) params;
-    // edgeframe_isr_ctx ctx = *ctxp;
-    // return;
-    // edgeframe_isr_ctx ctx = passctx;
-    // ESP_DRAM_LOGI(ETAG, "num %d, gpio %d", edgeframe_isr_numedges, ctx.gpio_pin);
-    // return;
+    gptimer_get_raw_count(ctx.timer, &edgeframe_tempcount);
     switch (edgeframe_isr_state){
         case EDGEFRAME_STATE_IDLE: {
             // gptimer_get_raw_count(ctx.timer, &edgeframe_startcount);
@@ -109,7 +106,6 @@ void IRAM_ATTR input_edgelog_isr(void *params) {
                 // too long
                 break;
             }
-            gptimer_get_raw_count(ctx.timer, &edgeframe_tempcount);
             int level = gpio_get_level(ctx.gpio_pin);
             edgeframe_template.edges[edgeframe_isr_numedges].edgetype = ctx.invert ? 1 - level : level;
             edgeframe_template.edges[edgeframe_isr_numedges].time = edgeframe_tempcount;// - edgeframe_startcount;

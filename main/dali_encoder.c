@@ -9,7 +9,7 @@
 
 // HALF_BIT_COUNT,
 // #define HALF_BIT_TIME_US 0xfff0ULL / 100000 * 1000000 // 833us
-#define HALF_BIT_COUNT 4166 // 100 ns units
+#define HALF_BIT_COUNT 4167 // 100 ns units
 // #define HALF_BIT_COUNT 0x7ff0 // 100 ns units
 // #define HALF_BIT_COUNT_B 0x0a00
 
@@ -116,29 +116,29 @@ esp_err_t rmt_new_dali_encoder(const dali_encoder_config_t *config, rmt_encoder_
 
     // construct the leading code and ending code with RMT symbol format
     dali_encoder->dali_leading_symbol = (rmt_symbol_word_t) {
-        .level0 = 0,
+        .level0 = 1,
         .duration0 = HALF_BIT_COUNT,
-        .level1 = 1,
+        .level1 = 0,
         .duration1 = HALF_BIT_COUNT
     };
     dali_encoder->dali_ending_symbol = (rmt_symbol_word_t) {
-        .level0 = 1,
+        .level0 = 0,
         .duration0 = HALF_BIT_COUNT * 2,
-        .level1 = 1,
+        .level1 = 0,
         .duration1 = HALF_BIT_COUNT * 2,
     };
 
     rmt_bytes_encoder_config_t bytes_encoder_config = {
         .bit0 = {
-            .level0 = 1,
-            .duration0 = HALF_BIT_COUNT,
-            .level1 = 0,
-            .duration1 = HALF_BIT_COUNT,
-        },
-        .bit1 = {
             .level0 = 0,
             .duration0 = HALF_BIT_COUNT,
             .level1 = 1,
+            .duration1 = HALF_BIT_COUNT,
+        },
+        .bit1 = {
+            .level0 = 1,
+            .duration0 = HALF_BIT_COUNT,
+            .level1 = 0,
             .duration1 = HALF_BIT_COUNT,
         },
         .flags = {
