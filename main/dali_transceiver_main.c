@@ -3,26 +3,27 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
-// #define LOG_LOCAL_LEVEL ESP_LOG_DEBUG
 #include "esp_log.h"
 #include "driver/rmt_tx.h"
 #include "driver/rmt_rx.h"
-#include "dali_encoder.h"
 #include "driver/gpio.h"
 #include "driver/gptimer.h"
 #include "driver/ledc.h"
 #include "edgeframe_logger.c"
 #include "dali_transmit.c"
 #include "0-10v.c"
+#include "dali_edgeframe_parser.c"
+#include "dali_rmt_receiver.c"
+#include "wifi.c"
+#include "http_server.c"
 
 #define RESOLUTION_HZ     10000000
 
 #define TX_GPIO       18
 #define STROBE_GPIO 17
-#define RX_GPIO       6
+#define RX_GPIO       18
 #define PWM_010v_GPIO   15
 
-#define RECEIVE_DOUBLE_BIT_THRESHOLD 6000
 
 #define DALI_FIRSTBYTE_BROADCAST_LEVEL 0b11111110
 #define DALI_FIRSTBYTE_BROADCAST_COMMAND 0b11111111
@@ -274,179 +275,11 @@ static DRAM_ATTR rmt_receive_config_t receive_config = {
 static DRAM_ATTR rmt_symbol_word_t raw_symbols[128];
 static DRAM_ATTR rmt_rx_done_event_data_t rx_data;
 
-
-void rmt_queue_log_task(QueueHandle_t *queue){
-
-    rmt_rx_done_event_data_t receiveData;
-    receive_event_t receivestruct;
-    uint64_t manchester_word;
-    uint8_t manchester_bits[64];
-    uint32_t final_word;
-    uint8_t bit_position;
-    uint8_t firstbyte;
-    uint8_t secondbyte;
-    bool a;
-    bool b;
-    while (1) {
-
-        bool received = xQueueReceive(*queue, &receivestruct, 101);
-
-        if (received) {
-            ESP_LOGI(TAG, "QUeue receive %lu", receivestruct.num);
-            // receiveData = *receivestruct.event_data;
-            for (int round = 1;round <2; round++) {
-                // rmt_receive(rx_channel, raw_symbols, sizeof(raw_symbols), &receive_config);
-                manchester_word = 0;
-                for (int i=0; i< 64; i++) {
-                    manchester_bits[i] = 0;
-                }
-                bit_position = 0;
-                if (round > 0) {
-                    ESP_LOGI(TAG, "Received RMT message...");
-                }
-                rmt_symbol_word_t *symbols = receivestruct.received_symbols;
-                for (int i = 0; i < receivestruct.num_symbols; i++) {
-                    rmt_symbol_word_t symbol = symbols[i];
-                    if (round > 0) {
-                        ESP_LOGI(TAG, "   Received RMT frame %u: %u, %u; %u", symbol.level0,
-                            symbol.duration0,
-                            symbol.level1,
-                            symbol.duration1);
-                    }
-                    manchester_word = manchester_word | ((uint64_t)symbol.level0 << bit_position);
-                    manchester_bits[bit_position] = symbol.level0;
-                    bit_position += 1;
-                    if (symbol.duration0 > RECEIVE_DOUBLE_BIT_THRESHOLD) {
-                        manchester_word = manchester_word | ((uint64_t)symbol.level0 << bit_position);
-                        manchester_bits[bit_position] = symbol.level0;
-                        bit_position += 1;
-                    }
-                    manchester_word = manchester_word | ((uint64_t)symbol.level1 << bit_position);
-                    manchester_bits[bit_position] = symbol.level1;
-                    bit_position += 1;
-                    if (symbol.duration1 > RECEIVE_DOUBLE_BIT_THRESHOLD) {
-                        manchester_word = manchester_word | ((uint64_t)symbol.level1 << bit_position);
-                        manchester_bits[bit_position] = symbol.level1;
-                        bit_position += 1;
-                    }
-
-                }
-                // ESP_LOGI(TAG, "End RMT Frames %llu", manchester_word);
-                // ESP_LOG_BUFFER_HEX(TAG, &manchester_word, 8);
-                // for (int i=0; i<64; i++) {
-                // ESP_LOGI(TAG, "received bit %u: %u", i, manchester_bits[i]);
-                // }
-                final_word = 0;
-                a = 0;
-                b = 0;
-                for (uint8_t i = 0; i <16; i += 1) {
-                    a = manchester_bits[i * 2 + 1];
-                    b = manchester_bits[i * 2 + 2];
-                    // ESP_LOGI(TAG, "i, a, b: %u, %u, %u", i, a, b);
-                    if (a != b) {
-                        final_word = final_word | (a << (15-i));
-                    }
-                    else {
-                        ESP_LOGE(TAG, "Bit error");
-                    }
-                }
-                secondbyte = final_word & 0xFF;
-                firstbyte = (final_word & 0xFF00) >> 8;
-                if (round > 0) {
-                    ESP_LOGI(TAG, "Received first byte %u", firstbyte);
-                    ESP_LOGI(TAG, "Received second byte %u", secondbyte);
-                }
-                if (firstbyte == receivestruct.outgoing.firstbyte && secondbyte == receivestruct.outgoing.secondbyte) {
-                    ESP_LOGI(TAG, "First byte matches");
-                    ESP_LOGI(TAG, "Second byte matches");
-                    break;
-                }
-            }
-        }
-
-    }
-}
-
-void add_dummy_queue_items(QueueHandle_t *queue) {
-    rmt_symbol_word_t symbol = {
-        .level0 = 0,
-        .duration0 = 123,
-        .level1 = 1,
-        .duration1 = 456
-    };
-    rmt_symbol_word_t symbol2 = {
-        .level0 = 1,
-        .duration0 = 321,
-        .level1 = 0,
-        .duration1 = 9870
-    };
-    rmt_symbol_word_t dummy_symbols[] = {symbol, symbol, symbol2};
-    rmt_rx_done_event_data_t sendData = {
-        .received_symbols = dummy_symbols,
-        .num_symbols = 3,
-    };
-
-    while (1) {
-        vTaskDelay(100);
-        vTaskDelay(pdMS_TO_TICKS(1000));
-        BaseType_t result = xQueueSend(*queue,(void *) &sendData, portMAX_DELAY);
-        if (result != pdTRUE) {
-            ESP_LOGI(TAG, "Queue send Failed");
-        }
-    }
-
-}
-
+//
+//
+//
 static int DRAM_ATTR rxdone = 0;
 static int DRAM_ATTR txdone = 0;
-
-
-
-typedef struct {
-    rmt_channel_handle_t rxc;
-    rmt_symbol_word_t* rs[128];
-    rmt_receive_config_t* rc;
-    QueueHandle_t q;
-    dali_forward_frame_t outgoing;
-} passs;
-
-static bool IRAM_ATTR example_rmt_rx_done_callback(rmt_channel_handle_t channel, const rmt_rx_done_event_data_t *edata, void *user_data)
-{
-    BaseType_t high_task_wakeup = pdFALSE;
-    passs conf = *(passs*) user_data;
-    // QueueHandle_t receive_queue = (QueueHandle_t)user_data;
-
-    // send the received RMT symbols to the parser task
-    rxdone += 1;
-
-    receive_event_t send_data = {
-        .received_symbols = edata->received_symbols,
-        .num_symbols = edata->num_symbols,
-        .outgoing = conf.outgoing,
-        .num = rxdone
-    };
-
-    xQueueSendFromISR(conf.q, &send_data, &high_task_wakeup);
-
-    static rmt_receive_config_t receive_config_ = {
-        .signal_range_min_ns = 2000,     // the shortest duration for NEC signal is 560us, 1250ns < 560us, valid signal won't be treated as noise
-        .signal_range_max_ns = 1600000, // the longest duration for NEC signal is 9000us, 12000000ns > 9000us, the receive won't stop early
-    };
-    rmt_receive(conf.rxc, conf.rs, sizeof(conf.rs), conf.rc);
-    // rmt_receive(rx_channel, raw_symbols, sizeof(raw_symbols), &receive_config_);
-    return high_task_wakeup == pdTRUE;
-}
-
-
-static bool IRAM_ATTR example_rmt_tx_done_callback(rmt_channel_handle_t channel, const rmt_tx_done_event_data_t *edata, void *user_data)
-{
-    // BaseType_t high_task_wakeup = pdFALSE;
-    // rmt_channel_handle_t rx_channel = user_data;
-    // rmt_enable(rx_channel);
-    txdone += 1;
-    return false;
-}
-
 
 static volatile DRAM_ATTR uint32_t times =0;
 static volatile DRAM_ATTR uint32_t inputtimes =0;
@@ -573,425 +406,291 @@ gptimer_handle_t configure_tart_timer(gptimer_handle_t strobetimer){
 
     ESP_LOGI(TAG, "Tart Set alarm actions");
     ESP_ERROR_CHECK(gptimer_set_alarm_action(gptimer, &alarm_config));
-
-    // ESP_LOGI(TAG, "Tart Start");
-    // ESP_ERROR_CHECK(gptimer_start(gptimer));
     return gptimer;
 }
+//
+// rmt_transmit_config_t configure_rmt_tx(rmt_channel_handle_t *tx_channel, rmt_encoder_handle_t *dali_encoder) {
+//
+//     ESP_LOGI(TAG, "create RMT TX channel");
+//     rmt_tx_channel_config_t tx_channel_cfg = {
+//         // .clk_src = RMT_CLK_SRC_RC_FAST,
+//         .clk_src = RMT_CLK_SRC_DEFAULT,
+//         .flags = {
+//             .invert_out = 0,
+//             .with_dma = 0,
+//             .io_loop_back = 0,
+//             .io_od_mode = 0,   // open drain mode is disabled
+//         },
+//         .resolution_hz = RESOLUTION_HZ,
+//         .mem_block_symbols = 64, // amount of RMT symbols that the channel can store at a time
+//         .trans_queue_depth = 4,  // number of transactions that allowed to pending in the background, this example won't queue multiple transactions, so queue depth > 1 is sufficient
+//         .gpio_num = TX_GPIO,
+//     };
+//     // rmt_channel_handle_t tx_channel = NULL;
+//     ESP_ERROR_CHECK(rmt_new_tx_channel(&tx_channel_cfg, tx_channel));
+//
+//     rmt_transmit_config_t transmit_config = {
+//         .loop_count = 0, // no loop
+//         .flags = {
+//             .eot_level = 0, // send EOT signal at the end of sending a frame
+//             .queue_nonblocking = 0, // block waiting for the transmission to be done
+//         },
+//     };
+//
+//     ESP_LOGI(TAG, "install IR dali encoder");
+//     dali_encoder_config_t dali_encoder_cfg = {
+//         .resolution = RESOLUTION_HZ,
+//     };
+//     // rmt_encoder_handle_t dali_encoder = NULL;
+//     ESP_ERROR_CHECK(rmt_new_dali_encoder(&dali_encoder_cfg, dali_encoder));
+//
+//     rmt_tx_event_callbacks_t txcbs = {
+//         .on_trans_done = example_rmt_tx_done_callback,
+//     };
+//
+//     ESP_ERROR_CHECK(rmt_tx_register_event_callbacks(*tx_channel, &txcbs, rx_channel));
+//
+//     ESP_LOGI(TAG, "enable RMT TX channel");
+//
+//     ESP_ERROR_CHECK(rmt_enable(*tx_channel));
+//     dali_forward_frame_t frame = {.firstbyte = 0, .secondbyte = 0};
+//     // ESP_ERROR_CHECK(rmt_transmit(*tx_channel, *dali_encoder, &frame, sizeof(frame), &transmit_config));
+//     return transmit_config;
+// }
 
-rmt_transmit_config_t configure_rmt_tx(rmt_channel_handle_t *tx_channel, rmt_encoder_handle_t *dali_encoder) {
-
-    ESP_LOGI(TAG, "create RMT TX channel");
-    rmt_tx_channel_config_t tx_channel_cfg = {
-        // .clk_src = RMT_CLK_SRC_RC_FAST,
-        .clk_src = RMT_CLK_SRC_DEFAULT,
-        .flags = {
-            .invert_out = 0,
-            .with_dma = 0,
-            .io_loop_back = 0,
-            .io_od_mode = 0,   // open drain mode is disabled
-        },
-        .resolution_hz = RESOLUTION_HZ,
-        .mem_block_symbols = 64, // amount of RMT symbols that the channel can store at a time
-        .trans_queue_depth = 4,  // number of transactions that allowed to pending in the background, this example won't queue multiple transactions, so queue depth > 1 is sufficient
-        .gpio_num = TX_GPIO,
+void setup_events(){
+    esp_event_loop_args_t eventloopconfig = {
+        .queue_size = 5,
     };
-    // rmt_channel_handle_t tx_channel = NULL;
-    ESP_ERROR_CHECK(rmt_new_tx_channel(&tx_channel_cfg, tx_channel));
+    esp_event_handler_t lightingloop;
+    esp_event_loop_create(&eventloopconfig, &lightingloop);
 
-    rmt_transmit_config_t transmit_config = {
-        .loop_count = 0, // no loop
-        .flags = {
-            .eot_level = 0, // send EOT signal at the end of sending a frame
-            .queue_nonblocking = 0, // block waiting for the transmission to be done
-        },
-    };
-
-    ESP_LOGI(TAG, "install IR dali encoder");
-    dali_encoder_config_t dali_encoder_cfg = {
-        .resolution = RESOLUTION_HZ,
-    };
-    // rmt_encoder_handle_t dali_encoder = NULL;
-    ESP_ERROR_CHECK(rmt_new_dali_encoder(&dali_encoder_cfg, dali_encoder));
-
-    rmt_tx_event_callbacks_t txcbs = {
-        .on_trans_done = example_rmt_tx_done_callback,
-    };
-
-    ESP_ERROR_CHECK(rmt_tx_register_event_callbacks(*tx_channel, &txcbs, rx_channel));
-
-    ESP_LOGI(TAG, "enable RMT TX channel");
-
-    ESP_ERROR_CHECK(rmt_enable(*tx_channel));
-    dali_forward_frame_t frame = {.firstbyte = 0, .secondbyte = 0};
-    // ESP_ERROR_CHECK(rmt_transmit(*tx_channel, *dali_encoder, &frame, sizeof(frame), &transmit_config));
-    return transmit_config;
 }
 
-#define EDGEDECODE_STATE_INIT 0
-#define EDGEDECODE_STATE_CHECKSTART 1
-#define EDGEDECODE_STATE_BITREADY 2
-#define EDGEDECODE_STATE_END 3
-
-#define DALI_TIMING_IDEA_HALF_BIT_US 417
-#define DALI_TIMING_TOLERANCE_US 150
-
-
-bool check_if_half_period(uint16_t time) {
-    return time < DALI_TIMING_IDEA_HALF_BIT_US + DALI_TIMING_TOLERANCE_US && time > DALI_TIMING_IDEA_HALF_BIT_US - DALI_TIMING_TOLERANCE_US;
-}
-
-bool check_if_full_period(uint16_t time) {
-    return time < DALI_TIMING_IDEA_HALF_BIT_US * 2 + DALI_TIMING_TOLERANCE_US && time > DALI_TIMING_IDEA_HALF_BIT_US * 2 - DALI_TIMING_TOLERANCE_US;
-}
-
-void edgeframe_queue_log_task(QueueHandle_t *queue) {
-    bool debug = false;
-    edgeframe receivedframe;
-    while (1) {
-        bool received = xQueueReceive(*queue, &receivedframe, 101);
-        if (received) {
-            ESP_LOGI(TAG, "Received frame length %d", receivedframe.length);
-            uint8_t state = 0;
-            uint32_t output = 0;
-            uint8_t output_bit_pos = 23;
-            uint16_t first_bit_time = 99999;
-            uint16_t baud_time=0;
-            uint16_t baud_counter_bits_count = 0;
-            uint16_t baud_counter_bits = 0;
-            edge_t edge;
-            uint16_t last_valid_bit_time;
-            uint16_t last_valid_bit_elapsed;
-            uint16_t last_edge_elapsed = 0;
-            bool error = false;
-            for (uint8_t i = 0; i<receivedframe.length; i++) {
-                if(debug) {
-                    ESP_LOGI(TAG, "Level %d at %u us (%u us) state %d",
-                        receivedframe.edges[i].edgetype,
-                        receivedframe.edges[i].time,
-                        receivedframe.edges[i].time - last_edge_elapsed,
-                        state);
-                }
-                last_edge_elapsed = receivedframe.edges[i].time;
-                if (error || state == EDGEDECODE_STATE_END) break;
-                edge = receivedframe.edges[i];
-                if (edge.edgetype == EDGETYPE_RISING) baud_time = edge.time - first_bit_time;
-                switch (state) {
-                    case EDGEDECODE_STATE_INIT: {
-                        state = EDGEDECODE_STATE_CHECKSTART;
-                        break;
-                    }
-                    case EDGEDECODE_STATE_CHECKSTART: {
-                        if (edge.edgetype == EDGETYPE_RISING && check_if_half_period(edge.time)) {
-                            state = EDGEDECODE_STATE_BITREADY;
-                            last_valid_bit_time = edge.time;
-
-                            first_bit_time = edge.time;
-                        }
-                        else
-                        {
-                            ESP_LOGE(TAG, "Start bit error %u", i);
-                            error = true;
-                        }
-                        break;
-                    }
-                    case EDGEDECODE_STATE_BITREADY: {
-
-                        if (edge.edgetype == EDGETYPE_NONE) {
-                            state = EDGEDECODE_STATE_END;
-                            break;
-                        }
-                        last_valid_bit_elapsed = edge.time - last_valid_bit_time;
-                        if (check_if_half_period(last_valid_bit_elapsed)) {
-                            if (debug) ESP_LOGD(TAG, "...Half bit %u", i);
-                            // do nothing
-                        }
-                        else if (check_if_full_period(last_valid_bit_elapsed))
-                        {
-                            if (debug) ESP_LOGD(TAG, "...Full bit %u edge %d bitpos %d", i, edge.edgetype, output_bit_pos);
-                            if (edge.edgetype == EDGETYPE_RISING) {
-                                output = output | (1 << output_bit_pos);
-                            }
-                            last_valid_bit_time = edge.time;
-                            output_bit_pos -= 1;
-                        }
-                        else if (last_valid_bit_elapsed < 40) {
-                            // assume glitch
-                        }
-                        else
-                        {
-                            ESP_LOGE(TAG, "No bit error %u elapsed %u", i, last_valid_bit_elapsed);
-                            // error = true;
-                        }
-
-                        break;
-                    }
-                }
-            }
-            int baud_bits_sub = (output >> (output_bit_pos+1)) & 1 ? 0 : 1;
-            ESP_LOGD(TAG, "Final output %lu", output);
-            ESP_LOGI(TAG, "Final output  >> 8 %lu", output >> 8);
-            if (baud_time) ESP_LOGI(TAG, "Baud rate %u", 500000 * (46 - output_bit_pos * 2 + baud_bits_sub) / baud_time);
-            // if (baud_time) ESP_LOGI(TAG, "Baud rate %u", 1000000 * (baud_counter_bits) / baud_time);
-            uint8_t firstbyte = (output & 0xFF0000) >> 16;
-            uint8_t secondbyte = (output & 0xFF00) >> 8;
-            ESP_LOGI(TAG, "First %d, second %d", firstbyte, secondbyte);
-            char bitstring[30];
-            // bitstring[24] = 0;
-            int spaceadd = 0;
-            for (int i = 0; i<16;i++) {
-                if (i == 8) {
-                    spaceadd += 1;
-                    bitstring[i] = 32;
-                }
-                bitstring[i + spaceadd] = ((output >> (23 - i)) & 1) ? 49 : 48;
-            }
-            bitstring[16 + spaceadd] = 0;
-            ESP_LOGI(TAG, "Bitstring %s", bitstring);
-            ESP_LOGI(TAG, "");
-                // ESP_LOGI(TAG, "Level %d after %u us",
-                    // receivedframe.edges[i].edgetype,
-                    // receivedframe.edges[i].time);
-            // }
-        }
-    }
-}
 
 void app_main(void)
 {
-    //
-    // ESP_LOGI(TAG, "create RMT RX channel");
-    // rmt_rx_channel_config_t rx_channel_cfg = {
-    //     .clk_src = RMT_CLK_SRC_DEFAULT,
-    //     .resolution_hz = RESOLUTION_HZ,
-    //     .mem_block_symbols = 128, // amount of RMT symbols that the channel can store at a time
-    //     .gpio_num = RX_GPIO,
-    //     .flags.io_loop_back = 0,
-    //     .flags.invert_in = 0,
-    // };
-    // rmt_channel_handle_t rx_channel = NULL;
-    // ESP_ERROR_CHECK(rmt_new_rx_channel(&rx_channel_cfg, &rx_channel));
-    //
-    // QueueHandle_t receive_queue = xQueueCreate(3, sizeof(receive_event_t));
-    // assert(receive_queue);
-
-    // rmt_rx_event_callbacks_t cbs = {
-    //     .on_recv_done = example_rmt_rx_done_callback,
-    // };
-    //
-    // passs conf = {{rx_channel},{raw_symbols},{&receive_config},{receive_queue}};
-    // ESP_ERROR_CHECK(rmt_rx_register_event_callbacks(rx_channel, &cbs, &conf));
-
-
-    // ESP_ERROR_CHECK(rmt_enable(rx_channel));
-
-
-    // ESP_ERROR_CHECK(rmt_receive(rx_channel, raw_symbols, sizeof(raw_symbols), &receive_config));
-    // ESP_ERROR_CHECK(rmt_enable(rx_channel));
-
     configure_gpio();
-
+    setup_wifi();
+    httpd_handle_t httpd = setup_httpserver();
+    
     gptimer_handle_t strobetimer = configure_strobetimer();
     ESP_ERROR_CHECK(gptimer_start(strobetimer));
     ledc_channel_t pwm0_10v_channel1;
     setup_pwm_0_10v();
+    dali_transmitter_handle_t dali_transmitter_handle;
+    setup_dali_transmitter(TX_GPIO, 3, &dali_transmitter_handle);
+    
     ESP_ERROR_CHECK(configure_pwm_0_10v(PWM_010v_GPIO, 1<<14, &pwm0_10v_channel1));
-    while (1){
-        for (int i=0; i<255; i++) {
-            update_0_10v_level(pwm0_10v_channel1, i *i);
-            vTaskDelay(pdMS_TO_TICKS(20));
-        }
-    }
+
     int level;
     uint64_t strobecount;
-
-    rmt_channel_handle_t tx_channel;
-    rmt_encoder_handle_t dali_encoder;
-    rmt_transmit_config_t transmit_config = configure_rmt_tx(&tx_channel, &dali_encoder);
+    //
+    // rmt_channel_handle_t tx_channel;
+    // rmt_encoder_handle_t dali_encoder;
+    // rmt_transmit_config_t transmit_config = configure_rmt_tx(&tx_channel, &dali_encoder);
 
     ESP_ERROR_CHECK(gpio_install_isr_service(0));
-    QueueHandle_t edgeframe_queue = start_edgelogger(RX_GPIO, true);
-    xTaskCreate(edgeframe_queue_log_task, "edgeframe_queue_log_task", 9128, &edgeframe_queue, 1, NULL);
+    // QueueHandle_t rmt_frame_queue = setup_rmt_dali_receiver(RX_GPIO, 4);
+    // setup_rmt_log_task(rmt_frame_queue);
+    
+    QueueHandle_t edgeframe_queue = start_edgelogger(RX_GPIO, false);
+    // ESP_LOGI(TAG, "Queuehandle %u", edgeframe_);
+    start_dali_parser(edgeframe_queue);
 
     level = gpio_get_level(RX_GPIO);
     gptimer_get_raw_count(strobetimer, &strobecount);
     ESP_LOGI(TAG, "loop log %lu, %u: count %llu", times, level, strobecount);
 
 
-    dali_forward_frame_t set_level_template = {
-        .firstbyte = 0b11111110,
-        .secondbyte = NULL,
-    };
-    dali_forward_frame_t reset = {
-        .firstbyte = 0b11111111,
-        .secondbyte = 0x20,
-    };
-    dali_forward_frame_t off = {
-        .firstbyte = 0b11111111,
-        .secondbyte = 0,
-    };
+    while (1){
+        BaseType_t success;
+        dali_forward_frame_t frame;
+        frame.firstbyte = DALI_FIRSTBYTE_BROADCAST_LEVEL;
+        for (int i=0; i<255; i++) {
+            // update_0_10v_level(pwm0_10v_channel1, i *i);
+            frame.secondbyte = i;
+            success = xQueueSendToBack(dali_transmitter_handle.queue, &frame, portMAX_DELAY);
+            vTaskDelay(pdMS_TO_TICKS(1000));
+            // success = xQueueSendToBack(dali_transmitter_handle.queue, &frame, portMAX_DELAY);
+            // vTaskDelay(pdMS_TO_TICKS(2000));
+        }
+    }
 
-    dali_forward_frame_t set_dtr0 = {
-        .firstbyte = 0b10100011,
-        .secondbyte = NULL,
-    };
-    dali_forward_frame_t query = {
-        .firstbyte = DALI_FIRSTBYTE_BROADCAST_COMMAND,
-        .secondbyte = 0x90,
-    };
-    dali_forward_frame_t querylevel = {
-        .firstbyte = DALI_FIRSTBYTE_BROADCAST_COMMAND,
-        .secondbyte = 0b10100000,
-    };
-
-    dali_forward_frame_t test = {
-        .firstbyte = 0b01001100, // 76
-        .secondbyte = 0b10011100, //156
-    };
-    dali_forward_frame_t testff = {
-        .firstbyte = 0xFF, // 76
-        .secondbyte = 0xFF, //156
-    };
-    dali_forward_frame_t queryshortaddress = {
-        .firstbyte = 0b10111011, // 76
-        .secondbyte = 0x00, //156
-    };
-    dali_forward_frame_t query_dtr = {
-        .firstbyte = DALI_FIRSTBYTE_BROADCAST_COMMAND, // 76
-        .secondbyte = 0b10011000, //156
-    };
-    dali_forward_frame_t query_dtr_49 = {
-        .firstbyte = (49 << 1) + 1,
-        .secondbyte = 0b10011000,
-    };
-    dali_forward_frame_t storedtr0asshortaddress = {
-        //YAAA AAA1 1000 0000
-        .firstbyte = DALI_FIRSTBYTE_BROADCAST_COMMAND,
-        .secondbyte = 0b10000000,
-    };
-
-
-
-    // // gpio_set_level(TX_GPIO, 0);
-    // ESP_ERROR_CHECK(rmt_transmit(tx_channel, dali_encoder, &set_level_template, sizeof(queryshortaddress), &transmit_config));
-    // vTaskDelay(pdMS_TO_TICKS(300));
-    // ESP_ERROR_CHECK(rmt_transmit(tx_channel, dali_encoder, &set_level_template, sizeof(queryshortaddress), &transmit_config));
-    // vTaskDelay(pdMS_TO_TICKS(300));
-    // ESP_ERROR_CHECK(rmt_transmit(tx_channel, dali_encoder, &set_level_template, sizeof(queryshortaddress), &transmit_config));
+    // dali_forward_frame_t set_level_template = {
+    //     .firstbyte = 0b11111110,
+    //     .secondbyte = NULL,
+    // };
+    // dali_forward_frame_t reset = {
+    //     .firstbyte = 0b11111111,
+    //     .secondbyte = 0x20,
+    // };
+    // dali_forward_frame_t off = {
+    //     .firstbyte = 0b11111111,
+    //     .secondbyte = 0,
+    // };
+    //
+    // dali_forward_frame_t set_dtr0 = {
+    //     .firstbyte = 0b10100011,
+    //     .secondbyte = NULL,
+    // };
+    // dali_forward_frame_t query = {
+    //     .firstbyte = DALI_FIRSTBYTE_BROADCAST_COMMAND,
+    //     .secondbyte = 0x90,
+    // };
+    // dali_forward_frame_t querylevel = {
+    //     .firstbyte = DALI_FIRSTBYTE_BROADCAST_COMMAND,
+    //     .secondbyte = 0b10100000,
+    // };
+    //
+    // dali_forward_frame_t test = {
+    //     .firstbyte = 0b01001100, // 76
+    //     .secondbyte = 0b10011100, //156
+    // };
+    // dali_forward_frame_t testff = {
+    //     .firstbyte = 0xFF, // 76
+    //     .secondbyte = 0xFF, //156
+    // };
+    // dali_forward_frame_t queryshortaddress = {
+    //     .firstbyte = 0b10111011, // 76
+    //     .secondbyte = 0x00, //156
+    // };
+    // dali_forward_frame_t query_dtr = {
+    //     .firstbyte = DALI_FIRSTBYTE_BROADCAST_COMMAND, // 76
+    //     .secondbyte = 0b10011000, //156
+    // };
+    // dali_forward_frame_t query_dtr_49 = {
+    //     .firstbyte = (49 << 1) + 1,
+    //     .secondbyte = 0b10011000,
+    // };
+    // dali_forward_frame_t storedtr0asshortaddress = {
+    //     //YAAA AAA1 1000 0000
+    //     .firstbyte = DALI_FIRSTBYTE_BROADCAST_COMMAND,
+    //     .secondbyte = 0b10000000,
+    // };
+    //
+    //
+    //
+    // // // gpio_set_level(TX_GPIO, 0);
+    // // ESP_ERROR_CHECK(rmt_transmit(tx_channel, dali_encoder, &set_level_template, sizeof(queryshortaddress), &transmit_config));
+    // // vTaskDelay(pdMS_TO_TICKS(300));
+    // // ESP_ERROR_CHECK(rmt_transmit(tx_channel, dali_encoder, &set_level_template, sizeof(queryshortaddress), &transmit_config));
+    // // vTaskDelay(pdMS_TO_TICKS(300));
+    // // ESP_ERROR_CHECK(rmt_transmit(tx_channel, dali_encoder, &set_level_template, sizeof(queryshortaddress), &transmit_config));
+    // // while (1) {
+    // // vTaskDelay(pdMS_TO_TICKS(300));
+    // // }
+    // // xTaskCreate((TaskFunction_t *) rmt_queue_log_task, "rmt_queue_log_task", 9128, &receive_queue, 1, NULL);
+    // // xTaskCreate((TaskFunction_t *) add_dummy_queue_items, "add_dummy_queue_items", 2048, &receive_queue, 2, NULL);
+    //
+    // level = gpio_get_level(RX_GPIO);
+    // gptimer_get_raw_count(strobetimer, &strobecount);
+    // ESP_LOGI(TAG, "loop log %lu, %u: count %llu", times, level, strobecount);
+    //
+    // set_level_template.firstbyte = (49 << 1);
+    // set_level_template.secondbyte = 0;
+    // ESP_LOGI(TAG, "Set address 49 to level %d", 0);
+    // // ESP_ERROR_CHECK(rmt_transmit(tx_channel, dali_encoder, &set_level_template, sizeof(queryshortaddress), &transmit_config));
+    // vTaskDelay(pdMS_TO_TICKS(600));
+    // set_level_template.firstbyte = (49 << 1);
+    // set_level_template.secondbyte = 0;
+    // ESP_LOGI(TAG, "Set address 49 to level %d", 0);
+    // // ESP_ERROR_CHECK(rmt_transmit(tx_channel, dali_encoder, &set_level_template, sizeof(queryshortaddress), &transmit_config));
+    // vTaskDelay(pdMS_TO_TICKS(600));
     // while (1) {
-    // vTaskDelay(pdMS_TO_TICKS(300));
+    //     // ESP_LOGI(TAG, "Set dtr0 %d", 49);
+    //     // set_dtr0.secondbyte = (49 << 1) + 1;
+    //     // ESP_ERROR_CHECK(rmt_transmit(tx_channel, dali_encoder, &set_dtr0, sizeof(queryshortaddress), &transmit_config));
+    //     // vTaskDelay(pdMS_TO_TICKS(1000));
+    //     //
+    //     // ESP_LOGI(TAG, "Query dtr");
+    //     // ESP_ERROR_CHECK(rmt_transmit(tx_channel, dali_encoder, &query_dtr, sizeof(queryshortaddress), &transmit_config));
+    //     // vTaskDelay(pdMS_TO_TICKS(1000));
+    //     //
+    //     // ESP_LOGI(TAG, "set dtr0 as short address twice %d", 49);
+    //     // ESP_ERROR_CHECK(rmt_transmit(tx_channel, dali_encoder, &storedtr0asshortaddress, sizeof(queryshortaddress), &transmit_config));
+    //     // vTaskDelay(pdMS_TO_TICKS(20));
+    //     // ESP_ERROR_CHECK(rmt_transmit(tx_channel, dali_encoder, &storedtr0asshortaddress, sizeof(queryshortaddress), &transmit_config));
+    //     // vTaskDelay(pdMS_TO_TICKS(1000));
+    //     //
+    //     // ESP_LOGI(TAG, "Query dtr 49");
+    //     // ESP_ERROR_CHECK(rmt_transmit(tx_channel, dali_encoder, &query_dtr_49, sizeof(queryshortaddress), &transmit_config));
+    //     // vTaskDelay(pdMS_TO_TICKS(1000));
+    //     //
+    //     // set_level_template.firstbyte = DALI_FIRSTBYTE_BROADCAST_LEVEL;
+    //     // set_level_template.secondbyte = 10;
+    //     // ESP_LOGI(TAG, "Set level %d", 10);
+    //     // ESP_ERROR_CHECK(rmt_transmit(tx_channel, dali_encoder, &set_level_template, sizeof(queryshortaddress), &transmit_config));
+    //     // vTaskDelay(pdMS_TO_TICKS(1000));
+    //     set_level_template.firstbyte = (49 << 1) + 1;
+    //     set_level_template.firstbyte = DALI_FIRSTBYTE_BROADCAST_LEVEL;
+    //     set_level_template.secondbyte = 100;
+    //     ESP_LOGI(TAG, "Set address all to level %d", 100);
+    //     ESP_ERROR_CHECK(rmt_transmit(tx_channel, dali_encoder, &set_level_template, sizeof(queryshortaddress), &transmit_config));
+    //     vTaskDelay(pdMS_TO_TICKS(300));
+    //
+    //     for (int i = 0; i< 64; i++) {
+    //
+    //         set_level_template.firstbyte = (i << 1);
+    //         // set_level_template.firstbyte = DALI_FIRSTBYTE_BROADCAST_LEVEL;
+    //         set_level_template.secondbyte = 1;
+    //         ESP_LOGI(TAG, "Set address %d to level 1", i);
+    //         ESP_ERROR_CHECK(rmt_transmit(tx_channel, dali_encoder, &set_level_template, sizeof(queryshortaddress), &transmit_config));
+    //         vTaskDelay(pdMS_TO_TICKS(300));
+    //     }
+    //
+    //     for (int i=0; i<150;i=i+20) {
+    //         set_level_template.firstbyte = (49 << 1) + 1;
+    //         set_level_template.firstbyte = DALI_FIRSTBYTE_BROADCAST_LEVEL;
+    //         set_level_template.secondbyte = i;
+    //         ESP_LOGI(TAG, "Set address 49 to level %d", i);
+    //         ESP_ERROR_CHECK(rmt_transmit(tx_channel, dali_encoder, &set_level_template, sizeof(queryshortaddress), &transmit_config));
+    //         vTaskDelay(pdMS_TO_TICKS(300));
+    //
+    //         set_level_template.firstbyte = (39 << 1);
+    //         set_level_template.secondbyte = 3;
+    //         ESP_LOGI(TAG, "Set address 39 to level %d", 3);
+    //         // ESP_ERROR_CHECK(rmt_transmit(tx_channel, dali_encoder, &set_level_template, sizeof(queryshortaddress), &transmit_config));
+    //         vTaskDelay(pdMS_TO_TICKS(400));
+    //
+    //         ESP_LOGI(TAG, "Query level");
+    //         // ESP_ERROR_CHECK(rmt_transmit(tx_channel, dali_encoder, &querylevel, sizeof(test), &transmit_config));
+    //         vTaskDelay(pdMS_TO_TICKS(400));
+    //     }
     // }
-    // xTaskCreate((TaskFunction_t *) rmt_queue_log_task, "rmt_queue_log_task", 9128, &receive_queue, 1, NULL);
-    // xTaskCreate((TaskFunction_t *) add_dummy_queue_items, "add_dummy_queue_items", 2048, &receive_queue, 2, NULL);
-
-    level = gpio_get_level(RX_GPIO);
-    gptimer_get_raw_count(strobetimer, &strobecount);
-    ESP_LOGI(TAG, "loop log %lu, %u: count %llu", times, level, strobecount);
-
-    set_level_template.firstbyte = (49 << 1);
-    set_level_template.secondbyte = 0;
-    ESP_LOGI(TAG, "Set address 49 to level %d", 0);
-    ESP_ERROR_CHECK(rmt_transmit(tx_channel, dali_encoder, &set_level_template, sizeof(queryshortaddress), &transmit_config));
-    vTaskDelay(pdMS_TO_TICKS(600));
-    set_level_template.firstbyte = (49 << 1);
-    set_level_template.secondbyte = 0;
-    ESP_LOGI(TAG, "Set address 49 to level %d", 0);
-    ESP_ERROR_CHECK(rmt_transmit(tx_channel, dali_encoder, &set_level_template, sizeof(queryshortaddress), &transmit_config));
-    vTaskDelay(pdMS_TO_TICKS(600));
-    while (1) {
-        // ESP_LOGI(TAG, "Set dtr0 %d", 49);
-        // set_dtr0.secondbyte = (49 << 1) + 1;
-        // ESP_ERROR_CHECK(rmt_transmit(tx_channel, dali_encoder, &set_dtr0, sizeof(queryshortaddress), &transmit_config));
-        // vTaskDelay(pdMS_TO_TICKS(1000));
-        //
-        // ESP_LOGI(TAG, "Query dtr");
-        // ESP_ERROR_CHECK(rmt_transmit(tx_channel, dali_encoder, &query_dtr, sizeof(queryshortaddress), &transmit_config));
-        // vTaskDelay(pdMS_TO_TICKS(1000));
-        //
-        // ESP_LOGI(TAG, "set dtr0 as short address twice %d", 49);
-        // ESP_ERROR_CHECK(rmt_transmit(tx_channel, dali_encoder, &storedtr0asshortaddress, sizeof(queryshortaddress), &transmit_config));
-        // vTaskDelay(pdMS_TO_TICKS(20));
-        // ESP_ERROR_CHECK(rmt_transmit(tx_channel, dali_encoder, &storedtr0asshortaddress, sizeof(queryshortaddress), &transmit_config));
-        // vTaskDelay(pdMS_TO_TICKS(1000));
-        //
-        // ESP_LOGI(TAG, "Query dtr 49");
-        // ESP_ERROR_CHECK(rmt_transmit(tx_channel, dali_encoder, &query_dtr_49, sizeof(queryshortaddress), &transmit_config));
-        // vTaskDelay(pdMS_TO_TICKS(1000));
-        //
-        // set_level_template.firstbyte = DALI_FIRSTBYTE_BROADCAST_LEVEL;
-        // set_level_template.secondbyte = 10;
-        // ESP_LOGI(TAG, "Set level %d", 10);
-        // ESP_ERROR_CHECK(rmt_transmit(tx_channel, dali_encoder, &set_level_template, sizeof(queryshortaddress), &transmit_config));
-        // vTaskDelay(pdMS_TO_TICKS(1000));
-        set_level_template.firstbyte = (49 << 1) + 1;
-        set_level_template.firstbyte = DALI_FIRSTBYTE_BROADCAST_LEVEL;
-        set_level_template.secondbyte = 100;
-        ESP_LOGI(TAG, "Set address all to level %d", 100);
-        ESP_ERROR_CHECK(rmt_transmit(tx_channel, dali_encoder, &set_level_template, sizeof(queryshortaddress), &transmit_config));
-        vTaskDelay(pdMS_TO_TICKS(300));
-
-        for (int i = 0; i< 64; i++) {
-
-            set_level_template.firstbyte = (i << 1);
-            // set_level_template.firstbyte = DALI_FIRSTBYTE_BROADCAST_LEVEL;
-            set_level_template.secondbyte = 1;
-            ESP_LOGI(TAG, "Set address %d to level 1", i);
-            ESP_ERROR_CHECK(rmt_transmit(tx_channel, dali_encoder, &set_level_template, sizeof(queryshortaddress), &transmit_config));
-            vTaskDelay(pdMS_TO_TICKS(300));
-        }
-
-        for (int i=0; i<150;i=i+20) {
-            set_level_template.firstbyte = (49 << 1) + 1;
-            set_level_template.firstbyte = DALI_FIRSTBYTE_BROADCAST_LEVEL;
-            set_level_template.secondbyte = i;
-            ESP_LOGI(TAG, "Set address 49 to level %d", i);
-            ESP_ERROR_CHECK(rmt_transmit(tx_channel, dali_encoder, &set_level_template, sizeof(queryshortaddress), &transmit_config));
-            vTaskDelay(pdMS_TO_TICKS(300));
-
-            set_level_template.firstbyte = (39 << 1);
-            set_level_template.secondbyte = 3;
-            ESP_LOGI(TAG, "Set address 39 to level %d", 3);
-            ESP_ERROR_CHECK(rmt_transmit(tx_channel, dali_encoder, &set_level_template, sizeof(queryshortaddress), &transmit_config));
-            vTaskDelay(pdMS_TO_TICKS(400));
-
-            ESP_LOGI(TAG, "Query level");
-            ESP_ERROR_CHECK(rmt_transmit(tx_channel, dali_encoder, &querylevel, sizeof(test), &transmit_config));
-            vTaskDelay(pdMS_TO_TICKS(400));
-        }
-    }
-    while (1) {
-        for (int i=0; i<7;i=i+1){
-
-            set_level_template.secondbyte = 1<<i; // -7;
-            // conf.outgoing = set_level_template;
-            ESP_ERROR_CHECK(rmt_transmit(tx_channel, dali_encoder, &set_level_template, sizeof(set_level_template), &transmit_config));
-
-            ESP_LOGI(TAG, "Transmitting state %d", 1<<i);
-            // ESP_LOGI(TAG, "done rx %u tx %u", rxdone, txdone);
-
-            // level = gpio_get_level(RX_GPIO);
-            // gptimer_get_raw_count(strobetimer, &strobecount);
-            // ESP_LOGI(TAG, "loop log %lu, %u: count %llu", times, level, strobecount);
-            vTaskDelay(pdMS_TO_TICKS(1000));
-            // ESP_ERROR_CHECK(rmt_disable(rx_channel));
-
-            // rmt_receive(rx_channel, raw_symbols, sizeof(raw_symbols), &receive_config);
-            // conf.outgoing = test;
-            ESP_ERROR_CHECK(rmt_transmit(tx_channel, dali_encoder, &querylevel, sizeof(test), &transmit_config));
-            // delay 1 second
-            ESP_LOGI(TAG, "Transmitting querylevel");
-
-            // ESP_LOGI(TAG, "done rx %u tx %u", rxdone, txdone);
-            // ESP_LOGI(TAG, "Messages waiting %u", uxQueueMessagesWaiting(receive_queue));
-
-            vTaskDelay(pdMS_TO_TICKS(1000));
-            // gpio_dump_io_configuration(stdout,
-                // (1ULL << RX_GPIO) | (1ULL << 17) | (1ULL << TX_GPIO));
-
-            // ESP_LOGI(TAG, "done rx %u tx %u times %lu inputtimes %lu value %lu", rxdone, txdone, times, inputtimes, value);
-            // ESP_ERROR_CHECK(rmt_enable(rx_channel));
-            // ESP_LOG_BUFFER_HEX(TAG, raw_symbols, 32);
-            vTaskDelay(pdMS_TO_TICKS(600));
-        }
-    }
+    // while (1) {
+    //     for (int i=0; i<7;i=i+1){
+    //
+    //         set_level_template.secondbyte = 1<<i; // -7;
+    //         // conf.outgoing = set_level_template;
+    //         // ESP_ERROR_CHECK(rmt_transmit(tx_channel, dali_encoder, &set_level_template, sizeof(set_level_template), &transmit_config));
+    //
+    //         ESP_LOGI(TAG, "Transmitting state %d", 1<<i);
+    //         // ESP_LOGI(TAG, "done rx %u tx %u", rxdone, txdone);
+    //
+    //         // level = gpio_get_level(RX_GPIO);
+    //         // gptimer_get_raw_count(strobetimer, &strobecount);
+    //         // ESP_LOGI(TAG, "loop log %lu, %u: count %llu", times, level, strobecount);
+    //         vTaskDelay(pdMS_TO_TICKS(1000));
+    //         // ESP_ERROR_CHECK(rmt_disable(rx_channel));
+    //
+    //         // rmt_receive(rx_channel, raw_symbols, sizeof(raw_symbols), &receive_config);
+    //         // conf.outgoing = test;
+    //         // ESP_ERROR_CHECK(rmt_transmit(tx_channel, dali_encoder, &querylevel, sizeof(test), &transmit_config));
+    //         // delay 1 second
+    //         ESP_LOGI(TAG, "Transmitting querylevel");
+    //
+    //         // ESP_LOGI(TAG, "done rx %u tx %u", rxdone, txdone);
+    //         // ESP_LOGI(TAG, "Messages waiting %u", uxQueueMessagesWaiting(receive_queue));
+    //
+    //         vTaskDelay(pdMS_TO_TICKS(1000));
+    //         // gpio_dump_io_configuration(stdout,
+    //             // (1ULL << RX_GPIO) | (1ULL << 17) | (1ULL << TX_GPIO));
+    //
+    //         // ESP_LOGI(TAG, "done rx %u tx %u times %lu inputtimes %lu value %lu", rxdone, txdone, times, inputtimes, value);
+    //         // ESP_ERROR_CHECK(rmt_enable(rx_channel));
+    //         // ESP_LOG_BUFFER_HEX(TAG, raw_symbols, 32);
+    //         vTaskDelay(pdMS_TO_TICKS(600));
+    //     }
+    // }
 }
