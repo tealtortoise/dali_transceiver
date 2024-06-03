@@ -118,7 +118,7 @@ void wifi_init_sta(void)
 }
 
 
-void setup_wifi(void)
+void setup_wifi()
 {
     //Initialize NVS
     esp_err_t ret = nvs_flash_init();

@@ -10,13 +10,7 @@
 #include "dali.h"
 
 
-static const char *ETAG = "edgeframe_isr";
-//
-// typedef struct {
-//     uint8_t firstbyte;
-//     uint8_t secondbyte;
-// } dali_forward_frame_t;
-
+static const char *ELTAG = "edgeframe_isr";
 
 typedef struct {
     QueueHandle_t queue;
@@ -34,10 +28,6 @@ typedef struct {
 #define EDGEFRAME_STATE_IDLE 0
 #define EDGEFRAME_STATE_LOGGING 1
 
-#define EDGETYPE_RISING 1
-#define EDGETYPE_FALLING 0
-#define EDGETYPE_NONE -1
-
 bool IRAM_ATTR timeout_isr(gptimer_handle_t timer, const gptimer_alarm_event_data_t *edata, void *user_ctx) {
     BaseType_t high_task_awoken = pdFALSE;
     edgeframe_isr_ctx *ctx = (edgeframe_isr_ctx*) user_ctx;
@@ -50,8 +40,8 @@ bool IRAM_ATTR timeout_isr(gptimer_handle_t timer, const gptimer_alarm_event_dat
     ctx->edgeframe_template.edges[ctx->edgeframe_isr_numedges].time = ctx->edgeframe_tempcount - ctx->edgeframe_startcount;
 
     BaseType_t success = xQueueSendFromISR(ctx->queue, (edgeframe*) &ctx->edgeframe_template, &high_task_awoken);
-    if (success != pdTRUE) ESP_DRAM_LOGE(ETAG, "Warning receive buffer full - missed Dali frame");
-    // ESP_DRAM_LOGI(ETAG, "sent queue frame length %d", ctx->edgeframe_template.length);
+    if (success != pdTRUE) ESP_DRAM_LOGE(ELTAG, "Warning receive buffer full - missed Dali frame");
+    // ESP_DRAM_LOGI(ELTAG, "sent queue frame length %d", ctx->edgeframe_template.length);
 
     // reset state machine
     ctx->edgeframe_template.length = 0;
@@ -62,9 +52,9 @@ bool IRAM_ATTR timeout_isr(gptimer_handle_t timer, const gptimer_alarm_event_dat
 
     return (high_task_awoken == pdTRUE);
 }
-static const DRAM_ATTR gptimer_event_callbacks_t cbs__ = {
-    .on_alarm = timeout_isr,
-};
+// static const DRAM_ATTR gptimer_event_callbacks_t cbs__ = {
+    // .on_alarm = timeout_isr,
+// };
 
 void IRAM_ATTR input_edgelog_isr(void *params) {
     edgeframe_isr_ctx *ctx = (edgeframe_isr_ctx*) params;
@@ -120,7 +110,7 @@ gptimer_handle_t configure_edgeframe_timer(edgeframe_isr_ctx *ctx){
     };
     ESP_ERROR_CHECK(gptimer_register_event_callbacks(gptimer, &cbs, ctx));
 
-    ESP_LOGI(ETAG, "Edgeframe timer Enable");
+    ESP_LOGI(ELTAG, "Edgeframe timer Enable");
     ESP_ERROR_CHECK(gptimer_enable(gptimer));
     return gptimer;
 }

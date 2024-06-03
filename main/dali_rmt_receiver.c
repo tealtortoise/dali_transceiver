@@ -5,7 +5,11 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
+#include "esp_log.h"
+#include "dali.h"
 
+#include "driver/rmt_tx.h"
+#include "driver/rmt_rx.h"
 
 #define RECEIVE_DOUBLE_BIT_THRESHOLD 600
 
@@ -14,7 +18,7 @@ static const char* RRTAG = "dali_parser";
 typedef struct {
     QueueHandle_t framequeue;
     rmt_channel_handle_t channel;
-    dali_forward_frame_t outgoing;
+    dali_frame_t outgoing;
     dali_rmt_received_frame_t template;
     rmt_receive_config_t receive_config;
 } dali_rmt_receiver_ctx;
@@ -112,8 +116,8 @@ void rmt_queue_log_task(void* params){
                         bitstring[i + spaceadd] = ((manchester_word >> (bitsroundedto8 - 1 - i)) & 1) ? 49 : 48;
                     }
                     bitstring[40 + spaceadd] = 0;
-                    ESP_LOGI(PTAG, "Bitstring %s", bitstring);
-                    ESP_LOGI(PTAG, "");
+                    ESP_LOGI(RRTAG, "Bitstring %s", bitstring);
+                    ESP_LOGI(RRTAG, "");
                 }
 
                 final_word = 0;

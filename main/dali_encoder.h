@@ -18,7 +18,7 @@ extern "C" {
 typedef struct {
     uint8_t firstbyte;
     uint8_t secondbyte;
-} dali_forward_frame_t;
+} dali_frame_t;
 
 /**
  * @brief Type of IR NEC encoder configuration

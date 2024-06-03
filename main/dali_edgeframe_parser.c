@@ -6,6 +6,7 @@
 #include "freertos/task.h"
 #include "freertos/queue.h"
 #include "esp_log.h"
+#include "dali.h"
 // #include "edgeframe_logger.c"
 
 static const char* PTAG = "dali_parser";
@@ -26,15 +27,31 @@ bool check_if_full_period(uint16_t time) {
     return time < DALI_TIMING_IDEA_HALF_BIT_US * 2 + DALI_TIMING_TOLERANCE_US && time > DALI_TIMING_IDEA_HALF_BIT_US * 2 - DALI_TIMING_TOLERANCE_US;
 }
 
+typedef struct {
+    QueueHandle_t edgequeue;
+    QueueHandle_t daliframequeue;
+    int ignore_forward;
+} parsestruct;
+
 void edgeframe_queue_log_task(void* params) {
-    QueueHandle_t queue = (QueueHandle_t) params;
+    // QueueHandle_t queue = (QueueHandle_t) params;
+    parsestruct *pass = (parsestruct*) params;
+    QueueHandle_t edgeinputqueue = pass->edgequeue;
+    QueueHandle_t dalioutputqueue = pass->daliframequeue;
+    int ignoreforward = pass->ignore_forward;
     bool debug = false;
     edgeframe receivedframe;
+    dali_frame_t outputframe;
+    BaseType_t sendsuccess;
     // vTaskDelay(pdMS_TO_TICKS(8000));
     while (1) {
-        bool received = xQueueReceive(queue, &receivedframe, 101);
+        bool received = xQueueReceive(edgeinputqueue, &receivedframe, 101);
+        // if (received){
+            // ESP_LOGI(PTAG, "Received frame length %d, ignoreforward %u",
+                // receivedframe.length, ignoreforward);
+        // }
         // received = false;
-        if (received) {
+        if (received && !(ignoreforward && receivedframe.length > 20)) {
             ESP_LOGI(PTAG, "Received frame length %d", receivedframe.length);
             uint8_t state = 0;
             uint32_t output = 0;
@@ -113,12 +130,19 @@ void edgeframe_queue_log_task(void* params) {
                 }
             }
             int baud_bits_sub = (output >> (output_bit_pos+1)) & 1 ? 0 : 1;
-            ESP_LOGD(PTAG, "Final output %lu", output);
-            ESP_LOGI(PTAG, "Final output  >> 8 %lu", output >> 8);
+            // ESP_LOGD(PTAG, "Final output %lu", output);
+            // ESP_LOGI(PTAG, "Final output  >> 8 %lu", output >> 8);
             if (baud_time) ESP_LOGI(PTAG, "Baud rate %u", 500000 * (46 - output_bit_pos * 2 + baud_bits_sub) / baud_time);
             // if (baud_time) ESP_LOGI(PTAG, "Baud rate %u", 1000000 * (baud_counter_bits) / baud_time);
             uint8_t firstbyte = (output & 0xFF0000) >> 16;
             uint8_t secondbyte = (output & 0xFF00) >> 8;
+            outputframe.firstbyte = firstbyte;
+            outputframe.secondbyte = secondbyte;
+            outputframe.type = (receivedframe.length > 20 ) ? DALI_FORWARD_FRAME_TYPE : DALI_BACKWARD_FRAME_TYPE;
+
+            sendsuccess = xQueueSendToBack(dalioutputqueue, &outputframe, 0);
+            if (sendsuccess != pdTRUE) ESP_LOGE(PTAG, "Dali output queue full");
+            
             ESP_LOGI(PTAG, "First %d, second %d", firstbyte, secondbyte);
             char bitstring[30];
             // bitstring[24] = 0;
@@ -141,7 +165,25 @@ void edgeframe_queue_log_task(void* params) {
     }
 }
 
-void start_dali_parser(QueueHandle_t queue) {
+
+parsestruct* start_dali_parser(QueueHandle_t edgequeue, int ignore_forward) {
+    QueueHandle_t daliframequeue = xQueueCreate(16, sizeof(dali_frame_t));
+    // ESP_LOGI(PTAG, "Queue handle %u", (int)&daliframequeue);
+    parsestruct *pass = malloc(sizeof(parsestruct));
+    // const parsestruct pass = {
+    //     .edgequeue = edgequeue,
+    //     .daliframequeue = daliframequeue,
+    //     .ignore_forward = ignore_forward
+    // };
+    pass->edgequeue = edgequeue;
+    pass->daliframequeue = daliframequeue;
+    pass->ignore_forward = ignore_forward;
+    ESP_LOGI(PTAG, "Ignoreforward %d", (uint8_t)ignore_forward);
+    // while(1){
+    //     vTaskDelay(10);
+    // }
+    // if (sendsuccess != pdTRUE) ESP_LOGE(PTAG, "Dali output queue full");
     xTaskCreate((void *)edgeframe_queue_log_task, "edgeframe_queue_log_task",
-        9128, queue, 1, NULL);
+        9128, pass, 1, NULL);
+    return pass;
 }
