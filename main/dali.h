@@ -17,7 +17,7 @@
 
 typedef struct {
     QueueHandle_t queue;
-    TaskHandle_t task;
+    TaskHandle_t mainloop_task;
     int level;
 } httpd_ctx;
 

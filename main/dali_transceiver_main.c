@@ -1,6 +1,9 @@
 // #include <soc/gpio_reg.h>
 
-#define IS_MAIN true
+#define IS_PRIMARY true
+#ifndef IS_PRIMARY
+#define IS_SECONDARY true
+#endif // ifdef is_primary
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
@@ -17,10 +20,10 @@
 #include "dali_utils.h"
 // #include "dali_utils.c"
 // #include "dali_rmt_receiver.c"
-#ifdef IS_MAIN
+#ifdef IS_PRIMARY
 #include "wifi.c"
 #include "http_server.c"
-#endif // IS_MAIN
+#endif // IS_PRIMARY
 #include "espnow.h"
 
 #define RESOLUTION_HZ     10000000
@@ -103,28 +106,51 @@ gptimer_handle_t configure_strobetimer(){
     return gptimer;
 }
 
-
-void app_main(void)
-{
-    configure_gpio();
-    QueueHandle_t lightingqueue = xQueueCreate(1, sizeof(int));
-    // esp_event_handler_t lightingloop = setup_events();
-    #ifdef IS_MAIN
+#ifdef IS_PRIMARY
+void primary(){
     setup_wifi();
     httpd_ctx httpdctx = {
-        .queue = lightingqueue,
-        .task = xTaskGetCurrentTaskHandle()
+        .mainloop_task = xTaskGetCurrentTaskHandle()
     };
     httpd_handle_t httpd = setup_httpserver(&httpdctx);
     
-    #endif // IS_MAIN
-    #ifndef IS_MAIN
+    TaskHandle_t espnow_send_task;
+    ESP_ERROR_CHECK(setup_espnow_common(&espnow_send_task, xTaskGetCurrentTaskHandle()));
+
+    
+    BaseType_t success;
+    uint32_t requestlevel;
+    
+    while (1) {
+        success = xTaskNotifyWaitIndexed(0, 0, 0, &requestlevel, 100);
+        if (success) {
+            if (requestlevel > 254) requestlevel = 254;
+            xTaskNotifyIndexed(espnow_send_task, 0, requestlevel, eSetValueWithOverwrite);
+            
+            ESP_LOGI(TAG, "Received new level notification: sent %lu to ESPNOW send task", requestlevel);
+            // ESP_ERROR_CHECK(set_0_10v_level(pwm0_10v_channel1, (uint16_t)((uint16_t) requestlevel) << 8));
+            // for (int i=8; i<10; i+=1) {
+                // ESP_ERROR_CHECK(dali_set_level(dali_transceiver, i, requestlevel));
+            // }
+            vTaskDelay(pdMS_TO_TICKS(4));
+        };
+    };
+}
+#endif // is primary
+
+#ifdef IS_SECONDARY
+void secondary(){
     espnow_wifi_init();
-    #endif
-    ESP_ERROR_CHECK(example_espnow_init());
-    while (1){
-        vTaskDelay(100);
-    }
+    
+    TaskHandle_t espnow_send_task;
+    ESP_ERROR_CHECK(setup_espnow_common(&espnow_send_task, xTaskGetCurrentTaskHandle()));
+    
+    
+    BaseType_t success;
+    uint32_t requestlevel;
+    
+    setup_espnow_receiver();
+    
     gptimer_handle_t strobetimer = configure_strobetimer();
     ESP_ERROR_CHECK(gptimer_start(strobetimer));
 
@@ -140,8 +166,6 @@ void app_main(void)
     dali_transceiver_handle_t dali_transceiver;
     ESP_ERROR_CHECK(dali_setup_transceiver(transceiver_config, &dali_transceiver));
 
-    // dali_set_fade_time(dali_transceiver, 9, 0);
-    // dali_set_fade_time(dali_transceiver, 8, 5);
     dali_broadcast_level(dali_transceiver, 30);
     dali_set_level(dali_transceiver, 8, 70);
     ESP_LOGI(TAG, "Query level returned %hi", dali_query_level(dali_transceiver, 9));
@@ -149,11 +173,11 @@ void app_main(void)
     uint8_t address;
     uint32_t queuepeek;
     BaseType_t success;
-    uint32_t requestlevel;
     // int level = 10;
     while (1){
-        BaseType_t success = xTaskNotifyWaitIndexed(0, 0, 0, &requestlevel, 100);
+        success = xTaskNotifyWaitIndexed(0, 0, 0, &requestlevel, 100);
         if (success) {
+            ESP_LOGI(TAG, "Received notification of level change to %lu", requestlevel);
             if (requestlevel > 254) requestlevel = 254;
             ESP_ERROR_CHECK(set_0_10v_level(pwm0_10v_channel1, (uint16_t)((uint16_t) requestlevel) << 8));
             for (int i=8; i<10; i+=1) {
@@ -162,5 +186,18 @@ void app_main(void)
             vTaskDelay(pdMS_TO_TICKS(4));
         }
     }
+}
+#endif
+
+void app_main(void)
+{
+    configure_gpio();
+    #ifdef IS_PRIMARY
+    primary();
+    #endif // IS_PRIMARY
+
+    #ifdef IS_SECONDARY
+    secondary();
+    #endif
 
 }

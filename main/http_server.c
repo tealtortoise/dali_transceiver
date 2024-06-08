@@ -85,7 +85,7 @@ static esp_err_t hello_get_handler(httpd_req_t *req)
     httpd_ctx *ctx = httpd_get_global_user_ctx(req->handle);
     // QueueHandle_t lightingqueue = ctx->queue;
     ctx->level = ns;
-    xTaskNotifyIndexed(ctx->task, 0, ns, eSetValueWithOverwrite);
+    xTaskNotifyIndexed(ctx->mainloop_task, 0, ns, eSetValueWithOverwrite);
     // int o = (int)httpd_get_global_user_ctx(req->handle);
     // ESP_LOGI(HTAG, "ctxval %u", o);
     // xQueueOverwrite(lightingqueue, &ns);
