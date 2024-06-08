@@ -1,5 +1,6 @@
 // #include <soc/gpio_reg.h>
 
+#define IS_MAIN true
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
@@ -7,14 +8,20 @@
 #include "driver/gpio.h"
 #include "driver/gptimer.h"
 #include "driver/ledc.h"
-#include "edgeframe_logger.c"
-#include "dali_transmit.c"
-#include "0-10v.c"
-#include "dali_edgeframe_parser.c"
+// #include "edgeframe_logger.h"
+// #include "dali_transmit.h"
+#include "0-10v.h"
+// #include "dali_edgeframe_parser.h"
+// #include "dali.h"
+#include "dali_transceiver.h"
+#include "dali_utils.h"
 // #include "dali_utils.c"
-#include "dali_rmt_receiver.c"
-// #include "wifi.c"
-// #include "http_server.c"
+// #include "dali_rmt_receiver.c"
+#ifdef IS_MAIN
+#include "wifi.c"
+#include "http_server.c"
+#endif // IS_MAIN
+#include "espnow.h"
 
 #define RESOLUTION_HZ     10000000
 
@@ -23,8 +30,7 @@
 #define RX_GPIO       6
 #define PWM_010v_GPIO   15
 
-
-static const char *TAG = "example";
+static const char *TAG = "main loop";
 
 void configure_gpio(){
     gpio_config_t strobe_gpio_config = {
@@ -103,72 +109,57 @@ void app_main(void)
     configure_gpio();
     QueueHandle_t lightingqueue = xQueueCreate(1, sizeof(int));
     // esp_event_handler_t lightingloop = setup_events();
-    // setup_wifi();
+    #ifdef IS_MAIN
+    setup_wifi();
     httpd_ctx httpdctx = {
         .queue = lightingqueue,
         .task = xTaskGetCurrentTaskHandle()
     };
-    // httpd_handle_t httpd = setup_httpserver(&httpdctx);
+    httpd_handle_t httpd = setup_httpserver(&httpdctx);
     
+    #endif // IS_MAIN
+    #ifndef IS_MAIN
+    espnow_wifi_init();
+    #endif
+    ESP_ERROR_CHECK(example_espnow_init());
+    while (1){
+        vTaskDelay(100);
+    }
     gptimer_handle_t strobetimer = configure_strobetimer();
     ESP_ERROR_CHECK(gptimer_start(strobetimer));
-    ledc_channel_t pwm0_10v_channel1;
-    setup_pwm_0_10v();
-    dali_transmitter_handle_t dali_transmitter;
-    setup_dali_transmitter(TX_GPIO, 3, &dali_transmitter);
-    
-    ESP_ERROR_CHECK(configure_pwm_0_10v(PWM_010v_GPIO, 1<<14, &pwm0_10v_channel1));
 
+    ledc_channel_t pwm0_10v_channel1;
+    ESP_ERROR_CHECK(setup_0_10v_channel(PWM_010v_GPIO, 1<<14, &pwm0_10v_channel1));
 
     ESP_ERROR_CHECK(gpio_install_isr_service(0));
     
+    dali_transceiver_config_t transceiver_config = dali_transceiver_sensible_default_config;
+    transceiver_config.receive_gpio_pin = RX_GPIO;
+    transceiver_config.transmit_gpio_pin = TX_GPIO;
 
-    QueueHandle_t edgeframe_queue = start_edgelogger(RX_GPIO, false);
-    
-    // QueueHandle_t daliqueue = start_dali_parser(edgeframe_queue);
+    dali_transceiver_handle_t dali_transceiver;
+    ESP_ERROR_CHECK(dali_setup_transceiver(transceiver_config, &dali_transceiver));
 
-    // QueueHandle_t daliqueue = start_dali_parser(edgeframe_queue, 0);
-    parsestruct *ps = start_dali_parser(edgeframe_queue, 1);
+    // dali_set_fade_time(dali_transceiver, 9, 0);
+    // dali_set_fade_time(dali_transceiver, 8, 5);
+    dali_broadcast_level(dali_transceiver, 30);
+    dali_set_level(dali_transceiver, 8, 70);
+    ESP_LOGI(TAG, "Query level returned %hi", dali_query_level(dali_transceiver, 9));
 
-    // transmit_frame(dali_transmitter, DALI_FIRSTBYTE_TERMINATE, DALI_SECONDBYTE_TERMINATE);
-    
-    vTaskDelay(100);
-    dali_frame_t frame;
-    frame.firstbyte = DALI_FIRSTBYTE_BROADCAST_LEVEL;
-    frame.secondbyte = 50;
-    xQueueSendToBack(dali_transmitter.queue, &frame, portMAX_DELAY);
-    
-    // vTaskDelay(pdMS_TO_TICKS(400));
-    // provision(dali_transmitter, ps->daliframequeue);
-    // vTaskDelay(pdMS_TO_TICKS(400));
+    uint8_t address;
+    uint32_t queuepeek;
+    BaseType_t success;
+    uint32_t requestlevel;
+    // int level = 10;
     while (1){
-        // BaseType_t success;
-        // frame.firstbyte;
-        uint8_t address;
-        uint32_t queuepeek;
-        BaseType_t success;
-        for (int i=5; i<10; i+=1) {
-            // update_0_10v_level(pwm0_10v_channel1, i *i);
-            // success = xQueuePeek(lightingqueue, &queuepeek, 0);
-            success = xTaskNotifyWaitIndexed(0, 0, 0, &queuepeek, pdMS_TO_TICKS(1000));
-            if (success == pdTRUE){
-                if (queuepeek >= 0 && queuepeek <= 63)
-                {
-                    address = queuepeek;
-                } else {
-                    ESP_LOGE(TAG, "queuepeek not valid %lu", queuepeek);
-                };
+        BaseType_t success = xTaskNotifyWaitIndexed(0, 0, 0, &requestlevel, 100);
+        if (success) {
+            if (requestlevel > 254) requestlevel = 254;
+            ESP_ERROR_CHECK(set_0_10v_level(pwm0_10v_channel1, (uint16_t)((uint16_t) requestlevel) << 8));
+            for (int i=8; i<10; i+=1) {
+                ESP_ERROR_CHECK(dali_set_level(dali_transceiver, i, requestlevel));
             }
-            frame.firstbyte = get_dali_address_byte_setlevel(i);
-            frame.secondbyte = 100;
-            ESP_LOGI(TAG, "address %d", i);
-            xQueueSendToBack(dali_transmitter.queue, &frame, portMAX_DELAY);
-            frame.secondbyte = 10;
-            vTaskDelay(pdMS_TO_TICKS(400));
-            xQueueSendToBack(dali_transmitter.queue, &frame, portMAX_DELAY);
-            vTaskDelay(pdMS_TO_TICKS(1000));
-            // success = xQueueSendToBack(dali_transmitter_handle.queue, &frame, portMAX_DELAY);
-            // vTaskDelay(pdMS_TO_TICKS(2000));
+            vTaskDelay(pdMS_TO_TICKS(4));
         }
     }
 

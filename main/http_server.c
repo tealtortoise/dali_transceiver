@@ -37,7 +37,7 @@
  * handlers for the web server.
  */
 
-static const char *HTAG = "example";
+static const char *HTAG = "http server";
 
 static char *responsebuffer[4096];
 

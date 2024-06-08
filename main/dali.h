@@ -1,16 +1,17 @@
-#include <stdint.h>
-#include <stdio.h>
 
-#include "driver/rmt_tx.h"
-#include "driver/rmt_rx.h"
-
-
-// #include "event_source.h"
-#include "esp_event_base.h"
 
 #ifndef DALI_H
 #define DALI_H
+#include <stdint.h>
+#include <stdio.h>
 
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "freertos/queue.h"
+
+// #include "driver/rmt_tx.h"
+#include "driver/rmt_rx.h"
+// #include "esp_event_base.h"
 
 #define RMT_RECEIVE_BUFFER_SIZE_SYMBOLS 48
 
@@ -22,6 +23,10 @@ typedef struct {
 
 #define DALI_FORWARD_FRAME_TYPE 0
 #define DALI_BACKWARD_FRAME_TYPE 1
+#define DALI_MANGLED_FRAME 2
+#define DALI_NO_FRAME_TYPE 3
+#define DALI_TRANSMIT_ERROR 3
+#define DALI_RECIEVE_ERROR 4
 
 typedef struct {
     uint8_t firstbyte;
@@ -29,6 +34,17 @@ typedef struct {
     uint8_t type;
 } dali_frame_t;
 
+static const dali_frame_t DALI_NO_FRAME = {
+    .firstbyte = 0,
+    .secondbyte = 0,
+    .type = DALI_NO_FRAME_TYPE
+};
+
+typedef struct {
+    dali_frame_t frame;
+    TaskHandle_t notify_task;
+    int32_t frameid;
+} dali_transmit_job;
 
 typedef struct {
     // const rmt_rx_done_event_data_t *event_data;
@@ -54,13 +70,6 @@ edgeframe;
 #define EDGETYPE_FALLING 0
 #define EDGETYPE_NONE -1
 
-
-ESP_EVENT_DEFINE_BASE(LIGHTING_EVENT);
-
-enum {
-    NEW_LEVEL_ID,
-};
-
 #define DALI_FIRSTBYTE_BROADCAST_LEVEL 0b11111110
 #define DALI_FIRSTBYTE_BROADCAST_COMMAND 0b11111111
 #define DALI_FIRSTBYTE_INITALISE 0xA5
@@ -73,6 +82,7 @@ enum {
 #define DALI_FIRSTBYTE_PROGRAM_SHORT_ADDRESS 0b10110111
 #define DALI_FIRSTBYTE_QUERY_SHORT_ADDRESS 0b10111011
 #define DALI_FIRSTBYTE_VERIFY_SHORT_ADDRESS 0b10111001
+#define DALI_FIRSTBYTE_SET_DTR 0b10100011
 #define DALI_FIRSTBYTE_WITHDRAW 0b10101011
 
 
@@ -80,38 +90,35 @@ enum {
 #define DALI_SECONDBYTE_COMMAND_OFF 0x00
 #define DALI_SECONDBYTE_TERMINATE 0x00
 
-
+#define DALI_SECONDBYTE_RESET_ALL 0x20
 #define DALI_SECONDBYTE_QUERY_DTR 0b10011000
 #define DALI_SECONDBYTE_STORE_DTR_AS_SHORT_ADDRESS 0b10000000
+#define DALI_SECONDBYTE_STORE_DTR_AS_FADE_TIME 0b00101110
+#define DALI_SECONDBYTE_STORE_DTR_AS_POWER_ON_LEVEL 0b00101101
 #define DALI_SECONDBYTE_QUERY_MISSING_SHORT_ADDRESS 150
 #define DALI_SECONDBYTE_INITIALISE_ALL_WITHOUT_SHORT_ADDRESS 0xFF
 #define DALI_SECONDBYTE_INITIALISE_ALL 0x00
 #define DALI_SECONDBYTE_RANDOMIZE 0
 #define DALI_SECONDBYTE_QUERY_SHORT_ADDRESS 0
+#define DALI_SECONDBYTE_QUERY_ACTUAL_LEVEL 0b10100000
+#define DALI_SECONDBYTE_QUERY_FADE_RATE 0b10100101
 // #define DALI_SECONDBYTE_VERIFY_SHORT_ADDRESS 0
 #define DALI_SECONDBYTE_COMPARE 0
 #define DALI_SECONDBYTE_WITHDRAW 0
 
-uint8_t get_dali_address_byte(uint8_t address){
-    return (address << 1) + 1;
-}
-uint8_t get_dali_address_byte_setlevel(uint8_t address){
-    return (address << 1);
-}
+uint8_t get_dali_address_byte(uint8_t address);
 
-dali_frame_t queryshortaddress = {
-    .firstbyte = 0b10111011,
-    .secondbyte = 0x00,
-};
-dali_frame_t storedtr0asshortaddress = {
-    //YAAA AAA1 1000 0000
-    .firstbyte = DALI_FIRSTBYTE_BROADCAST_COMMAND,
-    .secondbyte = 00000111
-};
+uint8_t get_dali_address_byte_setlevel(uint8_t address);
 
-#endif //DALI_H
+void dali_log_frame(dali_frame_t frame);
 
+void log_dali_frame_prefix(dali_frame_t frame, char *prefix);
 
+#pragma once
+
+#endif 
+
+/*
 // Type of Addresses Byte Description
 // Short address 0AAAAAAS (AAAAAA = 0 to 63, S = 0/1)
 // Group address 100AAAAS (AAAA = 0 to 15, S = 0/1)
@@ -266,3 +273,4 @@ dali_frame_t storedtr0asshortaddress = {
 // 138 0x8a Emergency Lighting Controller. A device, which is certified for use in control of emergency lighting, or, if not certified, for noncritical backup lighting.
 // 139 0x8b Analog input unit. A general device with analog input.
 // 140 0x8c Data Logger. A unit logging data (can be digital or analog data)
+*/

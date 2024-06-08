@@ -8,6 +8,7 @@
 #include "driver/gptimer.h"
 #include "driver/gpio_filter.h"
 #include "dali.h"
+#include "edgeframe_logger.h"
 
 
 static const char *ELTAG = "edgeframe_isr";
@@ -22,7 +23,7 @@ typedef struct {
     uint8_t edgeframe_isr_state;
     uint8_t edgeframe_isr_numedges;
     uint64_t edgeframe_tempcount;
-    uint64_t edgeframe_startcount;
+    // uint64_t edgeframe_startcount;
 } edgeframe_isr_ctx;
 
 #define EDGEFRAME_STATE_IDLE 0
@@ -32,12 +33,12 @@ bool IRAM_ATTR timeout_isr(gptimer_handle_t timer, const gptimer_alarm_event_dat
     BaseType_t high_task_awoken = pdFALSE;
     edgeframe_isr_ctx *ctx = (edgeframe_isr_ctx*) user_ctx;
 
-    gptimer_get_raw_count(ctx->timer, (uint64_t *)&ctx->edgeframe_tempcount);
+    gptimer_get_raw_count(ctx->timer, (uint64_t *)&(ctx->edgeframe_tempcount));
     ctx->edgeframe_template.length = ctx->edgeframe_isr_numedges + 1;
-
+    // ESP_DRAM_LOGI(ELTAG, "TImeout %llu", ctx->edgeframe_tempcount);
     // add stop condition
     ctx->edgeframe_template.edges[ctx->edgeframe_isr_numedges].edgetype = EDGETYPE_NONE;
-    ctx->edgeframe_template.edges[ctx->edgeframe_isr_numedges].time = ctx->edgeframe_tempcount - ctx->edgeframe_startcount;
+    ctx->edgeframe_template.edges[ctx->edgeframe_isr_numedges].time = ctx->edgeframe_tempcount;// - ctx->edgeframe_startcount;
 
     BaseType_t success = xQueueSendFromISR(ctx->queue, (edgeframe*) &ctx->edgeframe_template, &high_task_awoken);
     if (success != pdTRUE) ESP_DRAM_LOGE(ELTAG, "Warning receive buffer full - missed Dali frame");
@@ -123,7 +124,7 @@ QueueHandle_t start_edgelogger(uint8_t gpio, bool invert) {
 
     ctx->gpio_pin = gpio;
     ctx->queue = edgeframe_queue;
-    ctx->timeout = 1600;
+    ctx->timeout = 416 * 3;
     ctx->invert = invert;
     ctx->timer = configure_edgeframe_timer(ctx);
     ctx->edgeframe_isr_state = EDGEFRAME_STATE_IDLE;
