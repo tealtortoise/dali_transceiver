@@ -19,6 +19,18 @@ static QueueHandle_t ledc_channel_queue;
 
 static int8_t pwm_resolution = -1;
 
+#ifdef CONFIG_IDF_TARGET_ESP32S3
+
+#define CLOCK_SOURCE SOC_MOD_CLK_APB
+#define LEDC_CLOCK_SOURCE LEDC_APB_CLK
+#endif // config target
+#ifdef CONFIG_IDF_TARGET_ESP32C6
+
+#define CLOCK_SOURCE SOC_MOD_CLK_PLL_F80M
+#define LEDC_CLOCK_SOURCE LEDC_USE_PLL_DIV_CLK
+#endif // config target
+
+
 uint32_t get_pwm_duty(uint16_t level){
     // level range 0 - 0xffff: 0 is off
     if (level == 0) return OFF_DUTY_8_BIT << (pwm_resolution - 8);
@@ -34,7 +46,7 @@ void prepare_pwm_for_0_10v() {
         xQueueSend(ledc_channel_queue, (uint8_t*) &i, 1);
     }
     uint32_t clkspeed;
-    esp_clk_tree_src_get_freq_hz(SOC_MOD_CLK_APB, ESP_CLK_TREE_SRC_FREQ_PRECISION_EXACT, &clkspeed);
+    esp_clk_tree_src_get_freq_hz(CLOCK_SOURCE, ESP_CLK_TREE_SRC_FREQ_PRECISION_EXACT, &clkspeed);
     pwm_resolution = ledc_find_suitable_duty_resolution(clkspeed, PWM_0_10v_FREQUENCY);
 }
 
@@ -51,7 +63,7 @@ esp_err_t setup_0_10v_channel(uint8_t gpio_pin, uint16_t initial_level, ledc_cha
         .freq_hz = PWM_0_10v_FREQUENCY,
         .speed_mode = LEDC_LOW_SPEED_MODE,
         .timer_num = LEDC_TIMER_0,
-        .clk_cfg = LEDC_APB_CLK,
+        .clk_cfg = LEDC_CLOCK_SOURCE,
     };
 
     ESP_ERROR_CHECK(ledc_timer_config(&ledc_timer));
