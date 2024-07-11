@@ -7,6 +7,7 @@
    CONDITIONS OF ANY KIND, either express or implied.
 */
 
+#include "http_server.h"
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -27,7 +28,9 @@
 #include <esp_wifi.h>
 #include <esp_system.h>
 #include "nvs_flash.h"
+#include "base.h"
 #include "html.c"
+#include "http_server.h"
 // #include "esp_eth.h"
 #endif  // !CONFIG_IDF_TARGET_LINUX
 
@@ -37,14 +40,12 @@
  * handlers for the web server.
  */
 
-static const char *HTAG = "http server";
+static const char *TAG = "http server";
 
 static char *responsebuffer[4096];
 
-typedef struct {
-    httpd_handle_t server;
-    httpd_ctx *extra_ctx;
-} handler_ctx;
+extern int setpoint;
+
 
 /* An HTTP GET handler */
 static esp_err_t hello_get_handler(httpd_req_t *req)
@@ -70,7 +71,7 @@ static esp_err_t hello_get_handler(httpd_req_t *req)
         if (digits > 0){
             char *end;
             ns = strtol(numberlevel, &end, 10);
-            ESP_LOGI(HTAG, "Found digits in URI %s", numberlevel);
+            ESP_LOGI(TAG, "Found digits in URI %s", numberlevel);
         }
     }
     
@@ -84,10 +85,12 @@ static esp_err_t hello_get_handler(httpd_req_t *req)
     // req->sess_ctx;
     httpd_ctx *ctx = httpd_get_global_user_ctx(req->handle);
     // QueueHandle_t lightingqueue = ctx->queue;
-    ctx->level = ns;
-    xTaskNotifyIndexed(ctx->mainloop_task, 0, ns, eSetValueWithOverwrite);
+    setpoint = ns;
+    // xEventGroupSetBits(ctx->lightstate->eventgroup, EVENTBITS_ALL);
+    ESP_LOGI(TAG, "New set-point %i", ns);
+    xTaskNotifyIndexed(ctx->mainloop_task, SET_POINT_NOTIFY_INDEX, ns, eSetValueWithOverwrite);
     // int o = (int)httpd_get_global_user_ctx(req->handle);
-    // ESP_LOGI(HTAG, "ctxval %u", o);
+    // ESP_LOGI(TAG, "ctxval %u", o);
     // xQueueOverwrite(lightingqueue, &ns);
 
     httpd_resp_send(req, responsebuffer, HTTPD_RESP_USE_STRLEN);
@@ -139,17 +142,17 @@ static httpd_handle_t start_webserver(httpd_ctx *ctx)
     config.lru_purge_enable = true;
 
     // Start the httpd server
-    ESP_LOGI(HTAG, "Starting server on port: '%d'", config.server_port);
+    ESP_LOGI(TAG, "Starting server on port: '%d'", config.server_port);
     if (httpd_start(&server, &config) == ESP_OK) {
         // Set URI handlers
-        ESP_LOGI(HTAG, "Registering URI handlers");
+        ESP_LOGI(TAG, "Registering URI handlers");
         httpd_register_uri_handler(server, &hello);
         // httpd_register_uri_handler(server, &echo);
         // httpd_register_uri_handler(server, &ctrl);
         return server;
     }
 
-    ESP_LOGI(HTAG, "Error starting server!");
+    ESP_LOGI(TAG, "Error starting server!");
     return NULL;
 }
 
@@ -166,11 +169,11 @@ static void disconnect_handler(void* arg, esp_event_base_t event_base,
     handler_ctx *ctx = (handler_ctx*) event_data;
     // httpd_handle_t* server = (httpd_handle_t*) arg;
     if (ctx->server) {
-        ESP_LOGI(HTAG, "Stopping webserver");
+        ESP_LOGI(TAG, "Stopping webserver");
         if (stop_webserver(ctx->server) == ESP_OK) {
             ctx->server = NULL;
         } else {
-            ESP_LOGE(HTAG, "Failed to stop http server");
+            ESP_LOGE(TAG, "Failed to stop http server");
         }
     }
 }
@@ -181,7 +184,7 @@ static void connect_handler(void* arg, esp_event_base_t event_base,
     handler_ctx *ctx = (handler_ctx*) event_data;
     // httpd_handle_t* server = (httpd_handle_t*) arg;
     if (ctx->server == NULL) {
-        ESP_LOGI(HTAG, "Starting webserver");
+        ESP_LOGI(TAG, "Starting webserver");
         ctx->server = start_webserver(ctx->extra_ctx);
     }
 }

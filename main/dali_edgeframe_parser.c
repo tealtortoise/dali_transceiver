@@ -10,7 +10,7 @@
 #include "dali_edgeframe_parser.h"
 // #include "edgeframe_logger.c"
 
-static const char* PTAG = "dali_parser";
+static const char* TAG = "dali_parser";
 
 #define EDGEDECODE_STATE_INIT 0
 #define EDGEDECODE_STATE_CHECKSTART 1
@@ -57,12 +57,13 @@ void edgeframe_queue_log_task(void* params) {
     edgeframe receivedframe;
     dali_frame_t outputframe;
     BaseType_t sendsuccess;
-    uint8_t log;
+    uint8_t log;    
     uint8_t record;
     uint8_t frameaction;
     // vTaskDelay(pdMS_TO_TICKS(8000));
     while (1) {
         bool received = xQueueReceive(edgeinputqueue, &receivedframe, 101);
+        if (!received) continue;
         frame_duration = receivedframe.edges[receivedframe.length - 1].time;
         outputframe.type = get_frame_type_from_duration(frame_duration);
 
@@ -75,14 +76,14 @@ void edgeframe_queue_log_task(void* params) {
             frameaction = pass->config.backward_frame_action;
             break;
         default:
-            ESP_LOGE(PTAG,"Unknown frame type %d", outputframe.type);
+            ESP_LOGE(TAG,"Unknown frame type %d", outputframe.type);
             frameaction = DALI_PARSER_ACTION_LOG;
         }
         log = frameaction & 1;
         record = frameaction & 2;
-
+        // ESP_LOGI(TAG, "DEBUG frame action %d, log %d, record %d, frametype %d", frameaction, log, record, outputframe.type);
         if (received && log) {
-            uint8_t state = 0;
+            uint8_t strobestate = 0;
             uint32_t output = 0;
             uint8_t output_bit_pos = 23;
             uint16_t first_bit_time = 9999;
@@ -96,31 +97,31 @@ void edgeframe_queue_log_task(void* params) {
             bool error = false;
             for (uint8_t i = 0; i<receivedframe.length; i++) {
                 if(debug) {
-                    ESP_LOGI(PTAG, "Level %d at %u us (%u us) state %d",
+                    ESP_LOGI(TAG, "Level %d at %u us (%u us) strobestate %d",
                         receivedframe.edges[i].edgetype,
                         receivedframe.edges[i].time,
                         receivedframe.edges[i].time - last_edge_elapsed,
-                        state);
+                        strobestate);
                 }
                 last_edge_elapsed = receivedframe.edges[i].time;
-                if (error || state == EDGEDECODE_STATE_END) break;
+                if (error || strobestate == EDGEDECODE_STATE_END) break;
                 edge = receivedframe.edges[i];
                 if (edge.edgetype == EDGETYPE_RISING) baud_time = edge.time - first_bit_time;
-                switch (state) {
+                switch (strobestate) {
                     case EDGEDECODE_STATE_INIT: {
-                        state = EDGEDECODE_STATE_CHECKSTART;
+                        strobestate = EDGEDECODE_STATE_CHECKSTART;
                         break;
                     }
                     case EDGEDECODE_STATE_CHECKSTART: {
                         if (edge.edgetype == EDGETYPE_RISING && check_if_half_period(edge.time)) {
-                            state = EDGEDECODE_STATE_BITREADY;
+                            strobestate = EDGEDECODE_STATE_BITREADY;
                             last_valid_bit_time = edge.time;
 
                             first_bit_time = edge.time;
                         }
                         else
                         {
-                            ESP_LOGE(PTAG, "Start bit error %u", i);
+                            ESP_LOGE(TAG, "Start bit error %u", i);
                             error = true;
                         }
                         break;
@@ -128,17 +129,17 @@ void edgeframe_queue_log_task(void* params) {
                     case EDGEDECODE_STATE_BITREADY: {
 
                         if (edge.edgetype == EDGETYPE_NONE) {
-                            state = EDGEDECODE_STATE_END;
+                            strobestate = EDGEDECODE_STATE_END;
                             break;
                         }
                         last_valid_bit_elapsed = edge.time - last_valid_bit_time;
                         if (check_if_half_period(last_valid_bit_elapsed)) {
-                            if (debug) ESP_LOGD(PTAG, "...Half bit %u", i);
+                            if (debug) ESP_LOGD(TAG, "...Half bit %u", i);
                             // do nothing
                         }
                         else if (check_if_full_period(last_valid_bit_elapsed))
                         {
-                            if (debug) ESP_LOGD(PTAG, "...Full bit %u edge %d bitpos %d", i, edge.edgetype, output_bit_pos);
+                            if (debug) ESP_LOGD(TAG, "...Full bit %u edge %d bitpos %d", i, edge.edgetype, output_bit_pos);
                             if (edge.edgetype == EDGETYPE_RISING) {
                                 output = output | (1 << output_bit_pos);
                             }
@@ -150,7 +151,7 @@ void edgeframe_queue_log_task(void* params) {
                         }
                         else
                         {
-                            ESP_LOGE(PTAG, "No bit error %u elapsed %u", i, last_valid_bit_elapsed);
+                            ESP_LOGE(TAG, "No bit error %u elapsed %u", i, last_valid_bit_elapsed);
                             error = true;
                         }
 
@@ -171,10 +172,9 @@ void edgeframe_queue_log_task(void* params) {
 
             if (record || (error && (pass->config.mangled_frame_action & 2))) {
                 sendsuccess = xQueueSendToBack(dalioutputqueue, &outputframe, 0);
-                if (sendsuccess != pdTRUE) ESP_LOGE(PTAG, "Dali output queue full");
+                if (sendsuccess != pdTRUE) ESP_LOGE(TAG, "Dali output queue full");
             }
-
-            log_dali_frame_prefix(outputframe, record ? "ENQUEUED: " : "OBSERVED: ");
+            if (log) log_dali_frame_prefix(outputframe, record ? "ENQUEUED: " : "OBSERVED: ");
         }
     }
 }

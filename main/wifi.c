@@ -11,6 +11,7 @@
 
 #include "lwip/err.h"
 #include "lwip/sys.h"
+#include "base.h"
 
 #define LIGHTING_WIFI_SSID "vodafone10BD78"
 #define LIGHTING_WIFI_PASSWORD "9Crabstickerponcho"

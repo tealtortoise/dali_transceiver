@@ -11,15 +11,10 @@
 
 // #include "driver/rmt_tx.h"
 #include "driver/rmt_rx.h"
+#include "base.h"
 // #include "esp_event_base.h"
 
 #define RMT_RECEIVE_BUFFER_SIZE_SYMBOLS 48
-
-typedef struct {
-    QueueHandle_t queue;
-    TaskHandle_t mainloop_task;
-    int level;
-} httpd_ctx;
 
 #define DALI_FORWARD_FRAME_TYPE 0
 #define DALI_BACKWARD_FRAME_TYPE 1

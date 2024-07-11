@@ -115,7 +115,7 @@ void dali_transmit_queue_receiver_task(dali_transmit_isr_ctx *ctx) {
             ctx->state = DALI_ISR_STATE_STARTED;
             // gptimer_set_raw_count(ctx->timer, 0);
             gptimer_start(ctx->timer);
-            success = xTaskNotifyWaitIndexed(0, 0, 0, &returnval, 10);
+            success = xTaskNotifyWaitIndexed(0, 0, 0, &returnval, pdMS_TO_TICKS(100));
             if (job.frameid != DALI_FRAME_ID_DONT_NOTIFY) {
                 xTaskNotifyIndexed(job.notify_task, DALI_NOTIFY_COMPLETE_INDEX, job.frameid, eSetValueWithOverwrite);
             }
@@ -129,7 +129,7 @@ void dali_transmit_queue_receiver_task(dali_transmit_isr_ctx *ctx) {
 
 //
 
-esp_err_t setup_dali_transmitter(uint8_t gpio_pin, uint16_t queuedepth, dali_transmitter_handle_t *handle) {
+esp_err_t setup_dali_transmitter(uint8_t gpio_pin, uint8_t invert, uint16_t queuedepth, dali_transmitter_handle_t *handle) {
     // setup queue
     QueueHandle_t isrqueue = xQueueCreate(1, sizeof(dali_transmit_isr_job));
     QueueHandle_t transmitqueue = xQueueCreate(queuedepth, sizeof(dali_transmit_job));
@@ -173,7 +173,7 @@ esp_err_t setup_dali_transmitter(uint8_t gpio_pin, uint16_t queuedepth, dali_tra
     ctx->isr_queue = isrqueue;
     ctx->transmit_queue = transmitqueue;
     ctx->timer = gptimer;
-    ctx->invert = 1;
+    ctx->invert = invert;
     ctx->alarmconf = alarmconf;
 
     gptimer_event_callbacks_t cbs = {
