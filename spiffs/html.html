@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        * {
+            box-sizing: border-box;
+        } 
+        .slidecontainer {
+            margin: 1em auto 1em auto;
+            width:80%;
+        }
+        .slidecontainer span {
+            font-size: 240%;
+            width: 25%;
+            display:inline-block;
+        }
+        #levelslider {
+            width: 73%;
+        }
+        button.levelbutton {
+            margin: 1em auto 1em auto;
+            width: 80%;
+            padding-top: 1em;
+            padding-bottom: 1em;
+            display: block;
+            border-radius: 1em;
+            border-color: black;
+            border-width: 0.3em;
+            box-shadow: 0px 0px 5px 5px rgba(0, 0, 0, 0.171);
+            border-style: solid;
+            color: white;
+            font-size: 140%;
+        }
+        .red {
+            background-color: rgb(235, 47, 57);
+        }
+        .purple {
+            background-color: rgb(156, 68, 228);
+        }
+        .teal {
+            background-color: rgb(14, 193, 124);
+        }
+        .green {
+            background-color: rgb(175, 212, 8);
+        }
+        .orange {
+            background-color: rgb(246, 71, 47);
+        }
+    </style>
+</head>
+<body>
+    <div class="slidecontainer">
+        <span id="ajaxlevel">--</span><input type="range" min="0" max="254" value="50" class="slider" id="levelslider">
+    </div>
+    <div>
+        <button class="levelbutton red" level="0">Switch Off</button>
+        <button class="levelbutton orange" level="10">Night-time</button>
+        <button class="levelbutton green" level="30">Early evening</button>
+        <button class="levelbutton teal" level="220">Low daytime</button>
+        <button class="levelbutton purple" level="254">Full</button>
+    </div>
+    <script>
+        "use strict";
+        var xhttp = new XMLHttpRequest();
+        var ontimeout = 0;
+        var waiting = 0;
+        let slider = document.getElementById("levelslider");
+        let levelind = document.getElementById('ajaxlevel');
+        
+
+        function levelToPercent(level) {
+            return Math.floor(level / 2.54 + 0.5) + "%";
+
+        }
+
+        function send(setpoint){
+                console.log("Sending ", setpoint);
+                xhttp.open("GET", "/level/" + setpoint);
+                xhttp.send();
+        };
+
+        function sliderChangeFn() {
+            let sliderval = slider.value;
+            levelind.innerHTML = levelToPercent(sliderval);
+            levelind.setAttribute("style", "color: #A40000");
+            if (!ontimeout){
+                send(sliderval);
+                ontimeout = 1;
+                setTimeout(function() {
+                    ontimeout = 0;
+                    if (waiting){
+                        sliderval = slider.value;
+                        send(sliderval);
+                        waiting = 0;
+                    }
+                }, 80);
+            } else {
+                waiting = 1;
+            }
+        };
+        function buttonPressFn(event, v2) {
+            console.log(event);
+            let element = event.srcElement;
+            console.log(element);
+            let level = element.getAttribute("level");
+            slider.value = level;
+            levelind.innerHTML = levelToPercent(level);
+            levelind.setAttribute("style", "color: #A40000");
+            send(level);
+            console.log(level)
+        }
+        Array.from(document.getElementsByClassName("levelbutton")).forEach(element => {
+            element.onclick = buttonPressFn;
+        });
+        document.getElementById("levelslider").oninput = sliderChangeFn;
+
+        let changeBackToBlack = function() {
+            if (xhttp.readyState == 4 && xhttp.status == 200) {
+                levelind.setAttribute("style", "color: #000000");
+            }
+        };
+
+        xhttp.onreadystatechange = function() {
+            if (xhttp.readyState == 4 && xhttp.status == 200) {
+                levelind.innerHTML = levelToPercent(xhttp.responseText);
+                slider.value = xhttp.responseText;
+                xhttp.onreadystatechange = changeBackToBlack;
+            }
+        }
+        xhttp.open("GET", "/setpoint/current/");
+        xhttp.send();
+        
+    </script>
+</body>
+</html>

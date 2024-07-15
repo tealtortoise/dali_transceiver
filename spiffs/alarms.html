@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        .alarmunit {
+            display:grid;
+            /* position: absolute; */
+            grid-template-columns: 3fr 4fr 8fr 1fr;
+            gap: 14px;
+            /* border: 1px black solid; */
+            align-items: center;
+            margin-bottom: 2em;
+        }
+        .settingsunit {
+            display: grid;
+            gap:14px;
+            align-items: center;
+        }
+        input {
+            display: block;
+            width: 100%;
+            font-size: 110%;
+            text-align: center;
+        }
+        input.check {
+            transform: scale(2);
+        }
+        span {
+            display: block;
+            text-align: center;
+        }
+        button {
+            /* display: block; */
+            grid-column: 1 / 3;
+            font-size: 180%;
+        }
+        body {
+            padding: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="outer">
+    <div class="alarmunit">
+        <!-- <span>#</span> -->
+        <span>Setpoint 0-254</span>
+        <span>Time HHMM</span>
+        <span>Fade Time (sec)</span>
+        <span>On</span>
+        <!-- <span class="alarmnumber">1</span> -->
+        <input class="alarmsetpoint" id="setpoint1">
+        <input class="alarmtime" id="alarmtime1">
+        <input class ="alarmfade" id="fadetime1">
+        <input class="check" type="checkbox" id="enable1">
+        <!-- <span class="alarmnumber">2</span> -->
+        <input class="alarmsetpoint" id="setpoint2">
+        <input class="alarmtime" id="alarmtime2">
+        <input class ="alarmfade" id="fadetime2">
+        <input class="check"  type="checkbox" id="enable2">
+        <!-- <span class="alarmnumber">3</span> -->
+        <input class="alarmsetpoint" id="setpoint3">
+        <input class="alarmtime" id="alarmtime3">
+        <input class ="alarmfade" id="fadetime3">
+        <input class="check" type="checkbox" id="enable3">
+    </div>
+    <div class="settingsunit">
+        <div class="settingname">Default Fade Time (ms)</div>
+        <input class="setting" id="default_fadetime">
+        <div class="settingname">Full Power (0-256)</div>
+        <input class="setting" id="full_power">
+        
+        <button>Update</button>
+    </div>
+</div>
+
+<script>
+    "use strict";
+    function pad(num) {
+        num = num.toString();
+        while (num.length < 2) num = "0" + num;
+        return num;
+    }
+    function get(uri, el) {
+        
+        const options = {
+        method: 'GET',
+        };
+
+        // Make the PUT request using the fetch API
+        return fetch(uri, options)
+            .then(response => {
+                if (!response.ok) {
+                throw new Error('Network response was not ok');
+                }
+                // let text = response.text()
+                return response.text();
+            })
+            .then((st) => {
+                if (el != null) {
+                    el.value = st;
+                    console.log("Got ", st, uri, el, el.value);
+                    return;
+                }
+                return st;
+            })
+            .catch(error => {
+                console.error('There was a problem with your fetch operation:', error);
+            });
+    }
+    function send(uri, value){
+        const options = {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/plain'
+        },
+        body: `${value}`
+        };
+
+        // Make the PUT request using the fetch API
+        fetch(uri, options)
+            .then(response => {
+                if (!response.ok) {
+                throw new Error('Network response was not ok');
+                }
+                return response; // Parse the JSON response
+            })
+            .then((_) => {
+                console.log('Resource updated successfully:');
+            })
+            .catch(error => {
+                console.error('There was a problem with your fetch operation:', error);
+            });
+    };
+
+    function buttonclick(ev) {
+        for (let i = 1; i <= 3; i++){
+            let alarmnum = i;
+            let alarmtime_el = document.getElementById("alarmtime" + alarmnum);
+            let fadetime_el = document.getElementById("fadetime" + alarmnum);
+            let setpoint_el = document.getElementById("setpoint" + alarmnum);
+            let enable_el = document.getElementById("enable" + alarmnum);
+            let alarmtime = alarmtime_el.value;
+            let fadetime =  parseInt(fadetime_el.value, 10) * 1000;
+            let setpoint =  parseInt(setpoint_el.value, 10);
+            let enabled = enable_el.checked ? 1 : 0;
+            if (fadetime.length == 0){
+                fadetime = 60000;
+            }
+            if (setpoint > 254 || setpoint < 0){
+                console.log("Bad setpoint");
+                return;
+            }
+            if (alarmtime.length != 4){
+                console.log("not ok");
+                return;
+            }
+            let hour = parseInt(alarmtime.substring(0, 2), 10);
+            let min = parseInt(alarmtime.substring(2,4), 10);
+            if (min > 59 || min < 0) {
+                console.log("min not valid");
+                return;
+            }
+            if (hour < 0 || hour > 23) {
+                console.log("hour not valid");
+                return;
+            }
+            send(`/api/alarm${alarmnum}_min/`, min);
+            send(`/api/alarm${alarmnum}_hour/`, hour);
+            send(`/api/alarm${alarmnum}_fade/`, fadetime);
+            send(`/api/alarm${alarmnum}_setpoint/`, setpoint);
+            send(`/api/alarm${alarmnum}_enable/`, enabled);
+            
+        }
+        let default_fadetime = document.getElementById("default_fadetime").value;
+        if (default_fadetime >=0 && default_fadetime < 36000000){
+            send("/api/default_fadetime/", default_fadetime);
+        }
+        let full_power = document.getElementById("full_power").value;
+        if (full_power >=0 && full_power <= 256){
+            send("/api/full_power/", full_power);
+        }
+    }
+    for (let i = 1; i <= 3; i++ ){
+        let uri = `/api/alarm${i}_setpoint/`;
+        get(uri, document.getElementById(`setpoint${i}`));
+        uri = `/api/alarm${i}_fade/`;
+        get(uri).then((st) => {
+            document.getElementById(`fadetime${i}`).value = Math.floor(st / 1000 + 0.5);
+        });
+        
+        uri = `/api/alarm${i}_enable/`;
+        get(uri).then((st) => {
+            document.getElementById(`enable${i}`).checked = st == "1";
+        });
+        uri = `/api/alarm${i}_hour/`;
+        let hour;
+        let hour_prom = get(uri).then((st) => {
+            hour = st;
+        });
+        uri = `/api/alarm${i}_min/`;
+        let min;
+        let min_prom = get(uri).then((st) => {
+            min = st;
+        })
+        Promise.all([min_prom, hour_prom]).then(() => {
+            document.getElementById(`alarmtime${i}`).value = pad(hour) + pad(min);
+        });
+    }
+    get("/api/default_fadetime/", document.getElementById("default_fadetime"));
+    get("/api/full_power/", document.getElementById("full_power"));
+
+
+    let buttons = Array.from(document.getElementsByTagName("button"));
+    buttons.forEach((button_el) => {
+        console.log("addedonclick");
+        button_el.onclick = buttonclick;
+    });
+</script>
+</body>
+</html>
