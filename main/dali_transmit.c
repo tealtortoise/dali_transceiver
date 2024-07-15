@@ -56,13 +56,13 @@ bool IRAM_ATTR dali_transmit_isr(gptimer_handle_t timer, const gptimer_alarm_eve
         }
         case DALI_ISR_STATE_ENDDATA: {
             gpio_set_level(ctx->gpio_pin, 1 - ctx->invert);
-            ctx->alarmconf.alarm_count = 833 * 4;
+            ctx->alarmconf.alarm_count = 833 * 2;
             gptimer_set_alarm_action(ctx->timer, &ctx->alarmconf);
             ctx->state = DALI_ISR_STATE_STOP;
             break;
         }
         case DALI_ISR_STATE_STOP: {
-            ctx->alarmconf.alarm_count = 11000;
+            ctx->alarmconf.alarm_count = 9200;
             gptimer_set_alarm_action(ctx->timer, &ctx->alarmconf);
             ctx->state = DALI_ISR_STATE_SETTLING;
             // ESP_DRAM_LOGI(TTAG, "Call count %u", callcount);

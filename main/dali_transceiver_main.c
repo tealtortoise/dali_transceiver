@@ -3,6 +3,7 @@
 #include "freertos/task.h"
 #include "freertos/queue.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "driver/gpio.h"
 #include "driver/gptimer.h"
 #include "driver/ledc.h"
@@ -30,6 +31,8 @@
 #include "realtime.h"
 
 #define RESOLUTION_HZ     10000000
+
+#define GUESSED_LOOPTIME_US 60000
 
 
 static const char *TAG = "main loop";
@@ -138,80 +141,86 @@ void primary(){
     vTaskDelay(50);
     ESP_LOGI(TAG, "Starting main loop");
     int wait_ticks = 10;
-    int last_actual_level = actual_level;
-    int tick_increment = 1;
-    int last_slewing_tick_increment = 1;
+    int last_level = -1;
+    int last_level16 = -1;
+    int tick_increment_16 = 1 << 8;
     int local_fadetime = fadetime;
-    int last_fadetime = 0;
-    int last_slewing_wait_ticks = 10;
-    int wait_ms;
-    int wait_ticks_min = pdMS_TO_TICKS(60);
-
-    vTaskDelay(50);
+    int fade_remaining_16 = 0;
+    int setpoint16 = setpoint << 8;
+    int level16bit = setpoint16;
+    int64_t reftime = esp_timer_get_time() - GUESSED_LOOPTIME_US;
+    int64_t newtime;
+    int looptime = GUESSED_LOOPTIME_US;
     while (1) {
         received = xTaskNotifyWaitIndexed(SETPOINT_SLEW_NOTIFY_INDEX, 0, 0, &local_fadetime, wait_ticks);
+        setpoint16 = setpoint << 8;
         fadetime = (local_fadetime == USE_DEFAULT_FADETIME) ? default_fadetime : local_fadetime;
-        if (actual_level == setpoint){
+        // ESP_LOGI(TAG, "Received %i, setpoint16 %i ,wait_ticks %i, fadetime %i", received, setpoint16, wait_ticks, fadetime);
+        
+        if (wait_ticks) {
+            // looptime = GUESSED_LOOPTIME_US;
+            reftime = esp_timer_get_time();
+        }
+        else
+        {
+            newtime = esp_timer_get_time();
+            looptime = newtime - reftime;
+            reftime = newtime;
+        }
+
+        if (level16bit == setpoint16){
             // idling
             wait_ticks = pdMS_TO_TICKS(1000);
         }
         else
         {
-            // slewing
-            if (fadetime == last_fadetime) {
-                wait_ticks = last_slewing_wait_ticks;
-                tick_increment = last_slewing_tick_increment;
-            }
-            else
-            {
-                // recalculate
-                tick_increment = 1;
-                while(1){
-                    wait_ticks = pdMS_TO_TICKS((tick_increment * fadetime) >> 8);
-                    if (wait_ticks > wait_ticks_min) break;
-                    tick_increment += 1;
-                };
-                last_slewing_wait_ticks = wait_ticks;
-                last_slewing_tick_increment = tick_increment;
-                last_fadetime = fadetime;
-            }
+            wait_ticks = 0;
         }
+        tick_increment_16 = (looptime << 6) / fadetime;
+        // ESP_LOGI(TAG, "New wait ticks %i, tick inc %i, loop time %i us", wait_ticks, tick_increment_16, looptime);
         if (received || firsttime) {
             if (setpoint > 254){
                 ESP_LOGE(TAG, "Unknown level %i", setpoint);
                 continue;
             }
-            ESP_LOGI(TAG, "Setpoint now: %i", setpoint);
-            ESP_LOGI(TAG, "Actual_level %i, tick_inc %i, wait_tick %i", actual_level, tick_increment, wait_ticks);
-            
+            ESP_LOGI(TAG, "Received new setpoint '%i', fade time %i us", setpoint, fadetime);
+            // ESP_LOGI(TAG, "Actual_level %i, tick_inc %i, wait_tick %i", actual_level, tick_increment_16, wait_ticks);
         }
-        if ((actual_level != setpoint) && abs(actual_level - setpoint) < tick_increment) tick_increment = abs(actual_level - setpoint);
-        if (actual_level < setpoint){
-            actual_level += tick_increment;
-        }
-        else if (actual_level > setpoint)
-        {
-            actual_level -= tick_increment;
+        setpoint16 = setpoint << 8;
+        fade_remaining_16 = level16bit - setpoint16;
+
+        if ((fade_remaining_16 != 0) && abs(fade_remaining_16) < tick_increment_16) {
+            tick_increment_16 = abs(fade_remaining_16);
         }
 
-        if (last_actual_level != actual_level){
+        if (fade_remaining_16 < 0){
+            level16bit += tick_increment_16;
+        }
+        else if (fade_remaining_16 > 0)
+        {
+            level16bit -= tick_increment_16;
+        }
+
+        actual_level = level16bit >> 8;
+        last_level = last_level16 >> 8;
+        if (last_level == actual_level)
+        {
+            vTaskDelay(pdMS_TO_TICKS(10));
+        }
+        else 
+        {
+
             // xTaskNotifyIndexed(espnow_send_task, LIGHT_LEVEL_NOTIFY_INDEX, requestlevel, eSetValueWithOverwrite);
             // gpio_set_level(RELAY1_GPIO, requestlevel > 0);
             // gpio_set_level(RELAY2_GPIO, requestlevel > 0);
-            // ESP_LOGI(TAG, "Actual_level %i, tick_inc %i, wait_tick %i", actual_level, tick_increment, wait_ticks);
-            ESP_LOGI(TAG, "Actual Level %i", actual_level);
+            ESP_LOGI(TAG, "Actual_level %i, 16 %i, tick_inc %i, wait_tick %i, looptime %i us", actual_level, level16bit ,tick_increment_16, wait_ticks, looptime);
             ESP_ERROR_CHECK(set_0_10v_level(pwm1, actual_level));
             ESP_ERROR_CHECK(set_0_10v_level(pwm2, actual_level));
-            for (int i=8; i<10; i+=1) {
-                sent = dali_set_level_nowait(dali_transceiver, i, actual_level,pdMS_TO_TICKS(2500));
-                if (sent == ESP_ERR_NOT_FINISHED) {
-                    ESP_LOGE(TAG, "DALI transmit queue probably full, increasing delay %i -> %i",wait_ticks_min, wait_ticks_min + 1);
-                    wait_ticks_min += 1;
-                    last_fadetime = -1; // force recalculation
-                }
-            }
+            // for (int i=8; i<13; i+=1) {
+            sent = dali_broadcast_level(dali_transceiver, actual_level);
+            // }
         };
-        last_actual_level = actual_level;
+        last_level16 = level16bit;
         firsttime = 0;
     };
 }
@@ -242,7 +251,7 @@ void secondary(){
     ESP_ERROR_CHECK(dali_setup_transceiver(transceiver_config, &dali_transceiver));
 
     dali_broadcast_level(dali_transceiver, 30);
-    dali_set_level(dali_transceiver, 8, 70);
+    dali_set_level_block(dali_transceiver, 8, 70);
     ESP_LOGI(TAG, "Query level returned %hi", dali_query_level(dali_transceiver, 9));
 
     uint8_t address;
@@ -259,7 +268,7 @@ void secondary(){
             if (requestlevel > 254) requestlevel = 254;
             ESP_ERROR_CHECK(set_0_10v_level(pwm1, requestlevel));
             for (int i=8; i<10; i+=1) {
-                ESP_ERROR_CHECK(dali_set_level(dali_transceiver, i, requestlevel));
+                ESP_ERROR_CHECK(dali_set_level_block(dali_transceiver, i, requestlevel));
             }
             vTaskDelay(pdMS_TO_TICKS(4));
         }
