@@ -1,3 +1,4 @@
+#include <math.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
@@ -16,7 +17,7 @@
 // #include "dali_utils.c"
 // #include "dali_rmt_receiver.c"
 // #ifdef IS_PRIMARY
-#include "wifi.c"
+#include "wifi.h"
 #include "http_server.h"
 // #endif // IS_PRIMARY
 #include "espnow.h"
@@ -26,6 +27,7 @@
 #include "uart.h"
 #include "buttons.h"
 #include "adc.h"
+#include "realtime.h"
 
 #define RESOLUTION_HZ     10000000
 
@@ -63,6 +65,7 @@ void configure_input_pin(uint8_t pin, uint8_t wpu, uint8_t intr){
 }
 
 void configure_gpio(){
+    gpio_install_isr_service(0);
     configure_output_pin(RELAY1_GPIO, 0);
     configure_output_pin(RELAY2_GPIO, 0);
     configure_output_pin(LED1_GPIO, 0);
@@ -96,9 +99,9 @@ bool IRAM_ATTR strobetimer_isr(gptimer_handle_t timer, const gptimer_alarm_event
     return false;
 }
 
-
 void primary(){
     setup_wifi();
+    setup_sntp();
     httpd_ctx httpdctx = {
         .mainloop_task = xTaskGetCurrentTaskHandle()
     };
@@ -107,17 +110,16 @@ void primary(){
     // TaskHandle_t espnow_send_task;
     // ESP_ERROR_CHECK(setup_espnow_common(&espnow_send_task, xTaskGetCurrentTaskHandle()));
 
+    zeroten_handle_t pwm1;
+    zeroten_handle_t pwm2;
+    ESP_ERROR_CHECK(setup_0_10v_channel(LED1_GPIO, CALIBRATION_PWM_LOG, &pwm1));
+    ESP_ERROR_CHECK(setup_0_10v_channel(PWM_010v_GPIO, CALIBRATION_LOOKUP_NVS, &pwm2));
 
-    ledc_channel_t pwm0_10v_channel1;
-    ESP_ERROR_CHECK(setup_0_10v_channel(LED1_GPIO, 1<<14, &pwm0_10v_channel1));
-    ledc_channel_t pwm0_10v_channel2;
-    ESP_ERROR_CHECK(setup_0_10v_channel(PWM_010v2_GPIO, 1<<14, &pwm0_10v_channel2));
+    setup_button_interrupts(xTaskGetCurrentTaskHandle(), pwm1, pwm2);
 
-    // ESP_ERROR_CHECK(gpio_install_isr_service(0));
-    
     dali_transceiver_config_t transceiver_config = dali_transceiver_sensible_default_config;
-    transceiver_config.invert_input = DALI_DO_INVERT;
     transceiver_config.invert_input = DALI_DONT_INVERT;
+    transceiver_config.invert_output = DALI_DONT_INVERT;
     transceiver_config.receive_gpio_pin = RX_GPIO   ;
     transceiver_config.transmit_gpio_pin = TX_GPIO;
     transceiver_config.parser_config.forward_frame_action = DALI_PARSER_ACTION_IGNORE;
@@ -125,28 +127,91 @@ void primary(){
     dali_transceiver_handle_t dali_transceiver;
     ESP_ERROR_CHECK(dali_setup_transceiver(transceiver_config, &dali_transceiver));
 
+    // dali_set_system_failure_level(dali_transceiver, 8, 10);
+    // dali_set_system_failure_level(dali_transceiver, 9, 10);
     dali_broadcast_level(dali_transceiver, 30);
-    dali_set_level(dali_transceiver, 8, 70);
-    
-    BaseType_t success;
+
+    BaseType_t received;
+    esp_err_t sent;
     int firsttime = 1;
-    uint32_t requestlevel;
-    
+    actual_level = setpoint;
+    vTaskDelay(50);
+    ESP_LOGI(TAG, "Starting main loop");
+    int wait_ticks = 10;
+    int last_actual_level = actual_level;
+    int tick_increment = 1;
+    int last_slewing_tick_increment = 1;
+    int local_fadetime = fadetime;
+    int last_fadetime = 0;
+    int last_slewing_wait_ticks = 10;
+    int wait_ms;
+    int wait_ticks_min = pdMS_TO_TICKS(60);
+
+    vTaskDelay(50);
     while (1) {
-        success = xTaskNotifyWaitIndexed(SET_POINT_NOTIFY_INDEX, 0, 0, &requestlevel, 100);
-        if (success || firsttime) {
-            if (requestlevel > 254) requestlevel = 254;
-            // xTaskNotifyIndexed(espnow_send_task, LIGHT_LEVEL_NOTIFY_INDEX, requestlevel, eSetValueWithOverwrite);
-            gpio_set_level(RELAY1_GPIO, requestlevel > 0);
-            gpio_set_level(RELAY2_GPIO, requestlevel > 0);
-            // ESP_LOGI(TAG, "Received new level notification: %lu", requestlevel);
-            ESP_ERROR_CHECK(set_0_10v_level(pwm0_10v_channel1, (uint16_t)((uint16_t) requestlevel) << 8, true));
-            // ESP_ERROR_CHECK(set_0_10v_level(pwm0_10v_channel2, (uint16_t)((uint16_t) requestlevel) << 8, false));
-            for (int i=8; i<10; i+=1) {
-                ESP_ERROR_CHECK(dali_set_level(dali_transceiver, i, requestlevel));
+        received = xTaskNotifyWaitIndexed(SETPOINT_SLEW_NOTIFY_INDEX, 0, 0, &local_fadetime, wait_ticks);
+        fadetime = (local_fadetime == USE_DEFAULT_FADETIME) ? default_fadetime : local_fadetime;
+        if (actual_level == setpoint){
+            // idling
+            wait_ticks = pdMS_TO_TICKS(1000);
+        }
+        else
+        {
+            // slewing
+            if (fadetime == last_fadetime) {
+                wait_ticks = last_slewing_wait_ticks;
+                tick_increment = last_slewing_tick_increment;
             }
-            vTaskDelay(pdMS_TO_TICKS(4));
+            else
+            {
+                // recalculate
+                tick_increment = 1;
+                while(1){
+                    wait_ticks = pdMS_TO_TICKS((tick_increment * fadetime) >> 8);
+                    if (wait_ticks > wait_ticks_min) break;
+                    tick_increment += 1;
+                };
+                last_slewing_wait_ticks = wait_ticks;
+                last_slewing_tick_increment = tick_increment;
+                last_fadetime = fadetime;
+            }
+        }
+        if (received || firsttime) {
+            if (setpoint > 254){
+                ESP_LOGE(TAG, "Unknown level %i", setpoint);
+                continue;
+            }
+            ESP_LOGI(TAG, "Setpoint now: %i", setpoint);
+            ESP_LOGI(TAG, "Actual_level %i, tick_inc %i, wait_tick %i", actual_level, tick_increment, wait_ticks);
+            
+        }
+        if ((actual_level != setpoint) && abs(actual_level - setpoint) < tick_increment) tick_increment = abs(actual_level - setpoint);
+        if (actual_level < setpoint){
+            actual_level += tick_increment;
+        }
+        else if (actual_level > setpoint)
+        {
+            actual_level -= tick_increment;
+        }
+
+        if (last_actual_level != actual_level){
+            // xTaskNotifyIndexed(espnow_send_task, LIGHT_LEVEL_NOTIFY_INDEX, requestlevel, eSetValueWithOverwrite);
+            // gpio_set_level(RELAY1_GPIO, requestlevel > 0);
+            // gpio_set_level(RELAY2_GPIO, requestlevel > 0);
+            // ESP_LOGI(TAG, "Actual_level %i, tick_inc %i, wait_tick %i", actual_level, tick_increment, wait_ticks);
+            ESP_LOGI(TAG, "Actual Level %i", actual_level);
+            ESP_ERROR_CHECK(set_0_10v_level(pwm1, actual_level));
+            ESP_ERROR_CHECK(set_0_10v_level(pwm2, actual_level));
+            for (int i=8; i<10; i+=1) {
+                sent = dali_set_level_nowait(dali_transceiver, i, actual_level,pdMS_TO_TICKS(2500));
+                if (sent == ESP_ERR_NOT_FINISHED) {
+                    ESP_LOGE(TAG, "DALI transmit queue probably full, increasing delay %i -> %i",wait_ticks_min, wait_ticks_min + 1);
+                    wait_ticks_min += 1;
+                    last_fadetime = -1; // force recalculation
+                }
+            }
         };
+        last_actual_level = actual_level;
         firsttime = 0;
     };
 }
@@ -162,8 +227,10 @@ void secondary(){
     setup_espnow_receiver();
     
 
-    ledc_channel_t pwm0_10v_channel1;
-    ESP_ERROR_CHECK(setup_0_10v_channel(PWM_010v_GPIO, 1<<14, &pwm0_10v_channel1));
+    zeroten_handle_t pwm1;
+    zeroten_handle_t pwm2;
+    ESP_ERROR_CHECK(setup_0_10v_channel(LED1_GPIO, 2, &pwm1));
+    ESP_ERROR_CHECK(setup_0_10v_channel(PWM_010v2_GPIO, 2, &pwm2));
 
     // ESP_ERROR_CHECK(gpio_install_isr_service(0));
     
@@ -190,7 +257,7 @@ void secondary(){
             ESP_LOGI(TAG, "Received notification of level change to %lu", requestlevel);
 
             if (requestlevel > 254) requestlevel = 254;
-            ESP_ERROR_CHECK(set_0_10v_level(pwm0_10v_channel1, (uint16_t)((uint16_t) requestlevel) << 8, false));
+            ESP_ERROR_CHECK(set_0_10v_level(pwm1, requestlevel));
             for (int i=8; i<10; i+=1) {
                 ESP_ERROR_CHECK(dali_set_level(dali_transceiver, i, requestlevel));
             }
@@ -206,6 +273,7 @@ void app_main(void)
     // setup_uart();
     uint8_t dip_address = read_dip_switches();
     ESP_LOGI(TAG, "Read DIP Switch address: %d", dip_address);
+
     light_adc_config_t adcconfig = {
         .notify_task = xTaskGetCurrentTaskHandle(),
         .tolerance = 10,

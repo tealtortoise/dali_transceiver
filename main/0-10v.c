@@ -5,21 +5,20 @@
 #include <esp_clk_tree.h>
 #include "driver/ledc.h"
 #include "esp_log.h"
+#include "nvs_flash.h"
+#include "nvs.h"
+
 #include "base.h"
 #include "0-10v.h"
 
 #define PWM_0_10v_FREQUENCY 10000
-// #define OFF_DUTY_8_BIT 7
-// #define LOW_DUTY_8_BIT 14
-// #define HIGH_DUTY_8_BIT 250
-#define OFF_DUTY_8_BIT 0
-#define LOW_DUTY_8_BIT 0
-#define HIGH_DUTY_8_BIT 255
 #define MAX_LEDC_CHANNELS 6
 
-#define LUT_SIZE 256
-static DRAM_ATTR uint8_t lut_x[LUT_SIZE];
-static DRAM_ATTR uint16_t lut_y[LUT_SIZE];
+#define GENERIC_CAL_GAIN 0.8541
+#define GENERIC_CAL_OFF_VOLTAGE 0.35
+#define GENERIC_CAL_START_VOLTAGE 1.5
+#define GENERIC_CAL_FINISH_VOLTAGE 9.1
+#define GENERIC_CAL_FULL_VOLTAGE 10.0
 
 static const char *TAG = "0-10v driver";
 
@@ -41,29 +40,54 @@ static int8_t pwm_resolution = -1;
 uint64_t starttime;
 uint64_t et;
 
-uint32_t get_pwm_duty(uint16_t level, bool non_linearise){
-    // level range 0 - 0xffff: 0 is off
-    // if (level == 0) return OFF_DUTY_8_BIT << (pwm_resolution - 8);
-    starttime = get_system_time_us(0);
-    int intermediate_level = lut_y[(level >> 8)];
-    et = get_system_time_us(starttime);
-    ESP_LOGI(TAG, "get_PWM_DUTY took %llu us", et);
-    // ESP_LOGI(TAG, "level %i -> %i", level, intermediate_level);
-
-    // const uint16_t mult = (HIGH_DUTY_8_BIT - LOW_DUTY_8_BIT) << 8;
-    // uint32_t intermediate_duty = (LOW_DUTY_8_BIT << 16) + intermediate_level * mult;
-    // return intermediate_duty >> (32 -  pwm_resolution);
-    return intermediate_level;
+uint32_t get_pwm_duty(uint8_t level, uint16_t lut[]){
+    return lut[level];
 }
 
-void build_log_lookups(){
-    int x;
-    float mult = ((1 << pwm_resolution) - 1) / powf(1.027, 255);
-    for (int i=0; i < LUT_SIZE; i++){
-
-        x = i * (256 / LUT_SIZE);
-        lut_x[i] = x;
-        lut_y[i] = clamp(powf(1.027, x) * mult, 0, 0xffff);
+void built_lut(uint16_t lut[], int calibration, double gain){
+    int max_value = (1 << pwm_resolution) - 1;
+    lut[0] = 0;
+    lut[254] = max_value;
+    switch (calibration)
+    {
+        case CALIBRATION_PWM_LOG:
+            double mult = (max_value) / (pow(1.027, 254.0));
+            for (int i=1; i < 254; i++){
+                lut[i] = clamp(pow(1.027, i-1) * mult - 1, 0, 0xffff);
+            }
+            break;
+        case CALIBRATION_LOOKUP_NVS:
+        case CALIBRATION_GENERIC_LOG_ELDOLED:
+            ESP_LOGI(TAG, "Using gain %f for LUT", gain);
+            double x;
+            double diff = GENERIC_CAL_FINISH_VOLTAGE - GENERIC_CAL_START_VOLTAGE;
+            double voltage;
+            double dutydouble;
+            for (int i=0; i < 255; i++){
+                if (i == 0){
+                    voltage = GENERIC_CAL_OFF_VOLTAGE;
+                }
+                else if (i == 254)
+                {
+                    voltage = GENERIC_CAL_FULL_VOLTAGE;
+                }
+                else
+                {
+                    x = ((double) i - 1.0) / 253.0;
+                    voltage = x * diff + GENERIC_CAL_START_VOLTAGE;
+                }
+                dutydouble = voltage / 10.0 * gain;
+                lut[i] = clamp(dutydouble * max_value, 0, 0xffff);
+                if (i <3 || i > 251) {
+                    ESP_LOGI(TAG, "0-10v Cal Input %d -> voltage %f, doubleduty %f, lut %u", i, voltage, dutydouble, lut[i]);
+                }
+            }
+            break;
+        default:
+            for (int i=1; i < 254; i++){
+                lut[i] = clamp(i * max_value / 254, 0, 0xffff);
+            }
+            break;
     }
 }
 
@@ -75,16 +99,13 @@ void prepare_pwm_for_0_10v() {
     uint32_t clkspeed;
     esp_clk_tree_src_get_freq_hz(CLOCK_SOURCE, ESP_CLK_TREE_SRC_FREQ_PRECISION_EXACT, &clkspeed);
     pwm_resolution = ledc_find_suitable_duty_resolution(clkspeed, PWM_0_10v_FREQUENCY);
-    build_log_lookups();
 }
 
-esp_err_t setup_0_10v_channel(uint8_t gpio_pin, uint16_t initial_level, ledc_channel_t *ledc_channel){
+esp_err_t setup_0_10v_channel(uint8_t gpio_pin, int calibration, zeroten_handle_t *handle){
     if (pwm_resolution == -1) prepare_pwm_for_0_10v();
     uint8_t channelnum;
     BaseType_t success = xQueueReceive(ledc_channel_queue, &channelnum,0);
     if (!success) return ESP_FAIL;
-
-    *ledc_channel = channelnum;
 
     ledc_timer_config_t ledc_timer = {
         .duty_resolution = pwm_resolution,
@@ -97,22 +118,60 @@ esp_err_t setup_0_10v_channel(uint8_t gpio_pin, uint16_t initial_level, ledc_cha
     ESP_ERROR_CHECK(ledc_timer_config(&ledc_timer));
 
     ledc_channel_config_t ledc_channel_confstruct = {
-        .channel    = *ledc_channel,
-        .duty       = get_pwm_duty(initial_level, false),
+        .channel    = channelnum,
+        .duty       = 0,
         .intr_type = LEDC_INTR_DISABLE,
         .gpio_num   = gpio_pin,
         .speed_mode = LEDC_LOW_SPEED_MODE,
         .timer_sel  = LEDC_TIMER_0
     };
     ESP_ERROR_CHECK(ledc_channel_config(&ledc_channel_confstruct));
+
+    double gain = GENERIC_CAL_GAIN;
+    if (calibration == CALIBRATION_LOOKUP_NVS) {
+        ESP_ERROR_CHECK(nvs_flash_init());
+        nvs_handle_t nvs_handle;
+        ESP_ERROR_CHECK(nvs_open("nvs", NVS_READWRITE, &nvs_handle));
+        // ESP_ERROR_CHECK(nvs_set_i32(nvs_handle, "testint", 123));
+        char key[24];
+        build_nvs_key_for_gpio_gain(gpio_pin, key);
+        ESP_LOGI(TAG, "NVS Key '%s'", key);
+        int64_t channelgain_intrep;
+        double channelgain;
+        esp_err_t err = nvs_get_i64(nvs_handle, key, &channelgain_intrep);
+        if (err == ESP_OK) {
+            channelgain = *(double*) &channelgain_intrep;
+            ESP_LOGI(TAG, "Found gain %f in NVS for GPIO %d", channelgain, gpio_pin);
+            gain = channelgain;
+        }
+        // else
+        // {
+        //     channelgain = GENERIC_CAL_GAIN;
+        //     ESP_LOGI(TAG, "No gain found in NVS for GPIO %d, using generic %f", gpio_pin, channelgain);
+            
+        //     double testdouble = GENERIC_CAL_GAIN;
+        //     ESP_ERROR_CHECK(nvs_set_i64(nvs_handle, key, *(int64_t*) &testdouble));
+        //     ESP_LOGI(TAG, "Set gain in NVS to %f", testdouble);
+        // }
+    }
+
+    zeroten_handle_ *handlestruct = malloc(sizeof(zeroten_handle_));
+    handlestruct->ledc_channel = channelnum;
+    handlestruct->pwm_resolution = pwm_resolution;
+    handlestruct->gpio_pin = gpio_pin;
+    built_lut(handlestruct->lut, calibration, gain);
+
+    *handle = (zeroten_handle_t) handlestruct;
     return ESP_OK;
 }
 
-esp_err_t set_0_10v_level(uint8_t channel, uint16_t level, bool non_linearise) {
-    uint16_t duty = get_pwm_duty(level, non_linearise);
-    esp_err_t returnval = ledc_set_duty(LEDC_LOW_SPEED_MODE, channel, duty);
-    ESP_LOGI(TAG, "level %u -> duty %u (res %i)", level, duty, pwm_resolution );
-    returnval = returnval | ledc_update_duty(LEDC_LOW_SPEED_MODE, channel);
+esp_err_t set_0_10v_level(zeroten_handle_t handle, uint8_t level) {
+    if (level == 255) return ESP_ERR_INVALID_ARG;
+    zeroten_handle_* zhandle = (zeroten_handle_ *) handle;
+    uint32_t duty = get_pwm_duty(level, zhandle->lut);
+    esp_err_t returnval = ledc_set_duty(LEDC_LOW_SPEED_MODE, zhandle->ledc_channel, duty);
+    // ESP_LOGI(TAG, "level %d -> duty %lu (res %i)", level, duty, pwm_resolution );
+    returnval = returnval | ledc_update_duty(LEDC_LOW_SPEED_MODE, zhandle->ledc_channel);
     if (returnval) {
         ESP_LOGE(TAG, "0-10v LEDC set duty error: %u", level);
         return returnval;

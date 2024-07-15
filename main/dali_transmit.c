@@ -134,7 +134,7 @@ esp_err_t setup_dali_transmitter(uint8_t gpio_pin, uint8_t invert, uint16_t queu
     QueueHandle_t isrqueue = xQueueCreate(1, sizeof(dali_transmit_isr_job));
     QueueHandle_t transmitqueue = xQueueCreate(queuedepth, sizeof(dali_transmit_job));
 
-    // setup gpio
+    // setup gpio for DALI
     gpio_config_t gpioconf = {
         // .intr_type = GPIO_INTR_DISABLE,
         .mode = GPIO_MODE_INPUT_OUTPUT,
@@ -143,7 +143,6 @@ esp_err_t setup_dali_transmitter(uint8_t gpio_pin, uint8_t invert, uint16_t queu
         .pin_bit_mask = 1 << gpio_pin
     };
     gpio_config(&gpioconf);
-    gpio_set_drive_capability(gpio_pin,GPIO_DRIVE_CAP_3);
 
     // setup gptimer
     gptimer_config_t gptimerconfig = {
@@ -154,6 +153,7 @@ esp_err_t setup_dali_transmitter(uint8_t gpio_pin, uint8_t invert, uint16_t queu
     gptimer_handle_t gptimer;
     gptimer_new_timer(&gptimerconfig, &gptimer);
 
+    // setup alarm
     gptimer_alarm_config_t alarmconf = {
         .alarm_count = 416,
         .reload_count = 0,
