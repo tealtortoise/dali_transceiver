@@ -32,7 +32,7 @@
 
 #define RESOLUTION_HZ     10000000
 
-#define GUESSED_LOOPTIME_US 60000
+#define GUESSED_LOOPTIME_US 33000
 
 
 static const char *TAG = "main loop";
@@ -104,7 +104,7 @@ bool IRAM_ATTR strobetimer_isr(gptimer_handle_t timer, const gptimer_alarm_event
 
 void primary(){
     setup_wifi();
-    setup_sntp();
+    // setup_sntp();
     httpd_ctx httpdctx = {
         .mainloop_task = xTaskGetCurrentTaskHandle()
     };
@@ -152,12 +152,8 @@ void primary(){
     int64_t newtime;
     int looptime = GUESSED_LOOPTIME_US;
     while (1) {
-        received = xTaskNotifyWaitIndexed(SETPOINT_SLEW_NOTIFY_INDEX, 0, 0, &local_fadetime, wait_ticks);
-        setpoint16 = setpoint << 8;
-        fadetime = (local_fadetime == USE_DEFAULT_FADETIME) ? default_fadetime : local_fadetime;
-        // ESP_LOGI(TAG, "Received %i, setpoint16 %i ,wait_ticks %i, fadetime %i", received, setpoint16, wait_ticks, fadetime);
         
-        if (wait_ticks) {
+        if (last_level16 == level16bit) {
             // looptime = GUESSED_LOOPTIME_US;
             reftime = esp_timer_get_time();
         }
@@ -167,16 +163,26 @@ void primary(){
             looptime = newtime - reftime;
             reftime = newtime;
         }
+        
+        last_level16 = level16bit;
+        last_level = actual_level;
+        received = xTaskNotifyWaitIndexed(SETPOINT_SLEW_NOTIFY_INDEX, 0, 0, &local_fadetime, wait_ticks);
+        setpoint16 = setpoint << 15;
+        fadetime = (local_fadetime == USE_DEFAULT_FADETIME) ? default_fadetime : local_fadetime;
+        if (fadetime < 8) fadetime = 8;
+        // ESP_LOGI(TAG, "Received %i, setpoint16 %i ,wait_ticks %i, fadetime %i", received, setpoint16, wait_ticks, fadetime);
+        
 
         if (level16bit == setpoint16){
             // idling
-            wait_ticks = pdMS_TO_TICKS(1000);
+            wait_ticks = pdMS_TO_TICKS(100);
         }
         else
         {
-            wait_ticks = 0;
+            wait_ticks = (fadetime > 1800000) ? pdMS_TO_TICKS(100) : 0;
         }
-        tick_increment_16 = (looptime << 6) / fadetime;
+        // if ((fadetime > 180000)) ESP_LOGI(TAG, "%i, %i %i %i", level16bit, tick_increment_16, wait_ticks, looptime);
+        tick_increment_16 = (looptime << 13) / fadetime;
         // ESP_LOGI(TAG, "New wait ticks %i, tick inc %i, loop time %i us", wait_ticks, tick_increment_16, looptime);
         if (received || firsttime) {
             if (setpoint > 254){
@@ -186,7 +192,7 @@ void primary(){
             ESP_LOGI(TAG, "Received new setpoint '%i', fade time %i us", setpoint, fadetime);
             // ESP_LOGI(TAG, "Actual_level %i, tick_inc %i, wait_tick %i", actual_level, tick_increment_16, wait_ticks);
         }
-        setpoint16 = setpoint << 8;
+        setpoint16 = setpoint << 15;
         fade_remaining_16 = level16bit - setpoint16;
 
         if ((fade_remaining_16 != 0) && abs(fade_remaining_16) < tick_increment_16) {
@@ -201,11 +207,11 @@ void primary(){
             level16bit -= tick_increment_16;
         }
 
-        actual_level = level16bit >> 8;
-        last_level = last_level16 >> 8;
+        actual_level = (level16bit * full_power + 0x5FFF) >> 23;
         if (last_level == actual_level)
         {
-            vTaskDelay(pdMS_TO_TICKS(10));
+            if (wait_ticks < 10) wait_ticks = 10;
+            // vTaskDelay(pdMS_TO_TICKS(10));
         }
         else 
         {
@@ -220,7 +226,6 @@ void primary(){
             sent = dali_broadcast_level(dali_transceiver, actual_level);
             // }
         };
-        last_level16 = level16bit;
         firsttime = 0;
     };
 }

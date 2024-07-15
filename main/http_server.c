@@ -49,7 +49,7 @@ static const char *TAG = "http server";
 
 #define NO_DIGITS_FOUND -98765413
 
-#define NUM_ENDPOINTS 16
+#define NUM_ENDPOINTS 17
 static char responsebuffer[BUF_SIZE];
 static char recbuffer[REC_BUF_SIZE];
 
@@ -125,21 +125,19 @@ static const api_endpoint_t default_fadetime_endpoint = {
     .name = "default_fadetime",
     .array = &default_fadetime
 };
+static const api_endpoint_t full_power_endpoint = {
+    .name = "full_power",
+    .array = &full_power
+};
 
 static const api_endpoint_t registers[NUM_ENDPOINTS] = {
     alarm1_hour_endpoint, alarm1_min_endpoint, alarm1_fade_endpoint, alarm1_setpoint_endpoint, alarm1_enable_endpoint,
     alarm2_hour_endpoint, alarm2_min_endpoint, alarm2_fade_endpoint, alarm2_setpoint_endpoint, alarm2_enable_endpoint,
     alarm3_hour_endpoint, alarm3_min_endpoint, alarm3_fade_endpoint, alarm3_setpoint_endpoint, alarm3_enable_endpoint,
-    default_fadetime_endpoint
+    default_fadetime_endpoint, full_power_endpoint
 };
 
 void populate_registers(){
-    // registers[0].name[0] = "alarm_1_hour";
-    // registers[0].array = &alarmhours;
-    // registers[1].name[0] = "alarm_1_min";
-    // registers[1].array = &alarmmins;
-    // registers[2].name[0] = "alarm_1_fade";
-    // registers[2].array = &alarmfades;
 }
 
 
