@@ -91,10 +91,6 @@ void run_calibration(button_task_ctx_t *ctx){
         return;
     }
 
-    ESP_ERROR_CHECK(nvs_flash_init());
-    nvs_handle_t nvs_handle;
-    ESP_ERROR_CHECK(nvs_open("nvs", NVS_READWRITE, &nvs_handle));
-
     vTaskDelay(pdMS_TO_TICKS(1000));
 
     double voltage;
@@ -131,7 +127,7 @@ void run_calibration(button_task_ctx_t *ctx){
         build_nvs_key_for_gpio_gain(gpio, key);
         ESP_LOGI(TAG, "NVS Key: '%s'", key);
         
-        // ESP_ERROR_CHECK(nvs_set_i64(nvs_handle, key, *(int64_t*) &gain_correction));
+        // ESP_ERROR_CHECK(nvs_set_i64(nvs_handle_, key, *(int64_t*) &gain_correction));
         ESP_LOGI(TAG, "DIDNT Set gain in NVS to %f", gain_correction);
         vTaskDelay(pdMS_TO_TICKS(1000));
     }

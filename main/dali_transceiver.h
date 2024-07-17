@@ -51,7 +51,7 @@ esp_err_t dali_set_level_noblock(dali_transceiver_handle_t handle, uint8_t short
 
 int16_t dali_query_level(dali_transceiver_handle_t handle, uint8_t short_address);
 
-esp_err_t dali_broadcast_level(dali_transceiver_handle_t handle, uint8_t level);
+esp_err_t dali_broadcast_level_noblock(dali_transceiver_handle_t handle, uint8_t level);
 
 esp_err_t dali_set_and_verify_dtr(dali_transceiver_handle_t handle, uint8_t broadcast_value, uint8_t short_address_verify);
 

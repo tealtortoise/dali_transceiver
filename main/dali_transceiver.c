@@ -6,7 +6,7 @@ static const char *TAG = "DALI transceiver";
 dali_transceiver_config_t dali_transceiver_sensible_default_config = {
     .invert_input = DALI_DONT_INVERT,
     .invert_output = DALI_DONT_INVERT,
-    .transmit_queue_size_frames = 20,
+    .transmit_queue_size_frames = 1,
     .receive_queue_size_frames = 20,
     .parser_config = {
         .backward_frame_action = DALI_PARSER_ACTION_LOG_AND_RECORD,
@@ -154,8 +154,8 @@ int16_t dali_query_dtr(dali_transceiver_handle_t handle, uint8_t short_address){
     return -1;
 }
 
-esp_err_t dali_broadcast_level(dali_transceiver_handle_t handle, uint8_t level){
-    BaseType_t success = dali_transmit_frame_and_wait(handle, DALI_FIRSTBYTE_BROADCAST_LEVEL, level, pdMS_TO_TICKS(100));
+esp_err_t dali_broadcast_level_noblock(dali_transceiver_handle_t handle, uint8_t level){
+    BaseType_t success = dali_transmit_frame(handle, DALI_FIRSTBYTE_BROADCAST_LEVEL, level, pdMS_TO_TICKS(100));
     if (!success) return ESP_ERR_NOT_FINISHED;
     return ESP_OK;
 }

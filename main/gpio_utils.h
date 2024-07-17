@@ -45,7 +45,11 @@ static const char* OUTPUT_PIN_NAMES[] = {"LED1", "LED2", "PWM1", "PWM2", "RELAY1
 
 uint8_t read_dip_switches();
 
+int get_and_log_buttons();
+
 void rotate_gpio_outputs_forever();
+
+void configure_gpio();
 
 #endif // GPIO_UTILS_H
 

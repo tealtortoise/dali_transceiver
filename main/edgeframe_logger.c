@@ -48,7 +48,7 @@ bool IRAM_ATTR timeout_isr(gptimer_handle_t timer, const gptimer_alarm_event_dat
     ctx->edgeframe_template.length = 0;
     ctx->edgeframe_isr_numedges = 0;
     ctx->edgeframe_isr_state = EDGEFRAME_STATE_IDLE;
-    gpio_set_intr_type(ctx->gpio_pin, ctx->invert ? GPIO_INTR_POSEDGE : GPIO_INTR_NEGEDGE);
+    // gpio_set_intr_type(ctx->gpio_pin, ctx->invert ? GPIO_INTR_POSEDGE : GPIO_INTR_NEGEDGE);
     gptimer_stop(ctx->timer);
 
     return (high_task_awoken == pdTRUE);
@@ -129,7 +129,8 @@ QueueHandle_t start_edgelogger(uint8_t gpio, bool invert) {
     ctx->timer = configure_edgeframe_timer(ctx);
     ctx->edgeframe_isr_state = EDGEFRAME_STATE_IDLE;
 
-    gpio_set_intr_type(gpio, invert ? GPIO_INTR_POSEDGE: GPIO_INTR_NEGEDGE);
+    // gpio_set_intr_type(gpio, invert ? GPIO_INTR_POSEDGE: GPIO_INTR_NEGEDGE);
+    gpio_set_intr_type(gpio, GPIO_INTR_ANYEDGE);
     gpio_pin_glitch_filter_config_t glitch_config = {
         .clk_src = GLITCH_FILTER_CLK_SRC_DEFAULT,
         .gpio_num = gpio

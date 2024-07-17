@@ -8,6 +8,7 @@
 */
 
 #include "http_server.h"
+#include <time.h>
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -21,7 +22,6 @@
 #include <esp_http_server.h>
 #include "esp_event.h"
 #include "esp_netif.h"
-#include "esp_spiffs.h"
 // #include "esp_tls.h"
 #include "dali.h"
 
@@ -32,6 +32,7 @@
 #include "base.h"
 #include "html.c"
 #include "http_server.h"
+#include "settings.h"
 // #include "esp_eth.h"
 #endif  // !CONFIG_IDF_TARGET_LINUX
 
@@ -43,7 +44,7 @@
 
 static const char *TAG = "http server";
 
-#define BUF_SIZE 8192
+#define BUF_SIZE 0x3FFF
 
 #define REC_BUF_SIZE 256
 
@@ -55,91 +56,11 @@ static char recbuffer[REC_BUF_SIZE];
 
 extern int setpoint;
 
-typedef struct {
-    char name[24];
-    int* array;
-} api_endpoint_t;
 
-static const api_endpoint_t alarm1_hour_endpoint = {
-    .name = "alarm1_hour",
-    .array = &alarm1_hour
-};
-static const api_endpoint_t alarm2_hour_endpoint = {
-    .name = "alarm2_hour",
-    .array = &alarm2_hour
-};
-static const api_endpoint_t alarm3_hour_endpoint = {
-    .name = "alarm3_hour",
-    .array = &alarm3_hour
-
-};
-static const api_endpoint_t alarm1_min_endpoint = {
-    .name = "alarm1_min",
-    .array = &alarm1_min
-};
-static const api_endpoint_t alarm2_min_endpoint = {
-    .name = "alarm2_min",
-    .array = &alarm2_min
-};
-static const api_endpoint_t alarm3_min_endpoint = {
-    .name = "alarm3_min",
-    .array = &alarm3_min
-};
-static const api_endpoint_t alarm1_fade_endpoint = {
-    .name = "alarm1_fade",
-    .array = &alarm1_fade
-};
-static const api_endpoint_t alarm2_fade_endpoint = {
-    .name = "alarm2_fade",
-    .array = &alarm2_fade
-};
-static const api_endpoint_t alarm3_fade_endpoint = {
-    .name = "alarm3_fade",
-    .array = &alarm3_fade
-};
-static const api_endpoint_t alarm1_setpoint_endpoint = {
-    .name = "alarm1_setpoint",
-    .array = &alarm1_setpoint
-};
-static const api_endpoint_t alarm2_setpoint_endpoint = {
-    .name = "alarm2_setpoint",
-    .array = &alarm2_setpoint
-};
-static const api_endpoint_t alarm3_setpoint_endpoint = {
-    .name = "alarm3_setpoint",
-    .array = &alarm3_setpoint
-};
-static const api_endpoint_t alarm1_enable_endpoint = {
-    .name = "alarm1_enable",
-    .array = &alarm1_enable
-};
-static const api_endpoint_t alarm2_enable_endpoint = {
-    .name = "alarm2_enable",
-    .array = &alarm2_enable
-};
-static const api_endpoint_t alarm3_enable_endpoint = {
-    .name = "alarm3_enable",
-    .array = &alarm3_enable
-};
-static const api_endpoint_t default_fadetime_endpoint = {
-    .name = "default_fadetime",
-    .array = &default_fadetime
-};
-static const api_endpoint_t full_power_endpoint = {
-    .name = "full_power",
-    .array = &full_power
-};
-
-static const api_endpoint_t registers[NUM_ENDPOINTS] = {
-    alarm1_hour_endpoint, alarm1_min_endpoint, alarm1_fade_endpoint, alarm1_setpoint_endpoint, alarm1_enable_endpoint,
-    alarm2_hour_endpoint, alarm2_min_endpoint, alarm2_fade_endpoint, alarm2_setpoint_endpoint, alarm2_enable_endpoint,
-    alarm3_hour_endpoint, alarm3_min_endpoint, alarm3_fade_endpoint, alarm3_setpoint_endpoint, alarm3_enable_endpoint,
-    default_fadetime_endpoint, full_power_endpoint
-};
+api_endpoint_t registers[NUM_ENDPOINTS];
 
 void populate_registers(){
 }
-
 
 int get_int_from_uri(char* uri){
     char numberlevel[5];
@@ -176,29 +97,45 @@ static int idx_start;
 static int idx_end;
 static char substrings[5][32];
 static int slashcount;
+static int substring_count;
+static int substring_ints[5];
 
 void parse_uri(char* uri){
-
-    printf("URI: %s\n", uri);
+    for (int i = 0; i < 5; i++)
+    {
+        substring_ints[i] = GET_SETTING_NOT_FOUND;
+    }
+    // printf("URI: %s\n", uri);
     slashcount = 0;
+    int scanint;
+    int valid;
     for (int i = 0; i<strlen(uri); i++){
         if (uri[i] == '/'){
             slashes[slashcount] = i;
             slashcount += 1;
             // printf("found slash at %i\n", i);
+            if (slashcount >4) break;
             if (slashcount > 2){
                 idx_start = slashes[slashcount - 2] + 1;
                 idx_end = i;
                 // printf("i %i, start %i, end %i\n", i, idx_start, idx_end);
                 strncpy(substrings[slashcount - 3], uri + idx_start, idx_end - idx_start);
                 substrings[slashcount - 3][idx_end - idx_start] = 0;
+                valid = sscanf(substrings[slashcount - 3], "%i", &scanint);
+                if (valid) {
+                    substring_ints[slashcount - 3] = scanint;
+                }
             }
         }
     }
-    printf("Found %i slashes\n", slashcount);
-    printf("substr1 %s\n", substrings[0]);
-    printf("substr2 %s\n", substrings[1]);
-    printf("substr3 %s\n", substrings[2]);
+    // printf("Found %i slashes\n", slashcount);
+    substring_count = slashcount - 2;
+    // printf("substr1 %s\n", substrings[0]);
+    // printf("substr2 %s\n", substrings[1]);
+    // printf("substr3 %s\n", substrings[2]);
+    // printf("subint1 %i\n", substring_ints[0]);
+    // printf("subint2 %i\n", substring_ints[1]);
+    // printf("subint3 %i\n", substring_ints[2]);
 }
 
 int* get_endpoint_ptr(){
@@ -220,15 +157,30 @@ int* get_endpoint_ptr(){
 
 static esp_err_t rest_get_handler(httpd_req_t *req){
     parse_uri(req->uri);
-    int* reg = get_endpoint_ptr();
-    if (reg == 0) {
+    int value = GET_SETTING_NOT_FOUND;
+    // int* reg = get_endpoint_ptr();
+    int index = substring_ints[1];
+        
+    if (substring_count == 1) {
+        value = get_setting(substrings[0]);
+    }
+    else if (substring_count == 2 && substring_ints[1] != GET_SETTING_NOT_FOUND)
+    {
+        value = get_setting_indexed(substrings[0], index);
+        // ESP_LOGI(TAG, "Looking for %s index %i from %s", substrings[0], index, substrings[1]);
+    }
+    else
+    {
+        value = GET_SETTING_NOT_FOUND;
+    }
+    if (value == GET_SETTING_NOT_FOUND) {
         sprintf(responsebuffer, "Not found");
         httpd_resp_set_status(req, HTTPD_404);
         httpd_resp_send(req, responsebuffer, HTTPD_RESP_USE_STRLEN);
     }
     else
     {
-        sprintf(responsebuffer, "%i", *reg);
+        sprintf(responsebuffer, "%i", value);
     }
     httpd_resp_send(req, responsebuffer, HTTPD_RESP_USE_STRLEN);
     return ESP_OK;
@@ -236,16 +188,34 @@ static esp_err_t rest_get_handler(httpd_req_t *req){
 
 static esp_err_t rest_put_handler(httpd_req_t *req){
     parse_uri(req->uri);
-    ESP_LOGI(TAG, "Received PUT");
+    ESP_LOGI(TAG, "===== Received PUT at %s", req->uri);
 
     int bytes = httpd_req_recv(req, recbuffer, 255);
     recbuffer[bytes] = 0;
     int data;
     int datarecv = sscanf(recbuffer, "%i", &data);
-    ESP_LOGI(TAG, "Received %s (%i) %i", recbuffer, data, datarecv);
+    ESP_LOGD(TAG, "Received %s (%i) %i", recbuffer, data, datarecv);
+    int value = GET_SETTING_NOT_FOUND;
+    int exists = 0;
+    int existing = GET_SETTING_NOT_FOUND;
+    // int* reg = get_endpoint_ptr();
+    // int wait = rand() & 0xFF;
+    // ESP_LOGI(TAG, "waiting %i", wait);
+    // vTaskDelay(wait);
+    int index = substring_ints[1];
 
-    int* reg = get_endpoint_ptr();
-    if (reg == 0) {
+    if (substring_count == 1) {
+        // existing = get_setting(substrings[0]);
+    }
+    else if (substring_count == 2 && index != GET_SETTING_NOT_FOUND)
+    {
+        // existing = get_setting_indexed(substrings[0], index);
+    }
+    existing = -3;
+    exists = existing != GET_SETTING_NOT_FOUND;
+    ESP_LOGD(TAG, "Existing = %i", existing);
+    
+    if (exists == 0) {
         ESP_LOGI(TAG, "Returning 404");
         sprintf(responsebuffer, "Not found");
         httpd_resp_set_status(req, HTTPD_404);
@@ -259,7 +229,23 @@ static esp_err_t rest_put_handler(httpd_req_t *req){
         httpd_resp_send(req, responsebuffer, HTTPD_RESP_USE_STRLEN);
         return ESP_OK;
     }
-    *reg = data;
+
+    if (existing != data){
+        if (substring_count == 1) {
+            ESP_LOGD(TAG, "Setting key %s to %i", substrings[0], data);
+            set_setting(substrings[0], data);
+        }
+        else if (substring_count == 2 && substring_ints[1] != GET_SETTING_NOT_FOUND)
+        {
+            ESP_LOGD(TAG, "Setting key %s/%i to %i", substrings[0], substring_ints[1], data);
+            set_setting_indexed(substrings[0], index, data);
+            // ESP_LOGI(TAG, "Setting %s index %i from %s", substrings[0], index, substrings[1]);
+        }
+    }
+    else
+    {
+        ESP_LOGI(TAG, "URI '%s' unchanged (%i)", req->uri, existing);
+    }
     sprintf(responsebuffer, "OK");
     httpd_resp_send(req, responsebuffer, HTTPD_RESP_USE_STRLEN);
     return ESP_OK;
@@ -291,11 +277,26 @@ static esp_err_t current_setpoint_handler(httpd_req_t *req){
     return ESP_OK;
 }
 
+static const char* index_filename = "/spiffs/index.html";
+static const char* alarm_filename = "/spiffs/alarms.html";
+static const char* spiffsfolder = "/spiffs";
+// static const char* filenamebuf = "                         ";
 
 static esp_err_t file_handler(httpd_req_t *req){
     char* uri = req->uri;
-    char filename[64] = "/spiffs";
-    strcat(filename, uri);
+    char filename[64];
+    if (strcmp(uri, "/") == 0) {
+        strcpy(filename, index_filename);
+    }
+    else if (strcmp(uri, "/setup/") == 0)
+    {
+        strcpy(filename, alarm_filename);
+    }
+    else
+    {
+        strcpy(filename, spiffsfolder);
+        strcat(filename, uri);
+    }
     ESP_LOGI(TAG, "Looking for '%s'", filename);
     FILE *in_file  = fopen(filename, "r"); // read only
 
@@ -460,16 +461,8 @@ httpd_handle_t setup_httpserver(httpd_ctx *extractx)
     ctx->server = server;
     ctx->extra_ctx = extractx;
     ESP_ERROR_CHECK(nvs_flash_init());
-    ESP_ERROR_CHECK(esp_netif_init());
 
     
-    esp_vfs_spiffs_conf_t spiffsconf = {
-        .base_path = "/spiffs",
-        .format_if_mount_failed = false,
-        .max_files = 2,
-        .partition_label = NULL,
-    };
-    ESP_ERROR_CHECK(esp_vfs_spiffs_register(&spiffsconf));
     // FILE *in_file  = fopen("/spiffs/html.html", "r"); // read only
 
     // if (in_file == NULL)

@@ -129,30 +129,22 @@ esp_err_t setup_0_10v_channel(uint8_t gpio_pin, int calibration, zeroten_handle_
 
     double gain = GENERIC_CAL_GAIN;
     if (calibration == CALIBRATION_LOOKUP_NVS) {
-        ESP_ERROR_CHECK(nvs_flash_init());
-        nvs_handle_t nvs_handle;
-        ESP_ERROR_CHECK(nvs_open("nvs", NVS_READWRITE, &nvs_handle));
         // ESP_ERROR_CHECK(nvs_set_i32(nvs_handle, "testint", 123));
         char key[24];
         build_nvs_key_for_gpio_gain(gpio_pin, key);
         ESP_LOGI(TAG, "NVS Key '%s'", key);
         int64_t channelgain_intrep;
         double channelgain;
-        esp_err_t err = nvs_get_i64(nvs_handle, key, &channelgain_intrep);
+        esp_err_t err = nvs_get_i64(nvs_handle_, key, &channelgain_intrep);
         if (err == ESP_OK) {
             channelgain = *(double*) &channelgain_intrep;
             ESP_LOGI(TAG, "Found gain %f in NVS for GPIO %d", channelgain, gpio_pin);
             gain = channelgain;
         }
-        // else
-        // {
-        //     channelgain = GENERIC_CAL_GAIN;
-        //     ESP_LOGI(TAG, "No gain found in NVS for GPIO %d, using generic %f", gpio_pin, channelgain);
-            
-        //     double testdouble = GENERIC_CAL_GAIN;
-        //     ESP_ERROR_CHECK(nvs_set_i64(nvs_handle, key, *(int64_t*) &testdouble));
-        //     ESP_LOGI(TAG, "Set gain in NVS to %f", testdouble);
-        // }
+        else
+        {
+            ESP_LOGI(TAG, "No gain found in NVS for GPIO %d, using generic %f", gpio_pin, gain);
+        }
     }
 
     zeroten_handle_ *handlestruct = malloc(sizeof(zeroten_handle_));
