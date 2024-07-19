@@ -6,14 +6,24 @@
         * {
             box-sizing: border-box;
         } 
+        body {
+            background-color: black;
+            color:white;
+            padding-top: 1em;
+            
+            font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
         .slidecontainer {
-            margin: 1em auto 1em auto;
+            margin: 1em auto 1px auto;
             width:80%;
         }
         .slidecontainer span {
             font-size: 240%;
             width: 32%;
             display:inline-block;
+        }
+        span.updating {
+            color: #e0dc70;
         }
         #levelslider {
             width: 66%;
@@ -24,45 +34,54 @@
             padding-top: 0.5em;
             padding-bottom: 0.5em;
             display: block;
-            border-radius: 0.3em;
-            border-color: black;
-            border-width: 0.15em;
-            box-shadow: 0px 0px 5px 5px rgba(0, 0, 0, 0.171);
-            border-style: solid;
+            border-radius: 10em;
+            /* border-color: white; */
+            /* border-width: 0.1em; */
+            /* box-shadow: 0px 0px 5px 5px rgba(0, 0, 0, 0.171); */
+            border-style: none;
             color: white;
-            font-size: 180%;
+            font-size: 160%;
+            font-family: inherit;
         }
         .red {
-            background-color: rgb(235, 47, 57);
+            /* background-color: rgb(235, 47, 57); */
+            background-image: linear-gradient(to right, #a71414, #e03753);
         }
         .purple {
-            background-color: rgb(156, 68, 228);
+            /* background-color: rgb(156, 68, 228); */
+            
+            background-image: linear-gradient(to right, #622d95, #956ec9);
         }
         .teal {
-            background-color: rgb(14, 193, 124);
+            /* background-color: rgb(14, 193, 124); */
+            background-image: linear-gradient(to right, #3655ac, #17adac);
         }
         .green {
-            background-color: rgb(175, 212, 8);
+            /* background-color: rgb(175, 212, 8); */
+            background-image: linear-gradient(to right, #25874a, #36ac65);
         }
         .magenta {
-            background-color: rgb(212, 8, 124);
+            /* background-color: rgb(212, 8, 124); */
+            background-image: linear-gradient(to right, #8b1659, #ba3988);
         }
         .orange {
-            background-color: rgb(243, 102, 15);
+            /* background-color: rgb(243, 102, 15); */
+            
+            background-image: linear-gradient(to right, #cb3604, #ad8a21);
         }
     </style>
 </head>
 <body>
+    <div>
+        <button class="levelbutton magenta" level="254">Full</button>
+        <button class="levelbutton purple" level="220" id="preset4">Daytime</button>
+        <button class="levelbutton teal" level="180" id="preset3">Low Daytime</button>
+        <button class="levelbutton green" level="30" id="preset2">Early evening</button>
+        <button class="levelbutton orange" level="10" id="preset1">Night-time</button>
+        <button class="levelbutton red" level="0" id="preset0">Switch Off</button>
+    </div>
     <div class="slidecontainer">
         <span id="ajaxlevel">--</span><input type="range" min="0" max="254" value="50" class="slider" id="levelslider">
-    </div>
-    <div>
-        <button class="levelbutton red" level="0" id="preset0">Switch Off</button>
-        <button class="levelbutton orange" level="10" id="preset1">Night-time</button>
-        <button class="levelbutton green" level="30" id="preset2">Early evening</button>
-        <button class="levelbutton teal" level="180" id="preset3">Mid</button>
-        <button class="levelbutton purple" level="220" id="preset4">High</button>
-        <button class="levelbutton magenta" level="254">Full</button>
     </div>
     <script>
         "use strict";
@@ -119,7 +138,7 @@
         function sliderChangeFn() {
             let sliderval = slider.value;
             levelind.innerHTML = levelToPercent(sliderval);
-            levelind.setAttribute("style", "color: #A40000");
+            levelind.classList.add("updating");
             if (!ontimeout){
                 send(sliderval);
                 ontimeout = 1;
@@ -142,7 +161,7 @@
             let level = element.getAttribute("level");
             slider.value = level;
             levelind.innerHTML = levelToPercent(level);
-            levelind.setAttribute("style", "color: #A40000");
+            levelind.classList.add("updating");
             send(level);
             console.log(level)
         }
@@ -153,7 +172,7 @@
 
         let changeBackToBlack = function() {
             if (xhttp.readyState == 4 && xhttp.status == 200) {
-                levelind.setAttribute("style", "color: #000000");
+                levelind.classList.remove("updating");
             }
         };
 

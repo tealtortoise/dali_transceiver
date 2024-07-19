@@ -170,3 +170,9 @@ esp_err_t set_0_10v_level(zeroten_handle_t handle, uint8_t level) {
     }
     return ESP_OK;
 }
+
+esp_err_t disable_pwm_channel(zeroten_handle_t handle){
+    zeroten_handle_* zhandle = (zeroten_handle_ *) handle;
+    return ledc_stop(LEDC_LOW_SPEED_MODE, zhandle->ledc_channel, 0);
+    // return ESP_OK;
+}

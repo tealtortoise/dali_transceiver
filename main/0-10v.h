@@ -22,6 +22,7 @@ typedef struct zeroten_handle_* zeroten_handle_t;
 
 esp_err_t setup_0_10v_channel(uint8_t gpio_pin, int calibration, zeroten_handle_t *handle);
 esp_err_t set_0_10v_level(zeroten_handle_t handle, uint8_t level);
+esp_err_t disable_pwm_channel(zeroten_handle_t handle);
 #pragma once
 
 #endif

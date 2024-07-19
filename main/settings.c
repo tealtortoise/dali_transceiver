@@ -181,15 +181,15 @@ esp_err_t setup_nvs_spiffs_settings(){
             fclose(settingfile);
             return ESP_ERR_NOT_FOUND;
         }
-        ESP_LOGI(TAG, "Found comma at pos %i in %s", commapos, linebuffer);
+        // ESP_LOGI(TAG, "Found comma at pos %i in %s", commapos, linebuffer);
         strncpy(key, linebuffer, commapos);
         key[commapos] = (char) 0;
         sscanf(linebuffer + commapos + 1, "%i", &outputint);
-        ESP_LOGI(TAG,"Key %s = %i",key,outputint);
+        // ESP_LOGI(TAG,"Key %s = %i",key,outputint);
         key_find_result = nvs_find_key(nvs_handle_, key, &nvstype);
         if (key_find_result == ESP_OK && !force_update)
         {
-            ESP_LOGI(TAG, "Key '%s' already in NVS", key);
+            // ESP_LOGI(TAG, "Key '%s' already in NVS", key);
             mutex_taken = xSemaphoreTake(nvs_mutex, pdMS_TO_TICKS(5000));
             if (mutex_taken == pdTRUE){
                 ESP_ERROR_CHECK(nvs_get_i32(nvs_handle_, key, &existing_int));
@@ -228,7 +228,7 @@ esp_err_t setup_nvs_spiffs_settings(){
     if (nvs_updated) {
     }
     TaskHandle_t task;
-    xTaskCreate(commit_task, "nvs commit task", 2048, NULL, 0, &task);
+    xTaskCreate(commit_task, "nvs commit task", 2048, NULL, 1, &task);
     return ESP_OK;
 }
 

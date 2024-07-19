@@ -10,8 +10,26 @@
 static const char* TAG = "SNTP";
 
 static int alarm_minute = 41;
-void rtc_alarm_task(void* params){
+void rtc_task(void* params){
+
+    
+    esp_sntp_config_t config = ESP_NETIF_SNTP_DEFAULT_CONFIG("pool.ntp.org");
+    ESP_ERROR_CHECK(esp_netif_sntp_init(&config));
+    ESP_LOGI(TAG, "Started SNTP");
+    ESP_ERROR_CHECK(esp_netif_sntp_sync_wait(pdMS_TO_TICKS(10000)));
+
     time_t now;
+    char strftime_buf[64];
+    struct tm timeinfo;
+
+    time(&now);
+    setenv("TZ", "GMT0BST,M3.5.0/1:00:00,M10.5.0/2:00:00", 1);
+    tzset();
+
+    localtime_r(&now, &timeinfo);
+    strftime(strftime_buf, sizeof(strftime_buf), "%c", &timeinfo);
+    ESP_LOGI(TAG, "The current date/time in UK is: %s", strftime_buf);
+    
     struct tm *tm_struct;
     int hour;
     int minute;
@@ -57,23 +75,7 @@ void rtc_alarm_task(void* params){
 }
 
 
-void setup_sntp(){
-    esp_sntp_config_t config = ESP_NETIF_SNTP_DEFAULT_CONFIG("pool.ntp.org");
-    ESP_ERROR_CHECK(esp_netif_sntp_init(&config));
-    ESP_LOGI(TAG, "Started SNTP");
-    ESP_ERROR_CHECK(esp_netif_sntp_sync_wait(pdMS_TO_TICKS(10000)));
-
-    time_t now;
-    char strftime_buf[64];
-    struct tm timeinfo;
-
-    time(&now);
-    setenv("TZ", "GMT0BST,M3.5.0/1:00:00,M10.5.0/2:00:00", 1);
-    tzset();
-
-    localtime_r(&now, &timeinfo);
-    strftime(strftime_buf, sizeof(strftime_buf), "%c", &timeinfo);
-    ESP_LOGI(TAG, "The current date/time in UK is: %s", strftime_buf);
+void setup_sntp(TaskHandle_t mainlooptask){
     // time_t rawtime;
     // struct tm * timeinfo;
 
@@ -81,6 +83,6 @@ void setup_sntp(){
     // timeinfo = localtime ( &rawtime );
     // printf ( "Current local time and date: %s", asctime (timeinfo) );
     TaskHandle_t rtc_handle;
-    xTaskCreate(rtc_alarm_task, "rtc_alarm_task", 2048, (void*) xTaskGetCurrentTaskHandle(), 1, &rtc_handle);
+    xTaskCreate(rtc_task, "rtc_task", 4096, (void*) mainlooptask, 1, &rtc_handle);
     // vTaskDelay(pdMS_TO_TICKS(10000));
 }

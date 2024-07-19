@@ -8,6 +8,7 @@
 #include "freertos/task.h"
 #include "freertos/queue.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "driver/gpio.h"
 #include "driver/gptimer.h"
 #include "dali.h"
@@ -15,7 +16,7 @@
 #include "dali_edgeframe_parser.h"
 
 
-static const char *TTAG = "dali_transit";
+static const char *TAG = "dali_transit";
 
 typedef struct {
     uint16_t data;
@@ -65,7 +66,7 @@ bool IRAM_ATTR dali_transmit_isr(gptimer_handle_t timer, const gptimer_alarm_eve
             ctx->alarmconf.alarm_count = 9200;
             gptimer_set_alarm_action(ctx->timer, &ctx->alarmconf);
             ctx->state = DALI_ISR_STATE_SETTLING;
-            // ESP_DRAM_LOGI(TTAG, "Call count %u", callcount);
+            // ESP_DRAM_LOGI(TAG, "Call count %u", callcount);
             break;
         }
         case DALI_ISR_STATE_SETTLING: {
@@ -81,7 +82,7 @@ bool IRAM_ATTR dali_transmit_isr(gptimer_handle_t timer, const gptimer_alarm_eve
             break;
         }
         case DALI_ISR_STATE_IDLE: {
-            ESP_DRAM_LOGI(TTAG, "How have we ended up here ctxdata: %u", ctx->data);
+            ESP_DRAM_LOGI(TAG, "How have we ended up here ctxdata: %u", ctx->data);
             ESP_ERROR_CHECK(ESP_ERR_NOT_ALLOWED);
             break;
         }
@@ -89,6 +90,14 @@ bool IRAM_ATTR dali_transmit_isr(gptimer_handle_t timer, const gptimer_alarm_eve
     }
     return ctx->taskawoken == pdTRUE;
 }
+
+typedef struct {
+    uint8_t level;
+    uint32_t time;
+} framestart_log_element_t;
+
+static int framestart_current_idx = 0;
+static framestart_log_element_t framestartlog[1024];
 
 void dali_transmit_queue_receiver_task(dali_transmit_isr_ctx *ctx) {
     dali_frame_t frame;
@@ -106,7 +115,7 @@ void dali_transmit_queue_receiver_task(dali_transmit_isr_ctx *ctx) {
         if (received == pdTRUE) {
             tempdata = job.frame.secondbyte;
             ctx->data = tempdata | (job.frame.firstbyte << 8);
-            // ESP_LOGI(TTAG, "Sending f: %d, s: %d to ISR", frame.firstbyte, frame.secondbyte);
+            // ESP_LOGI(TAG, "Sending f: %d, s: %d to ISR", frame.firstbyte, frame.secondbyte);
             assert(ctx->state == DALI_ISR_STATE_IDLE);
             ctx -> bitpos = 0;
             ctx->alarmconf.alarm_count = 416;
@@ -115,19 +124,35 @@ void dali_transmit_queue_receiver_task(dali_transmit_isr_ctx *ctx) {
             ctx->state = DALI_ISR_STATE_STARTED;
             // gptimer_set_raw_count(ctx->timer, 0);
             gptimer_start(ctx->timer);
+            framestartlog[framestart_current_idx & 1023].level = job.frame.secondbyte;
+            framestartlog[framestart_current_idx & 1023].time = (uint32_t) esp_timer_get_time();
+            framestart_current_idx += 1;
+
             success = xTaskNotifyWaitIndexed(0, 0, 0, &returnval, pdMS_TO_TICKS(100));
             if (job.frameid != DALI_FRAME_ID_DONT_NOTIFY) {
                 xTaskNotifyIndexed(job.notify_task, DALI_NOTIFY_COMPLETE_INDEX, job.frameid, eSetValueWithOverwrite);
             }
             
-            if (success != pdTRUE) ESP_LOGE(TTAG, "Dali transmit timer_isr didn't return in time");
-            if (ctx->state != DALI_ISR_STATE_IDLE) ESP_LOGE(TTAG, "ISR state not IDLE");
+            if (success != pdTRUE) ESP_LOGE(TAG, "Dali transmit timer_isr didn't return in time");
+            if (ctx->state != DALI_ISR_STATE_IDLE) ESP_LOGE(TAG, "ISR state not IDLE");
         }
     };
 
 };
 
 //
+void display_transmit_buffer_log_timings(){
+    uint32_t start_time = framestartlog[0].time;
+    uint32_t elapsed = 0;
+    uint32_t elapsedtot = 0;
+
+
+    for (int i = 1; i < framestart_current_idx; i++) {
+        elapsedtot = framestartlog[i].time - start_time;
+        elapsed = framestartlog[i].time - framestartlog[i-1].time;
+        ESP_LOGI(TAG, "Logged %d after %lu (at %lu ms)", framestartlog[i].level, elapsed, elapsedtot);
+    }
+}
 
 esp_err_t setup_dali_transmitter(uint8_t gpio_pin, uint8_t invert, uint16_t queuedepth, dali_transmitter_handle_t *handle) {
     // setup queue
@@ -187,7 +212,7 @@ esp_err_t setup_dali_transmitter(uint8_t gpio_pin, uint8_t invert, uint16_t queu
     handle->frameidcounter = 1;
 
     gptimer_enable(gptimer);
-    xTaskCreate((void *)dali_transmit_queue_receiver_task, "dali_transmit_queue_receiver_task", 2400, ctx, 1, NULL);
+    xTaskCreate((void *)dali_transmit_queue_receiver_task, "dali_transmit_queue_receiver_task", 2400, ctx, 8, NULL);
 
     return ESP_OK;
 }

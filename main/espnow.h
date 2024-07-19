@@ -39,7 +39,7 @@
 #endif
 
 #define ESPNOW_QUEUE_SIZE           6
-#define CONFIG_ESPNOW_CHANNEL 11
+#define CONFIG_ESPNOW_CHANNEL 0
 #define CONFIG_ESPNOW_LMK "abcdefghabcdefgh"
 #define CONFIG_ESPNOW_PMK "abcdefghabcdefga"
 #define CONFIG_ESPNOW_SEND_COUNT 10

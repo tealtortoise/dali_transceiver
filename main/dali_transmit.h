@@ -43,10 +43,9 @@ typedef struct {
 
 #define DALI_NOTIFY_COMPLETE_INDEX 4
 
+void display_transmit_buffer_log_timings();
 
 esp_err_t setup_dali_transmitter(uint8_t gpio_pin, uint8_t invert, uint16_t queuedepth, dali_transmitter_handle_t *handle);
-
-
 
 #pragma once
 

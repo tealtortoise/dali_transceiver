@@ -44,7 +44,7 @@
 
 static const char *TAG = "http server";
 
-#define BUF_SIZE 0x3FFF
+#define BUF_SIZE 0x7FFF
 
 #define REC_BUF_SIZE 256
 
@@ -188,12 +188,12 @@ static esp_err_t rest_get_handler(httpd_req_t *req){
 
 static esp_err_t rest_put_handler(httpd_req_t *req){
     parse_uri(req->uri);
-    ESP_LOGI(TAG, "===== Received PUT at %s", req->uri);
 
     int bytes = httpd_req_recv(req, recbuffer, 255);
     recbuffer[bytes] = 0;
     int data;
     int datarecv = sscanf(recbuffer, "%i", &data);
+    ESP_LOGI(TAG, "===== Received PUT at %s (%s)", req->uri, recbuffer);
     ESP_LOGD(TAG, "Received %s (%i) %i", recbuffer, data, datarecv);
     int value = GET_SETTING_NOT_FOUND;
     int exists = 0;
@@ -252,7 +252,7 @@ static esp_err_t rest_put_handler(httpd_req_t *req){
 }
 
 /* An HTTP GET handler */
-static esp_err_t hello_get_handler(httpd_req_t *req)
+static esp_err_t setpoint_get_handler(httpd_req_t *req)
 {
     int ns = get_int_from_uri(req->uri);
     if ((ns >= 0) && (ns <=254)) {
@@ -328,10 +328,30 @@ static esp_err_t file_handler(httpd_req_t *req){
 
 }
 
+static char logbuffercopy[LOGBUFFER_SIZE];
+
+static esp_err_t logbuffer_handler(httpd_req_t *req){
+    // initialise_logbuffer();
+    
+    // for (int i = 0; i < LOGBUFFER_SIZE; i++){
+        // logbuffer[i] = 'a';
+    // }
+    
+    // responsebuffer[fsize] = 0;
+    // logbuffer[10] = 0;
+    int bytes_at_end = (LOGBUFFER_SIZE - logbufferpos - 1);
+    memcpy(logbuffercopy, logbuffer + logbufferpos, bytes_at_end);
+    memcpy(logbuffercopy + bytes_at_end, logbuffer, LOGBUFFER_SIZE - bytes_at_end);
+    httpd_resp_set_type(req, "text/plain");
+    httpd_resp_send(req, logbuffercopy,LOGBUFFER_SIZE);
+    return ESP_OK;
+
+}
+
 static const httpd_uri_t hello = {
     .uri       = "/level/?*",
     .method    = HTTP_GET,
-    .handler   = hello_get_handler,
+    .handler   = setpoint_get_handler,
     .user_ctx  = "Hello World!"
 };
 
@@ -351,6 +371,12 @@ static const httpd_uri_t rest_get = {
     .uri       = "/api/?*",
     .method    = HTTP_GET,
     .handler   = rest_get_handler,
+    .user_ctx  = NULL
+};
+static const httpd_uri_t log_get = {
+    .uri       = "/log/",
+    .method    = HTTP_GET,
+    .handler   = logbuffer_handler,
     .user_ctx  = NULL
 };
 static const httpd_uri_t rest_put = {
@@ -410,6 +436,7 @@ static httpd_handle_t start_webserver(httpd_ctx *ctx)
         httpd_register_uri_handler(server, &get_setpoint);
         httpd_register_uri_handler(server, &rest_get);
         httpd_register_uri_handler(server, &rest_put);
+        httpd_register_uri_handler(server, &log_get);
         httpd_register_uri_handler(server, &files);
         // httpd_register_uri_handler(server, &echo);
         // httpd_register_uri_handler(server, &ctrl);

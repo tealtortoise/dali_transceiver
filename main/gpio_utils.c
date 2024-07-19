@@ -5,11 +5,95 @@
 
 static const char* TAG = "GPIO_UTILS";
 
+#define RELAY_TURNOFF_DELAY_S 20
+#define RELAY_LOCKOUT_TIME_S 5
+
+
+inline int32_t _MAX(int32_t a, int32_t b) { return((a) > (b) ? a : b); }
+inline int32_t _MIN(int32_t a, int32_t b) { return((a) < (b) ? a : b); }
+
 uint8_t read_dip_switches(){
     return gpio_get_level(DIP1_GPIO) | 
         (gpio_get_level(DIP2_GPIO) << 1) |
         (gpio_get_level(DIP3_GPIO) << 2) |
         (gpio_get_level(DIP4_GPIO) << 3);
+}
+
+typedef struct {
+    int configbits;
+    int level1;
+    int level2;
+    int turnoff_delay;
+} relay_timeout_data_t;
+
+static relay_timeout_data_t timeout_data;
+
+#define CONFIGBIT_USE_RELAY1 0x1
+#define CONFIGBIT_USE_RELAY2 0x2
+
+void relay_timeout_task(void* params) {
+    int counter1 = 0;
+    int counter2 = 0;
+    int offcounter1 = 0;
+    int offcounter2 = 0;
+    int last1 = 0;
+    int current1 = 0;
+    int last2 = 0;
+    int current2 = 0;
+    int configbits;
+    while (1) {
+        configbits = timeout_data.configbits;
+        offcounter1 = _MAX(offcounter1 - 1, 0);
+        offcounter2 = _MAX(offcounter2 - 1, 0);
+        if (!timeout_data.level1) {
+            counter1 = counter1 > 0 ? counter1 - 1 : 0;
+        }
+        else {
+            counter1 = RELAY_TURNOFF_DELAY_S << 2;
+        };
+        if (!timeout_data.level2) {
+            counter2 = counter2 > 0 ? counter2 - 1 : 0;
+        }
+        else
+        {
+            counter2 = RELAY_TURNOFF_DELAY_S << 2;
+        }
+        if (!(configbits & CONFIGBIT_USE_RELAY1)) counter1 = 0;
+        if (!(configbits & CONFIGBIT_USE_RELAY2)) counter2 = 0;
+        last1 = current1;
+        last2 = current2;
+        current1 = counter1 > 0 && !offcounter1;
+        current2 = counter2 > 0 && !offcounter2;
+        gpio_set_level(RELAY1_GPIO, current1);
+        gpio_set_level(RELAY2_GPIO, current2);
+        // ESP_LOGI(TAG, "%i, %i, %i, %i", counter1, counter2,  current1,current2);
+        if (current1 < last1) {
+            ESP_LOGI(TAG, "Relay 1 Now OFF");
+            offcounter1 = RELAY_LOCKOUT_TIME_S << 2;
+        };
+        if (current2 < last2) {
+            ESP_LOGI(TAG, "Relay 2 Now OFF");
+            offcounter2 = RELAY_LOCKOUT_TIME_S << 2;
+        };
+        if (current1 > last1) ESP_LOGI(TAG, "Relay 1 Now ON");
+        if (current2 > last2) ESP_LOGI(TAG, "Relay 2 Now ON");
+        vTaskDelay(pdMS_TO_TICKS(269));
+    }
+}
+
+void manage_relay_timeouts(int configbits, int level1, int level2){
+    timeout_data.level1 = level1;
+    timeout_data.level2 = level2;
+    timeout_data.configbits = configbits;
+}
+
+void setup_relays(int configbits){
+    TaskHandle_t task_;
+    timeout_data.configbits = configbits;
+    timeout_data.level1 = 0;
+    timeout_data.level2 = 0;
+    timeout_data.turnoff_delay = RELAY_TURNOFF_DELAY_S;
+    xTaskCreate(relay_timeout_task, "relaytimeout", 2048, NULL, 1, &task_);
 }
 
 int get_and_log_buttons(){

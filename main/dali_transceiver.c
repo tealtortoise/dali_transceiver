@@ -28,11 +28,14 @@ esp_err_t dali_setup_transceiver(dali_transceiver_config_t config, dali_transcei
     dali_transceiver_t *transceiver = malloc(sizeof(dali_transceiver_t));
     transceiver->transmitter = transmitter;
 
-    QueueHandle_t edgeframe_queue = start_edgelogger(config.receive_gpio_pin, config.invert_input);
+    if (config.receive_queue_size_frames > 0)
+    {
+        ESP_LOGW(TAG, "WARNING! Receive queue size 0 -> DALI Receiver disabled!!");
+        QueueHandle_t edgeframe_queue = start_edgelogger(config.receive_gpio_pin, config.invert_input);
 
-    QueueHandle_t dali_received_frame_queue = start_dali_parser(edgeframe_queue, config.parser_config);
-    transceiver->dali_received_frame_queue = dali_received_frame_queue;
-
+        QueueHandle_t dali_received_frame_queue = start_dali_parser(edgeframe_queue, config.parser_config);
+        transceiver->dali_received_frame_queue = dali_received_frame_queue;
+    }
     *handle = transceiver;
     return ESP_OK;
 }

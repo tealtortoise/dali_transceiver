@@ -12,6 +12,8 @@
 #include "lwip/err.h"
 #include "lwip/sys.h"
 #include "base.h"
+
+#include "espnow.h"
 #include "wifi.h"
 
 #define LIGHTING_WIFI_SSID "vodafone10BD78"
@@ -135,6 +137,9 @@ void setup_wifi()
     ESP_LOGI(TAG, "ESP_WIFI_MODE_STA");
     wifi_init_sta();
     esp_wifi_set_ps(WIFI_PS_NONE);
+    // TaskHandle_t espnow_send_task;
+    ESP_ERROR_CHECK(setup_espnow_common(&espnowtask, xTaskGetCurrentTaskHandle()));
+
 }
 
 

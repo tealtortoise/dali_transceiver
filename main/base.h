@@ -2,12 +2,14 @@
 #define base_H
 
 #include <stdint.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 #include "nvs_flash.h"
 #include "nvs.h"
 
-#ifndef min
-    #define min(a,b) ((a) < (b) ? (a) : (b))
-#endif
+// #ifndef min
+    // #define min(a,b) ((a) < (b) ? (a) : (b))
+// #endif
 
 #define RESISTOR_CHANGE_NOTIFY_INDEX 2
 #define SETPOINT_SLEW_NOTIFY_INDEX 1
@@ -20,13 +22,27 @@
 
 #define GET_SETTING_NOT_FOUND 0x80000000
 
+
+#define CONFIGBIT_USE_RELAY1 0x1
+#define CONFIGBIT_USE_RELAY2 0x2
+#define CONFIGBIT_USE_DALI 0x4
+#define CONFIGBIT_USE_ESPNOW 0x8
+#define CONFIGBIT_USE_0_10v1 0x10
+#define CONFIGBIT_USE_0_10v2 0x20
+
 extern nvs_handle_t nvs_handle_;
 
+extern TaskHandle_t espnowtask;
+
+#define LOGBUFFER_SIZE 0xFFFF
+
+extern volatile char logbuffer[LOGBUFFER_SIZE];
+
+extern int logbufferpos;
 
 extern int actual_level;
 extern int setpoint;
 extern int fadetime;
-extern int default_fadetime;
 
 extern int alarm1_hour;
 extern int alarm1_min;
@@ -48,10 +64,17 @@ extern int full_power;
 
 void build_nvs_key_for_gpio_gain(int gpio, char* keybuf);
 
+int32_t _MAX(int32_t a, int32_t b);
+
+int32_t _MIN(int32_t a, int32_t b);
+
 int clamp(int in, int low, int high);
 
 uint64_t get_system_time_us(uint64_t offset);
 
+void initialise_logbuffer();
+
+void log_string(char *logstring);
 
 typedef struct {
     const char name[24];

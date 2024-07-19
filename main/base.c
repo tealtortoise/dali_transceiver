@@ -1,6 +1,7 @@
 #include "base.h"
 
 #include <stdio.h>
+
 #include <string.h>
 #include "sys/time.h"
 #include "stdint.h"
@@ -26,20 +27,72 @@ int fadetime = 50;
 int duty = -1;
 int maxduty = -1;
 
+
+TaskHandle_t espnowtask = NULL;
+
 struct timeval time_;
+
+
+volatile char logbuffer[LOGBUFFER_SIZE];
+
+extern int logbufferpos = 0;
 
 void build_nvs_key_for_gpio_gain(int gpio, char* keybuf){
     sprintf(keybuf, "GPIOPIN %hhu GAIN", gpio);
 }
 
+inline int32_t _MAX(int32_t a, int32_t b) { return((a) > (b) ? a : b); }
+inline int32_t _MIN(int32_t a, int32_t b) { return((a) < (b) ? a : b); }
+
 int clamp(int in, int low, int high){
-    return (in >low) ? min(in, high) : low;
+    return (in > low) ? _MIN(in, high) : low;
 }
 
 uint64_t get_system_time_us(uint64_t offset){
     gettimeofday(&time_, NULL);
     // return time_.tv_sec * 1000000LL + time_.tv_usec - offset;
     return time_.tv_usec - offset;
+}
+
+void initialise_logbuffer(){
+    for (int i = 0; i < LOGBUFFER_SIZE; i++){
+        logbuffer[i] = ' ';
+        // ESP_LOGI(TAG, "%i -> i %i, %d", (size_t) logbuffer, i, logbuffer[i]);
+    }
+    
+    // sprintf(logbuffer, "This 2 is a log");
+}
+static char tempbuffer[512];
+void log_string(char* logstring){
+    time_t rawtime;
+    struct tm * timeinfo;
+
+    time ( &rawtime );
+    timeinfo = localtime ( &rawtime );
+    char* timestr = asctime(timeinfo);
+    strcpy(tempbuffer, timestr);
+    tempbuffer[25] = ' ';
+    tempbuffer[24] = ' ';
+    strcpy(tempbuffer + 26, logstring);
+    int len = strlen(tempbuffer);
+    int buffer_remaining = LOGBUFFER_SIZE - logbufferpos - 1;
+    int bytes_copied = 0;
+    if (buffer_remaining)
+    {
+        bytes_copied = _MIN(buffer_remaining, len);
+        strncpy(logbuffer + logbufferpos, tempbuffer, bytes_copied);
+        ESP_LOGI(TAG, "Copied %i into end of buffer", bytes_copied);
+        logbufferpos += bytes_copied;
+    }
+    if (bytes_copied < len){
+        logbufferpos = 0;
+        
+        strncpy(logbuffer + logbufferpos, tempbuffer + bytes_copied, (len - bytes_copied));
+        ESP_LOGI(TAG, "Copied %i bytes remaining into start", len- bytes_copied);
+        logbufferpos += len-bytes_copied;
+    }
+    logbuffer[logbufferpos] = '\n';
+    logbufferpos += 1;
 }
 
 // static const api_endpoint_t alarm2_hour_endpoint = {

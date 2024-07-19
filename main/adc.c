@@ -110,9 +110,9 @@ void adc_task(void *params) {
             accumulator += cal_voltage;
             if (samples_different == -1){
                 // averaging window completed
-                average_voltage = min(accumulator / (config->average_window), VOLTAGE_CAP);
+                average_voltage = _MIN(accumulator / (config->average_window), VOLTAGE_CAP);
                 resistor =   (average_voltage * 1000) / (VOLTAGE_CAP + 1 - average_voltage);
-                potential_new_setpoint = resistance_to_level(min(resistor, HIGH_RESISTANCE));
+                potential_new_setpoint = resistance_to_level(_MIN(resistor, HIGH_RESISTANCE));
                 
                 // ESP_LOGI(TAG, "Found different value %i, resistor %i -> level %i (S %i, %i)", average_voltage, resistor, potential_new_setpoint, sign, last_sign);
 
@@ -164,6 +164,6 @@ void setup_adc(light_adc_config_t config){
 
     light_adc_config_t *copyconfig = malloc(sizeof(light_adc_config_t));
     memcpy(copyconfig, &config, sizeof(light_adc_config_t));
-    xTaskCreate(adc_task, "ADC Monitor",2048, copyconfig, 1, &adc_task_handle);
+    xTaskCreate(adc_task, "ADC Monitor",3200, copyconfig, 3, &adc_task_handle);
     
 }
