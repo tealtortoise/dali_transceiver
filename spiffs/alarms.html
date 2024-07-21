@@ -3,6 +3,10 @@
 <head>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    
+    <link rel="shortcut icon" href="favicon.ico">
+    <link rel="apple-touch-icon image_src" href="apple-touch-icon.png">
+    <link rel="manifest" href="assets/site.webmanifest">
     <style>
         * {
             box-sizing: border-box;
@@ -16,6 +20,31 @@
             color: white;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             
+        }
+        
+        header {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            column-gap: 0em;
+            margin-top: 0.7em;
+            margin-bottom: 2em;
+            padding: 0 2em 0 2em;
+        }
+        button.nav {
+            
+            /* margin: 0.7em auto 0.7em auto; */
+            width: 80%;
+            padding: 0.2em 0.2em 0.2em 0.2em;
+            border-radius: 0.4em;
+            /* border-color: white; */
+            /* border-width: 0.1em; */
+            /* box-shadow: 0px 0px 5px 5px rgba(0, 0, 0, 0.171); */
+            border: solid rgb(159, 159, 159) 2px;
+            color: white;
+            font-size: 120%;
+            font-family: inherit;
+            
+            background-image: linear-gradient(to right, #281b2a, #432f5f);
         }
         button  {
             display: block;
@@ -39,12 +68,15 @@
             align-items: center;
             margin-bottom: 2em;
         }
+        .channelinfo {
+            margin-bottom: 0.8em;
+        }
         .settingsunit {
             display: grid;
             gap:14px;
             align-items: center;
             grid-template-columns: 2fr 2fr;
-            margin-bottom: 1.5em;
+            margin-bottom: 0.5em;
         }
         input {
             border: none;
@@ -149,6 +181,13 @@
     </style>
 </head>
 <body>
+    
+    <header>
+        <a href="/"><button class="nav " level="254">Levels</button></a>
+        <a href="/setup/"><button class="nav " level="254">Setup</button></a>
+        <a href="/ch/"><button class="nav " level="254">Channels</button></a>
+            
+    </header>
 <main>
     <div class="alarmunit">
         <!-- <span>#</span> -->
@@ -210,7 +249,16 @@
         <input class="setting" id="preset3">
         <div class="settingname">Preset 4 Brightness</div>
         <input class="setting" id="preset4">
+        <div class="settingname">DALI1 Channel</div>
+        <input class="setting" id="dali1_channel">
+        <div class="settingname">DALI2 Channel</div>
+        <input class="setting" id="dali2_channel">
+        <div class="settingname">DALI3 Channel</div>
+        <input class="setting" id="dali3_channel">
+        <div class="settingname">DALI4 Channel</div>
+        <input class="setting" id="dali4_channel">
     </div>
+    <div class="channelinfo">For DALI short addresses use 0 <= channel <= 63. For DALI groups use 100 <= group <= 116. For DALI Broadcast use 200. -1 will disable channel.</div>
     <div class="settingsunit">
         <div class="settingname">Use Relay 1</div>
         
@@ -235,25 +283,32 @@
               <label for="configbit3" class="slider"></label>
             </div>
         </div>
-        <div class="settingname">Use ESPNOW</div>
+        <div class="settingname">Use 0-10v 1</div>
         <div class="checkbox-wrapper-20">
             <div class="switch">
               <input id="configbit4" class="input" type="checkbox" />
               <label for="configbit4" class="slider"></label>
             </div>
         </div>
-        <div class="settingname">Use 0-10v 1</div>
+        <div class="settingname">Use 0-10v 2</div>
         <div class="checkbox-wrapper-20">
             <div class="switch">
               <input id="configbit5" class="input" type="checkbox" />
               <label for="configbit5" class="slider"></label>
             </div>
         </div>
-        <div class="settingname">Use 0-10v 2</div>
+        <div class="settingname">Send ESPNOW</div>
         <div class="checkbox-wrapper-20">
             <div class="switch">
               <input id="configbit6" class="input" type="checkbox" />
               <label for="configbit6" class="slider"></label>
+            </div>
+        </div>
+        <div class="settingname">Receive ESPNOW</div>
+        <div class="checkbox-wrapper-20">
+            <div class="switch">
+              <input id="configbit7" class="input" type="checkbox" />
+              <label for="configbit7" class="slider"></label>
             </div>
         </div>
     </div>
@@ -408,16 +463,19 @@
         if (full_power >=0 && full_power <= 256){
             promises.push(send("/api/full_power/", full_power, full_power_el));
         }
-        
+        for (let i = 1; i <= 4; i++){
+            let channel_el = document.getElementById("dali" + i + "_channel");
+            let channel = channel_el.value;
+            send("/api/" + channel_el.id + "/", channel, channel_el);
+        }
         let configbits = 0;
-        for (let bit = 0; bit <= 5; bit ++){
+        for (let bit = 0; bit <= 6; bit ++){
             let status = document.getElementById("configbit" + (bit + 1)).checked;
             configbits = configbits | (status << bit);
         }
 
-        promises.push(send("/api/configbits/", configbits, configbits_el).then(() => {
-            
-            for (let bit = 0; bit <= 5; bit ++){
+        promises.push(send("/api/configbits/", configbits).then(() => {
+            for (let bit = 0; bit <= 6; bit ++){
                 let el = document.getElementById("configbit" + (bit + 1));
                 let label = el.nextElementSibling;
                 label.classList.remove("modified");
@@ -461,9 +519,15 @@
     }
     get("/api/default_fade/", document.getElementById("default_fadetime"));
     get("/api/full_power/", document.getElementById("full_power"));
+
+    for (let i = 1; i <= 4; i++){
+            let channel_el = document.getElementById("dali" + i + "_channel");
+            get("/api/" + channel_el.id + "/", channel_el);
+    }
+
     get("/api/configbits/").then((bits) =>
         {
-            for (let bit = 0; bit <= 5; bit ++){
+            for (let bit = 0; bit <= 6; bit ++){
                 let status = (bits >> bit) & 1;
                 document.getElementById("configbit" + (bit + 1)).checked = status;
             }

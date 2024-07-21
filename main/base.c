@@ -28,6 +28,8 @@ int duty = -1;
 int maxduty = -1;
 
 
+volatile level_t levellut[255];
+
 TaskHandle_t espnowtask = NULL;
 
 struct timeval time_;
@@ -64,6 +66,7 @@ void initialise_logbuffer(){
 }
 static char tempbuffer[512];
 void log_string(char* logstring){
+    printf("%s\n", logstring);
     time_t rawtime;
     struct tm * timeinfo;
 
@@ -81,14 +84,14 @@ void log_string(char* logstring){
     {
         bytes_copied = _MIN(buffer_remaining, len);
         strncpy(logbuffer + logbufferpos, tempbuffer, bytes_copied);
-        ESP_LOGI(TAG, "Copied %i into end of buffer", bytes_copied);
+        // ESP_LOGI(TAG, "Copied %i into end of buffer", bytes_copied);
         logbufferpos += bytes_copied;
     }
     if (bytes_copied < len){
         logbufferpos = 0;
         
         strncpy(logbuffer + logbufferpos, tempbuffer + bytes_copied, (len - bytes_copied));
-        ESP_LOGI(TAG, "Copied %i bytes remaining into start", len- bytes_copied);
+        // ESP_LOGI(TAG, "Copied %i bytes remaining into start", len- bytes_copied);
         logbufferpos += len-bytes_copied;
     }
     logbuffer[logbufferpos] = '\n';

@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="shortcut icon" href="favicon.ico">
+    <link rel="apple-touch-icon image_src" href="apple-touch-icon.png">
+    <link rel="manifest" href="assets/site.webmanifest">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    
+    <style>
+        * {
+            box-sizing: border-box;
+        } 
+        body {
+            background-color: black;
+            color:white;
+            padding-top: 1em;
+            
+            font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        header {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            column-gap: 0em;
+            margin-top: 0.7em;
+            margin-bottom: 2em;
+            padding: 0 2em 0 2em;
+        }
+        button.nav {
+            
+            /* margin: 0.7em auto 0.7em auto; */
+            width: 80%;
+            padding: 0.2em 0.2em 0.2em 0.2em;
+            border-radius: 0.4em;
+            /* border-color: white; */
+            /* border-width: 0.1em; */
+            /* box-shadow: 0px 0px 5px 5px rgba(0, 0, 0, 0.171); */
+            border: solid rgb(159, 159, 159) 2px;
+            color: white;
+            font-size: 120%;
+            font-family: inherit;
+            
+            background-image: linear-gradient(to right, #281b2a, #432f5f);
+        }
+        div.slidecontainer {
+            position: relative;
+            margin: 0 auto 1em auto;
+            padding: 1em 1em 1em 1em;
+            max-width: 500px;
+        }
+        div.slider {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr 1fr;
+            margin-bottom: 1em;
+            align-items: center;
+        }
+        div.slider input {
+            grid-column: 1/5;
+        }
+        div.slider label {
+            display: block;
+        }
+        span.updating {
+            color: #e0dc70;
+        }
+        #levelslider {
+            width: 66%;
+        }
+        button.levelbutton {
+            margin: 0.7em auto 0.7em auto;
+            width: 80%;
+            padding-top: 0.5em;
+            padding-bottom: 0.5em;
+            display: block;
+            border-radius: 10em;
+            /* border-color: white; */
+            /* border-width: 0.1em; */
+            /* box-shadow: 0px 0px 5px 5px rgba(0, 0, 0, 0.171); */
+            border-style: none;
+            color: white;
+            font-size: 160%;
+            font-family: inherit;
+        }
+        .red {
+            /* background-color: rgb(235, 47, 57); */
+            background-image: linear-gradient(to right, #a71414, #e03753);
+        }
+        .purple {
+            /* background-color: rgb(156, 68, 228); */
+            
+            background-image: linear-gradient(to right, #622d95, #956ec9);
+        }
+        .teal {
+            /* background-color: rgb(14, 193, 124); */
+            background-image: linear-gradient(to right, #3655ac, #17adac);
+        }
+        .green {
+            /* background-color: rgb(175, 212, 8); */
+            background-image: linear-gradient(to right, #25874a, #36ac65);
+        }
+        .magenta {
+            /* background-color: rgb(212, 8, 124); */
+            background-image: linear-gradient(to right, #8b1659, #ba3988);
+        }
+        .orange {
+            /* background-color: rgb(243, 102, 15); */
+            
+            background-image: linear-gradient(to right, #cb3604, #ad8a21);
+        }
+        
+        .checkbox-wrapper-20 {
+            --slider-height: 8px;
+            --slider-width: calc(var(--slider-height) * 4);
+            --switch-height: calc(var(--slider-height) * 3);
+            --switch-width: var(--switch-height);
+            --switch-shift: var(--slider-height);
+            --transition: all 0.2s ease;
+
+            --switch-on-color: #9d0ed5;
+            --slider-on-color: #6b216c;
+
+            --switch-off-color: #512b58;
+            --slider-off-color: #4f4f4f;
+        }
+
+        .checkbox-wrapper-20 .switch {
+            display: block;
+        }
+            
+        .checkbox-wrapper-20 .switch .slider {
+            position: relative;
+            display: inline-block;
+            height: var(--slider-height);
+            width: var(--slider-width);
+            border-radius: var(--slider-height);
+            cursor: pointer;
+            background: var(--slider-off-color);
+            transition: var(--transition);
+        }
+            
+        .checkbox-wrapper-20 .switch .slider:after {
+            background: var(--switch-off-color);
+            position: absolute;
+            left: calc(-1 * var(--switch-shift));
+            top: calc((var(--slider-height) - var(--switch-height)) / 2);
+            display: block;
+            width: var(--switch-height);
+            height: var(--switch-width);
+            border-radius: 50%;
+            /* box-shadow: 0px 2px 2px rgba(0, 0, 0, .2); */
+            content: '';
+            transition: var(--transition);
+        }
+            
+        .checkbox-wrapper-20 .switch label {
+            margin-right: 7px;
+        }
+            
+        .checkbox-wrapper-20 .switch label.modified {
+            background-color: #a1a1a1 !important;
+        }
+        .checkbox-wrapper-20 .switch label.saved {
+            background-color: rgb(108 151 88) !important;
+        }
+        .checkbox-wrapper-20 .switch .input {
+            display: none;
+        }
+            
+        .checkbox-wrapper-20 .switch .input ~ .label {
+            margin-left: var(--slider-height);
+        }
+                
+        .checkbox-wrapper-20 .switch .input:checked ~ .slider:after {
+            left: calc(var(--slider-width) - var(--switch-width) + var(--switch-shift));
+        }
+            
+        .checkbox-wrapper-20 .switch .input:checked ~ .slider {
+            background: var(--slider-on-color);
+        }
+
+        .checkbox-wrapper-20 .switch .input:checked ~ .slider:after {
+            background: var(--switch-on-color);
+        }
+    </style>
+</head>
+<body>
+    
+<header>
+    <a href="/"><button class="nav " level="254">Levels</button></a>
+    <a href="/setup/"><button class="nav " level="254">Setup</button></a>
+    <a href="/ch/"><button class="nav " level="254">Channels</button></a>
+        
+</header>
+    <div class="slidecontainer">
+        <div class="slider" id="zeroten1_control">
+            <label for="zeroten1">0-10v 1</label>
+            
+            <div id="zeroten1_ch"></div>
+            <div id="zeroten1_level">--</div>
+            <div class="checkbox-wrapper-20">
+                <div class="switch">
+                <input id="en_zeroten1" class="input" type="checkbox" />
+                <label for="en_zeroten1" class="slider"></label>
+                </div>
+            </div>
+            <input type="range" min="0" max="254" value="0" class="lvlslider" id="zeroten1">
+        </div>
+        <div class="slider" id="zeroten2_control">
+            <label for="zeroten2">0-10v 2</label>
+            <div id="zeroten2_ch"></div>
+            <div id="zeroten2_level">--</div>
+            <div class="checkbox-wrapper-20">
+                <div class="switch">
+                <input id="en_zeroten2" class="input" type="checkbox" />
+                <label for="en_zeroten2" class="slider"></label>
+                </div>
+            </div>
+            <input type="range" min="0" max="254" value="0" class="lvlslider" id="zeroten2">
+        </div>
+        <div class="slider" id="dali1_control">
+            <label for="dali1">DALI Ch 1</label>
+            <div id="dali1_ch"></div>
+            <div id="dali1_level">--</div>
+            <div class="checkbox-wrapper-20">
+                <div class="switch">
+                <input id="en_dali1" class="input" type="checkbox" />
+                <label for="en_dali1" class="slider"></label>
+                </div>
+            </div>
+            <input type="range" min="0" max="254" value="0" class="lvlslider" id="dali1">
+        </div>
+        <div class="slider" id="dali2_control">
+            <label for="dali1">DALI Ch 2</label>
+            <div id="dali2_ch"></div>
+            <div id="dali2_level">--</div>
+            <div class="checkbox-wrapper-20">
+                <div class="switch">
+                <input id="en_dali2" class="input" type="checkbox" />
+                <label for="en_dali2" class="slider"></label>
+                </div>
+            </div>
+            <input type="range" min="0" max="254" value="0" class="lvlslider" id="dali2">
+        </div>
+        <div class="slider" id="dali3_control">
+            <label for="dali3">DALI Ch 3</label>
+            <div id="dali3_ch"></div>
+            <div id="dali3_level">--</div>
+            <div class="checkbox-wrapper-20">
+                <div class="switch">
+                <input id="en_dali3" class="input" type="checkbox" />
+                <label for="en_dali3" class="slider"></label>
+                </div>
+            </div>
+            <input type="range" min="0" max="254" value="0" class="lvlslider" id="dali3">
+        </div>
+        <div class="slider" id="dali4_control">
+            <label for="dali4">DALI Ch 4</label>
+            <div id="dali4_ch"></div>
+            <div id="dali4_level">--</div>
+            <div class="checkbox-wrapper-20">
+                <div class="switch">
+                <input id="en_dali4" class="input" type="checkbox" />
+                <label for="en_dali4" class="slider"></label>
+                </div>
+            </div>
+            <input type="range" min="0" max="254" value="0" class="lvlslider" id="dali4">
+        </div>
+        <div class="slider" id="espnow_control">
+            <label for="espnow">ESPNOW</label>
+            <div id="espnow_ch"></div>
+            <div id="espnow_level">--</div>
+            <div class="checkbox-wrapper-20">
+                <div class="switch">
+                <input id="en_espnow" class="input" type="checkbox" />
+                <label for="en_espnow" class="slider"></label>
+                </div>
+            </div>
+            <input type="range" min="0" max="254" value="0" class="lvlslider" id="espnow">
+        </div>
+    </div>
+    <script>
+        "use strict";
+
+        function get(uri, el) {
+            const options = {
+            method: 'GET',
+            };
+            return fetch(uri, options)
+                .then(response => {
+                    if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                    }
+                    // let text = response.text()
+                    return response.text();
+                })
+                // .then((st) => {
+                //     if (el != null) {
+                //         el.value = st;
+                //         console.log("Got ", st, uri, el, el.value);
+                //         return;
+                //     }
+                //     return st;
+                // })
+                .catch(error => {
+                    console.error('There was a problem with your fetch operation:', error);
+                });
+        }
+        var ontimeout = 0;
+        var waiting = 0;
+        let slider = document.getElementById("levelslider");
+        let levelind = document.getElementById('ajaxlevel');
+        
+        
+        // for (let i = 1; i <= 4; i++) {
+        //     let uri = `/api/preset/${i}/`;
+        //     get(uri).then((st) => {
+        //         document.getElementById("preset" + i).setAttribute("level", st);
+        //     });
+        // }
+
+        // function levelToPercent(level) {
+        //     return Math.floor(level / 2.54 + 0.5) + "%";
+
+        // }
+
+        function send(el, value){
+            if (value == null){
+                value = el.value;
+            }
+            const options = {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/plain'
+            },
+            body: `${value}`
+            };
+
+            let uri = `/api/channel/${el.id}/`;
+            // Make the PUT request using the fetch API
+            return fetch(uri, options)
+                .then(response => {
+                    if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                    }
+                    // if (el != null) {
+                        // if (el.type == "checkbox"){
+                        //     console.log(el);
+                        //     let label = el.nextElementSibling;
+                        //     label.classList.remove("modified");
+                        //     label.classList.add("saved");
+                        // } else {
+                        //     el.className = "saved";
+                        // }
+
+                    // }
+                    return response;
+                })
+                .catch(error => {
+                    console.error('There was a problem with your fetch operation:', error);
+                });
+        };
+
+        function getChecked(slider_el){
+            let id = slider_el.id;
+            let enable_el = document.getElementById(`en_${id}`);
+            return enable_el.checked;
+        }
+
+        let checked_ob = {};
+        document.checked_ob = checked_ob;
+        Array.from(document.getElementsByClassName("lvlslider")).forEach((el) => {  
+            let id = el.id;
+            checked_ob[id] = getChecked(el);
+            get(`/api/channel/${id}/`).then((res) => {
+                if (res == -1) {
+                    document.getElementById(`en_${id}`).checked = false;
+                    checked_ob[id] = false;
+                } else {
+                    document.getElementById(`en_${id}`).checked = true;
+                    checked_ob[id] = true;
+                    el.value = res;
+                    let event = new Event("input");
+                    el.dispatchEvent(event);
+                }
+            });
+            if (id.substring(0, 4) == "dali") {
+                get(`/api/${id.substring(0,5)}_channel/`).then((resp) => {
+                    let ch_ind_id = `${id}_ch`;
+                    let ch_el = document.getElementById(ch_ind_id);
+                    if (resp == -1){
+                        ch_el.innerHTML = `Addr ${resp} (Off)`;
+                    } else if (resp == 200) {
+                        ch_el.innerHTML = `Addr ${resp} (Brdcast)`;
+                    } else if (resp >= 100 && resp <= 115) {
+                        ch_el.innerHTML = `Addr ${resp} (Grp ${resp-100})`;
+                    } else if (resp >= 0 && resp <= 63) {
+                        ch_el.innerHTML = `Addr ${resp}`;
+                    } else {
+                        ch_el.innerHTML = `Unknown Addr ${resp}`;
+                    }
+                });
+            }
+        });
+
+        Array.from(document.getElementsByClassName("input")).forEach((el) => {
+            el.onchange = (ev) => {
+                let id = ev.srcElement.id;
+                let checked = ev.srcElement.checked;
+                checked_ob[id.substring(3)] = checked;
+                let slider_el = document.getElementById(id.substring(3));
+                send(slider_el, checked ? slider_el.value : -1);
+            };
+        });
+
+
+        function sliderChangeFn(ev) {
+            let slider_el = ev.srcElement;
+            let sliderval = slider_el.value;
+            let id = slider_el.id;
+            let level_ind = document.getElementById(id + "_level");
+            level_ind.innerHTML = sliderval;
+            // levelind.classList.add("updating");
+            if (!ontimeout){
+                if (checked_ob[id]) send(slider_el);
+                ontimeout = 1;
+                setTimeout(function() {
+                    ontimeout = 0;
+                    if (waiting){
+                        sliderval = slider_el.value;
+                        if (checked_ob[id]) send(slider_el);
+                        waiting = 0;
+                    }
+                }, 80);
+            } else {
+                waiting = 1;
+            }
+        };
+        // function buttonPressFn(event, v2) {
+        //     console.log(event);
+        //     let element = event.srcElement;
+        //     console.log(element);
+        //     let level = element.getAttribute("level");
+        //     slider.value = level;
+        //     levelind.innerHTML = levelToPercent(level);
+        //     levelind.classList.add("updating");
+        //     send(level);
+        //     console.log(level)
+        // }
+        // Array.from(document.getElementsByClassName("levelbutton")).forEach(element => {
+        //     element.onclick = buttonPressFn;
+        // });
+        Array.from(document.getElementsByClassName("lvlslider")).forEach((el) => {
+            el.oninput = sliderChangeFn;
+
+
+        });
+
+        // let changeBackToBlack = function() {
+        //     if (xhttp.readyState == 4 && xhttp.status == 200) {
+        //         levelind.classList.remove("updating");
+        //     }
+        // };
+
+        // xhttp.onreadystatechange = function() {
+        //     if (xhttp.readyState == 4 && xhttp.status == 200) {
+        //         levelind.innerHTML = levelToPercent(xhttp.responseText);
+        //         slider.value = xhttp.responseText;
+        //         xhttp.onreadystatechange = changeBackToBlack;
+        //     }
+        // }
+        // xhttp.open("GET", "/setpoint/current/");
+        // xhttp.send();
+        
+    </script>
+</body>
+</html>

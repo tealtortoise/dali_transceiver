@@ -104,9 +104,13 @@ edgeframe;
 #define DALI_SECONDBYTE_COMPARE 0
 #define DALI_SECONDBYTE_WITHDRAW 0
 
-uint8_t get_dali_address_byte(uint8_t address);
+uint8_t get_dali_command_address_byte(uint8_t address);
 
-uint8_t get_dali_address_byte_setlevel(uint8_t address);
+uint8_t get_dali_setlevel_address_byte(uint8_t address);
+
+uint8_t get_dali_setlevel_group_byte(uint8_t group);
+
+uint8_t get_dali_command_group_byte(uint8_t group);
 
 void dali_log_frame(dali_frame_t frame);
 

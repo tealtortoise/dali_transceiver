@@ -49,6 +49,8 @@ esp_err_t dali_set_level_block(dali_transceiver_handle_t handle, uint8_t short_a
 
 esp_err_t dali_set_level_noblock(dali_transceiver_handle_t handle, uint8_t short_address, uint8_t level, int queuefull_timeout);
 
+esp_err_t dali_set_level_group_noblock(dali_transceiver_handle_t handle, uint8_t group, uint8_t level, int queuefull_timeout);
+
 int16_t dali_query_level(dali_transceiver_handle_t handle, uint8_t short_address);
 
 esp_err_t dali_broadcast_level_noblock(dali_transceiver_handle_t handle, uint8_t level);

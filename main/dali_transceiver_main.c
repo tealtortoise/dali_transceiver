@@ -49,13 +49,13 @@ static const char *TAG = "main loop";
 nvs_handle_t mainloop_nvs_handle;
 
 void setup_networking(void* params){
-    TaskHandle_t mainlooptask = (TaskHandle_t) params;
+    networking_ctx_t *ctx = (networking_ctx_t *) params;
     setup_wifi();
-    setup_sntp(mainlooptask);
-    httpd_ctx httpdctx = {
-        .mainloop_task = mainlooptask,
-    };
-    httpd_handle_t httpd = setup_httpserver(&httpdctx);
+    setup_sntp(ctx->mainloop_task);
+    // httpd_ctx httpdctx = {
+    //     .mainloop_task = mainlooptask,
+    // };
+    httpd_handle_t httpd = setup_httpserver(ctx);
     while (1){
         vTaskDelay(portMAX_DELAY);
     }
@@ -84,11 +84,46 @@ void calc_tickinc_and_looptime(uint64_t looptime) {
 }
 
 
-static char templogbuffer[128];
+void transmit_setlevel_dali_channel(dali_transceiver_handle_t transceiver, int channel, int level){
+    if (channel >= 0 && channel <= 63)
+    {
+        dali_set_level_noblock(transceiver, channel ,level, pdMS_TO_TICKS(130));
+        return;
+    }
+    if (channel >= 100 && channel <= 115)
+    {
+        dali_set_level_group_noblock(transceiver, channel - 100 ,level, pdMS_TO_TICKS(130));
+        return;
+    }
+    if (channel == 200) {
+        dali_broadcast_level_noblock(transceiver, level);
+        return;
+    }
+    if (channel == -1) return;
+    ESP_LOGE(TAG, "Unknown DALI Channel %i", channel);
+    return;
+}
+
+static char templogbuffer[256];
 void primary(){
     setup_relays(get_setting("configbits"));
-    TaskHandle_t networktask;   
-    xTaskCreate(setup_networking, "setup_networking", 4096, xTaskGetCurrentTaskHandle(), 2, &networktask);
+    
+    level_overrides_t level_overrides = {
+        .dali1 = -1,
+        .dali2 = -1,
+        .dali3 = -1,
+        .dali4 = -1,
+        .zeroten1 = -1,
+        .zeroten2 = -1,
+        .espnow = -1
+    };
+
+    networking_ctx_t networking_ctx = {
+        .mainloop_task = xTaskGetCurrentTaskHandle(),
+        .level_overrides = &level_overrides
+    };
+    TaskHandle_t networktask;
+    xTaskCreate(setup_networking, "setup_networking", 4096, (void*) &networking_ctx, 2, &networktask);
 
     zeroten_handle_t pwm1;
     zeroten_handle_t pwm2;
@@ -132,10 +167,24 @@ void primary(){
     
     bool at_setpoint;
     int actual_level = setpoint;
+    level_t level_el;
     uint64_t current_time;
     uint64_t actual_looptime;
     int random_looptime = 1;
     int local_setpoint = setpoint;
+
+    int dali1_channel = get_setting("dali1_channel");
+    int dali2_channel = get_setting("dali2_channel");
+    int dali3_channel = get_setting("dali3_channel");
+    int dali4_channel = get_setting("dali4_channel");
+    int zeroten1_lvl_to_send = setpoint;
+    int zeroten2_lvl_to_send = setpoint;
+    int dali1_lvl_to_send = setpoint;
+    int dali2_lvl_to_send = setpoint;
+    int dali3_lvl_to_send = setpoint;
+    int dali4_lvl_to_send = setpoint;
+    int espnow_lvl_to_send = setpoint;
+    bool dali_broadcast = false;
     while (1) {
         actual_looptime = (esp_timer_get_time() - reftime);
         if (actual_looptime > (target_looptime + LOOPTIME_TOLERANCE))
@@ -172,44 +221,121 @@ void primary(){
         {
             // we're at setpoint
             reawake_time = reftime + MAX_UPDATE_INTERVAL;
-            ESP_LOGI(TAG, "State: Idle. Waiting for new setpoint.");
+            // sprintf(templogbuffer, "%s: State: Idle. Waiting for new setpoint.", TAG);
+            // log_string(templogbuffer);
             configbits = get_setting("configbits");
-            sprintf(templogbuffer, "Config: Relay1: %i, Relay2: %i, DALI: %i, ESPNOW %i, 0-10v 1: %i, 0-10v 2:%i",
+            dali1_channel = get_setting("dali1_channel");
+            dali2_channel = get_setting("dali2_channel");
+            dali3_channel = get_setting("dali3_channel");
+            dali4_channel = get_setting("dali4_channel");
+
+            sprintf(templogbuffer, "IDLE. Config: Relay1: %i, Relay2: %i, DALI: %i, 0-10v 1: %i, 0-10v 2:%i, Send ESPNOW %i, Recv ESPNOW %i",
                 (configbits & CONFIGBIT_USE_RELAY1) > 0,
                 (configbits & CONFIGBIT_USE_RELAY2) > 0,
                 (configbits & CONFIGBIT_USE_DALI) > 0,
-                (configbits & CONFIGBIT_USE_ESPNOW) > 0,
                 (configbits & CONFIGBIT_USE_0_10v1) > 0,
-                (configbits & CONFIGBIT_USE_0_10v2) > 0);
-            printf(templogbuffer);
+                (configbits & CONFIGBIT_USE_0_10v2) > 0,
+                (configbits & CONFIGBIT_TRANSMIT_ESPNOW) > 0,
+                (configbits & CONFIGBIT_RECEIVE_ESPNOW) > 0);
+            // printf(templogbuffer);
             log_string(templogbuffer);
                 // list_tasks();
         }
 
         fade_remaining = local_setpoint - actual_level;
-        manage_relay_timeouts(configbits, actual_level, actual_level);
+        level_el = levellut[actual_level];
+        manage_relay_timeouts(configbits, level_el.relay1, level_el.relay2);
 
-        if (espnowtask != NULL && (configbits & CONFIGBIT_USE_ESPNOW))
+        if (espnowtask != NULL && (configbits & CONFIGBIT_TRANSMIT_ESPNOW))
         {
+            if (level_overrides.espnow != -1) {
+                espnow_lvl_to_send = level_overrides.espnow;
+            }
+            else
+            {
+                espnow_lvl_to_send = level_el.espnow_lvl;
+            }
             xTaskNotifyIndexed(espnowtask,
                 SETPOINT_SLEW_NOTIFY_INDEX,
-                actual_level,
+                espnow_lvl_to_send,
                 eSetValueWithOverwrite);
         }
             
         if (configbits & CONFIGBIT_USE_0_10v1){
-            ESP_ERROR_CHECK(set_0_10v_level(pwm1, actual_level));
+            if (level_overrides.zeroten1 != -1) {
+                zeroten1_lvl_to_send = level_overrides.zeroten1;
+            }
+            else
+            {
+                zeroten1_lvl_to_send = level_el.zeroten1_lvl;
+            }
+            ESP_ERROR_CHECK(set_0_10v_level(pwm1, zeroten1_lvl_to_send));
         }
         if (configbits & CONFIGBIT_USE_0_10v2)
         {
-            ESP_ERROR_CHECK(set_0_10v_level(pwm2, actual_level));
+            if (level_overrides.zeroten2 != -1) {
+                zeroten2_lvl_to_send = level_overrides.zeroten2;
+            }
+            else
+            {
+                zeroten2_lvl_to_send = level_el.zeroten2_lvl;
+            }
+            ESP_ERROR_CHECK(set_0_10v_level(pwm2, zeroten2_lvl_to_send));
         }
         // for (int i=8; i<13; i+=1) {
-        if (configbits & CONFIGBIT_USE_DALI){
-            sent = dali_broadcast_level_noblock(dali_transceiver, actual_level);
+        if (configbits & CONFIGBIT_USE_DALI)
+        {
+            if (level_overrides.dali1 != -1) {
+                dali1_lvl_to_send = level_overrides.dali1;
+            }
+            else
+            {
+                dali1_lvl_to_send = level_el.dali1_lvl;
+            }
+            transmit_setlevel_dali_channel(dali_transceiver, dali1_channel, dali1_lvl_to_send);
+
+            dali_broadcast = dali1_channel == 200;
+            if (!dali_broadcast) {
+
+                if (level_overrides.dali2 != -1) {
+                    dali2_lvl_to_send = level_overrides.dali2;
+                }
+                else
+                {
+                    dali2_lvl_to_send = level_el.dali2_lvl;
+                }
+                if (level_overrides.dali3 != -1) {
+                    dali3_lvl_to_send = level_overrides.dali3;
+                }
+                else
+                {
+                    dali3_lvl_to_send = level_el.dali3_lvl;
+                }
+                if (level_overrides.dali4 != -1) {
+                    dali4_lvl_to_send = level_overrides.dali4;
+                }
+                else
+                {
+                    dali4_lvl_to_send = level_el.dali4_lvl;
+                }
+                transmit_setlevel_dali_channel(dali_transceiver, dali2_channel, dali2_lvl_to_send);
+                transmit_setlevel_dali_channel(dali_transceiver, dali3_channel, dali3_lvl_to_send);
+                transmit_setlevel_dali_channel(dali_transceiver, dali4_channel, dali4_lvl_to_send);
+            }
         }
-        sprintf(templogbuffer, "%s: Snt %i->%i Fade %i Intvl %llu", TAG, actual_level, local_setpoint, fadetime, target_looptime);
-        printf(templogbuffer);
+        // sprintf(templogbuffer, "%s: Snt %i->%i Fade %i Intvl %llu", TAG, actual_level, local_setpoint, fadetime, target_looptime);
+        // log_string(templogbuffer);
+        sprintf(templogbuffer, "%s: Lvl %i->%i { 0-10v1 %d, 0-10v2 %d, DALI1 %d, `DALI2 %d, DALI3 %d, DALI4 %d, ESPNOW %d, Relay1 %d, Relay2 %d LpTm %i", TAG, actual_level, local_setpoint,
+            zeroten1_lvl_to_send,
+            zeroten2_lvl_to_send,
+            dali1_lvl_to_send,
+            dali2_lvl_to_send,
+            dali3_lvl_to_send,
+            dali4_lvl_to_send,
+            espnow_lvl_to_send,
+            level_el.relay1,
+            level_el.relay2,
+            (int) actual_looptime);
         log_string(templogbuffer);
         // ESP_LOGI(TAG, "Setp %i, tick_inc %i, tgt_ltm %llu ftime %i, leveltme %llu", setpoint, tick_inc, target_looptime, fadetime, ideal_time_between_levels_us);
         // ESP_LOGI(TAG, "Curr %i, Actual lptm %llu", actual_level, actual_looptime);
@@ -379,6 +505,7 @@ void app_main(void)
     vTaskPrioritySet(NULL, 6);
     configure_gpio();
     setup_nvs_spiffs_settings();
+    read_level_luts(levellut);
     TaskHandle_t randomtask;
     // xTaskCreate(random_setpointer_task, "random setpointer task", 2048, (void*) xTaskGetCurrentTaskHandle(), 7, &randomtask);
     // set_setting("alarmhour", 3, 1000);

@@ -1,19 +1,15 @@
 #ifndef HTTP_SERVER_H
 #define HTTP_SERVER_H
 
+#include "base.h"
 #include <esp_http_server.h>
 
 typedef struct {
-    QueueHandle_t queue;
-    TaskHandle_t mainloop_task;
-} httpd_ctx;
-
-typedef struct {
     httpd_handle_t server;
-    httpd_ctx *extra_ctx;
+    networking_ctx_t *extra_ctx;
 } handler_ctx;
 
-httpd_handle_t setup_httpserver(httpd_ctx *extractx);
+httpd_handle_t setup_httpserver(networking_ctx_t *extractx);
 
 #endif // HTTP_SERVER_H
 

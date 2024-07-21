@@ -5,12 +5,19 @@
 
 static const char *TAG = "DALI";
 
-uint8_t get_dali_address_byte(uint8_t address){
+uint8_t get_dali_command_address_byte(uint8_t address){
     return (address << 1) + 1;
 }
-uint8_t get_dali_address_byte_setlevel(uint8_t address){
+uint8_t get_dali_setlevel_address_byte(uint8_t address){
     return (address << 1);
 }
+uint8_t get_dali_setlevel_group_byte(uint8_t group){
+    return (group << 1) + 0x80;
+}
+uint8_t get_dali_command_group_byte(uint8_t group){
+    return (group << 1) + 0x81;
+}
+
 
 const char *frametypes[4] = {"Forward frame", "Backward frame", "Mangled frame", "No frame"};
 

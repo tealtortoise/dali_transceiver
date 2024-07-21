@@ -102,7 +102,7 @@ int get_setting(char* name) {
     return get_setting_indexed(name, -1);
 };
 
-static char linebuffer[64];
+static char linebuffer[128];
 static char key[16];
 static int outputint;
 
@@ -143,8 +143,15 @@ esp_err_t setup_nvs_spiffs_settings(){
         ESP_ERROR_CHECK(nvs_flash_erase());
         err = nvs_flash_init();
     }
+    err = nvs_flash_init_partition("nvs2");
+    if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        // NVS partition was truncated and needs to be erased
+        // Retry nvs_flash_init
+        ESP_ERROR_CHECK(nvs_flash_erase_partition("nvs2"));
+        err = nvs_flash_init_partition("nvs2");
+    }
     ESP_ERROR_CHECK( err );
-    ESP_ERROR_CHECK(nvs_open("mulberry", NVS_READWRITE, &nvs_handle_));
+    ESP_ERROR_CHECK(nvs_open_from_partition("nvs2", "mulberry", NVS_READWRITE, &nvs_handle_));
 
     FILE *settingfile = fopen("/spiffs/default_settings.csv", "r");
     int commapos = -1;
@@ -229,6 +236,85 @@ esp_err_t setup_nvs_spiffs_settings(){
     }
     TaskHandle_t task;
     xTaskCreate(commit_task, "nvs commit task", 2048, NULL, 1, &task);
+    return ESP_OK;
+}
+
+
+esp_err_t read_level_luts(level_t lut[]){
+    FILE *lutfile = fopen("/spiffs/levelluts.csv", "r");
+    if (lutfile == NULL)
+    {
+        ESP_LOGE(TAG, "couldn't find levelluts.csv");
+        ESP_ERROR_CHECK(ESP_ERR_NOT_FOUND);
+    }
+    int commapos = -1;
+    int celllen = -1;
+    int lastcommapos = -1;
+    char* out; 
+    int existing_int;
+    char cellbuffer[16];
+    int cell_int;
+    int column_idx;
+    int row_idx;
+    char* lutlinebuffer = malloc(128);
+    size_t levet_t_size = sizeof(level_t);
+    while (1){
+        commapos = -1;
+        lastcommapos = -1;
+        column_idx = 0;
+        row_idx = 0;
+        cell_int = -1;
+        out = fgets(linebuffer, 128, lutfile);
+        linebuffer[40] = 0;
+        // sprintf(linebuffer, "test,0");
+
+        printf(linebuffer);
+        if (linebuffer[0] == '#') continue;
+
+        for (int i = 1; i <= 64; i++){
+            if (linebuffer[i] == ',' || linebuffer[i] == 13 || linebuffer[i] == 10 || linebuffer[i] == 0) {
+                commapos = i;
+                celllen = i - lastcommapos - 1;
+                if (celllen == 0) break;
+                memcpy(cellbuffer, linebuffer + lastcommapos + 1, celllen);
+                cellbuffer[celllen] = 0;
+                sscanf(cellbuffer, "%i", &cell_int);
+                if (column_idx == 0)
+                {
+                    row_idx = cell_int;
+                    if (row_idx > 254 || row_idx < 0)
+                    {
+                        ESP_LOGE(TAG, "Invalid row is CSV LUT (%i)", row_idx);
+                        break;
+                    }
+                }
+                else
+                {
+                    uint8_t * byt = (size_t) lut + levet_t_size * row_idx + column_idx - 1;
+                    *byt = (uint8_t) cell_int;
+                
+                }
+                // printf("Row %i Cell %i contents '%s' data %i\n", row_idx, column_idx, cellbuffer, cell_int);
+                column_idx += 1;
+                lastcommapos = commapos;
+                if (linebuffer[i] == 0)
+                {
+                    break;
+                }
+                // ESP_LOGI(TAG, "%d, %d", lut[4].dali1_lvl, lut[5].dali2_lvl);
+            }
+        }
+        // vTaskDelay(500);
+        if (commapos == -1) {
+            ESP_LOGE(TAG, "Could't find comma in line"); 
+            fclose(lutfile);
+            return ESP_ERR_NOT_FOUND;
+        }
+        // ESP_LOGI(TAG, "Found comma at pos %i in %s", commapos, linebuffer);
+        if (out == NULL) break;
+    }
+
+    fclose(lutfile);
     return ESP_OK;
 }
 

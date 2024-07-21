@@ -263,7 +263,7 @@ static esp_err_t setpoint_get_handler(httpd_req_t *req)
         sprintf(responsebuffer, response, 0);
     };
     // req->sess_ctx;
-    httpd_ctx *ctx = httpd_get_global_user_ctx(req->handle);
+    networking_ctx_t *ctx = httpd_get_global_user_ctx(req->handle);
     setpoint = ns;
     xTaskNotifyIndexed(ctx->mainloop_task, SETPOINT_SLEW_NOTIFY_INDEX, USE_DEFAULT_FADETIME, eSetValueWithOverwrite);
 
@@ -277,8 +277,83 @@ static esp_err_t current_setpoint_handler(httpd_req_t *req){
     return ESP_OK;
 }
 
+static esp_err_t rest_put_channel_handler(httpd_req_t *req){
+    parse_uri(req->uri);
+    bool put = req->method == HTTP_PUT;
+    int data = -1;
+    
+    char* channelname = substrings[1];
+    int* override_ptr;
+    if (put) {
+            
+        int bytes = httpd_req_recv(req, recbuffer, 255);
+        recbuffer[bytes] = 0;
+        int datarecv = sscanf(recbuffer, "%i", &data);
+        ESP_LOGI(TAG, "===== Received PUT at %s (%s)", req->uri, recbuffer);
+        ESP_LOGD(TAG, "Received %s (%i) %i", recbuffer, data, datarecv);
+        ESP_LOGI(TAG, "Trying to set override for channel %s: %i", channelname, data);
+    }
+    char* chname;
+    networking_ctx_t *ctx = httpd_get_global_user_ctx(req->handle);
+    if (strcmp(channelname, "dali1") == 0){
+        override_ptr = &ctx->level_overrides->dali1;
+        chname = "DALI1";
+    }
+    else if (strcmp(channelname, "dali2") == 0)
+    {
+        override_ptr = &ctx->level_overrides->dali2;
+        chname = "DALI2";
+    }
+    else if (strcmp(channelname, "dali3") == 0)
+    {
+        override_ptr = &ctx->level_overrides->dali3;
+        chname = "DALI3";
+    }
+    else if (strcmp(channelname, "dali4") == 0)
+    {
+        override_ptr = &ctx->level_overrides->dali4;
+        chname = "DALI4";
+    }
+    else if (strcmp(channelname, "espnow") == 0)
+    {
+        override_ptr = &ctx->level_overrides->espnow;
+        chname = "ESPNOW";
+    }
+    else if (strcmp(channelname, "zeroten1") == 0)
+    {
+        override_ptr = &ctx->level_overrides->zeroten1;
+        chname = "0-10v 1";
+    }
+    else if (strcmp(channelname, "zeroten2") == 0)
+    {
+        override_ptr = &ctx->level_overrides->zeroten2;
+        chname = "0-10v 2";
+    }
+    else
+    {
+        ESP_LOGI(TAG, "Didn't recognise channel %s", channelname);
+        return httpd_resp_send_404(req);
+    }
+    if (put)
+    {
+        *override_ptr = data;
+        sprintf(responsebuffer, "OK");
+        ESP_LOGI(TAG, "PUT: Set %s to %i", chname, data);
+        xTaskNotifyIndexed(ctx->mainloop_task, SETPOINT_SLEW_NOTIFY_INDEX, USE_DEFAULT_FADETIME, eSetValueWithOverwrite);
+    }
+    else
+    {
+        sprintf(responsebuffer, "%i", *override_ptr);
+        ESP_LOGI(TAG, "GET: %s is %i", chname, *override_ptr);
+    }
+    
+    httpd_resp_send(req, responsebuffer, HTTPD_RESP_USE_STRLEN);
+    return ESP_OK;
+}
+
 static const char* index_filename = "/spiffs/index.html";
 static const char* alarm_filename = "/spiffs/alarms.html";
+static const char* channels_filename = "/spiffs/channels.html";
 static const char* spiffsfolder = "/spiffs";
 // static const char* filenamebuf = "                         ";
 
@@ -291,6 +366,10 @@ static esp_err_t file_handler(httpd_req_t *req){
     else if (strcmp(uri, "/setup/") == 0)
     {
         strcpy(filename, alarm_filename);
+    }
+    else if (strcmp(uri, "/ch/") == 0)
+    {
+        strcpy(filename, channels_filename);
     }
     else
     {
@@ -323,7 +402,11 @@ static esp_err_t file_handler(httpd_req_t *req){
 
     responsebuffer[fsize] = 0;
 
-    httpd_resp_send(req, responsebuffer, HTTPD_RESP_USE_STRLEN);
+    int urilen = strlen(uri);
+    if (strcmp(uri + urilen - 4, ".ico") == 0) httpd_resp_set_type(req, "image/x-icon");
+    if (strcmp(uri + urilen - 4, ".png") == 0) httpd_resp_set_type(req, "image/png");
+    if (strcmp(uri + urilen - 5, ".html") == 0) httpd_resp_set_type(req, "text/html");
+    httpd_resp_send(req, responsebuffer, fsize);
     return ESP_OK;
 
 }
@@ -385,6 +468,18 @@ static const httpd_uri_t rest_put = {
     .handler   = rest_put_handler,
     .user_ctx  = NULL
 };
+static const httpd_uri_t rest_put_channel_level = {
+    .uri       = "/api/channel/?*",
+    .method    = HTTP_PUT,
+    .handler   = rest_put_channel_handler,
+    .user_ctx  = NULL
+};
+static const httpd_uri_t rest_get_channel_level = {
+    .uri       = "/api/channel/?*",
+    .method    = HTTP_GET,
+    .handler   = rest_put_channel_handler,
+    .user_ctx  = NULL
+};
 // static const httpd_uri_t set_alarm = {
 //     .uri       = "/setpoint/current/",
 //     .method    = HTTP_GET,
@@ -419,7 +514,7 @@ esp_err_t http_404_error_handler(httpd_req_t *req, httpd_err_code_t err)
     return ESP_FAIL;
 }
 
-static httpd_handle_t start_webserver(httpd_ctx *ctx)
+static httpd_handle_t start_webserver(networking_ctx_t *ctx)
 {
     httpd_handle_t server = NULL;
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
@@ -433,6 +528,8 @@ static httpd_handle_t start_webserver(httpd_ctx *ctx)
         // Set URI handlers
         ESP_LOGI(TAG, "Registering URI handlers");
         httpd_register_uri_handler(server, &hello);
+        httpd_register_uri_handler(server, &rest_put_channel_level);
+        httpd_register_uri_handler(server, &rest_get_channel_level);
         httpd_register_uri_handler(server, &get_setpoint);
         httpd_register_uri_handler(server, &rest_get);
         httpd_register_uri_handler(server, &rest_put);
@@ -481,7 +578,7 @@ static void connect_handler(void* arg, esp_event_base_t event_base,
 }
 #endif // !CONFIG_IDF_TARGET_LINUX
 
-httpd_handle_t setup_httpserver(httpd_ctx *extractx)
+httpd_handle_t setup_httpserver(networking_ctx_t *extractx)
 {
     static httpd_handle_t server = NULL;
     handler_ctx *ctx = malloc(sizeof(handler_ctx));

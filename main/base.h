@@ -26,9 +26,10 @@
 #define CONFIGBIT_USE_RELAY1 0x1
 #define CONFIGBIT_USE_RELAY2 0x2
 #define CONFIGBIT_USE_DALI 0x4
-#define CONFIGBIT_USE_ESPNOW 0x8
-#define CONFIGBIT_USE_0_10v1 0x10
-#define CONFIGBIT_USE_0_10v2 0x20
+#define CONFIGBIT_USE_0_10v1 0x8
+#define CONFIGBIT_USE_0_10v2 0x10
+#define CONFIGBIT_TRANSMIT_ESPNOW 0x20
+#define CONFIGBIT_RECEIVE_ESPNOW 0x40
 
 extern nvs_handle_t nvs_handle_;
 
@@ -36,7 +37,7 @@ extern TaskHandle_t espnowtask;
 
 #define LOGBUFFER_SIZE 0xFFFF
 
-extern volatile char logbuffer[LOGBUFFER_SIZE];
+extern volatile DRAM_ATTR char logbuffer[LOGBUFFER_SIZE];
 
 extern int logbufferpos;
 
@@ -44,23 +45,34 @@ extern int actual_level;
 extern int setpoint;
 extern int fadetime;
 
-extern int alarm1_hour;
-extern int alarm1_min;
-extern int alarm1_fade;
-extern int alarm1_setpoint;
-extern int alarm1_enable;
-extern int alarm2_hour;
-extern int alarm2_min;
-extern int alarm2_fade;
-extern int alarm2_setpoint;
-extern int alarm2_enable;
-extern int alarm3_hour;
-extern int alarm3_min;
-extern int alarm3_fade;
-extern int alarm3_setpoint;
-extern int alarm3_enable;
-extern int full_power;
+typedef struct {
+    uint8_t zeroten1_lvl;
+    uint8_t zeroten2_lvl;
+    uint8_t dali1_lvl;
+    uint8_t dali2_lvl;
+    uint8_t dali3_lvl;
+    uint8_t dali4_lvl;
+    uint8_t espnow_lvl;
+    uint8_t relay1;
+    uint8_t relay2;
+} level_t;
 
+typedef struct {
+    int dali1;
+    int dali2;
+    int dali3;
+    int dali4;
+    int zeroten1;
+    int zeroten2;
+    int espnow;
+} level_overrides_t;
+
+extern volatile level_t levellut[255];
+
+typedef struct {
+    TaskHandle_t mainloop_task;
+    level_overrides_t *level_overrides;
+} networking_ctx_t;
 
 void build_nvs_key_for_gpio_gain(int gpio, char* keybuf);
 

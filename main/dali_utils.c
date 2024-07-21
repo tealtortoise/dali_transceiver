@@ -127,23 +127,23 @@ esp_err_t _dali_assign_short_addresses(dali_transceiver_handle_t handle, int sta
             ESP_LOGI(TAG, "Programming short address %u", short_address);
             frame = dali_transmit_frame_and_wait_for_backward_frame(handle, 
                 DALI_FIRSTBYTE_PROGRAM_SHORT_ADDRESS, 
-                get_dali_address_byte(short_address), 100);
+                get_dali_command_address_byte(short_address), 100);
             if (frame.type != DALI_BACKWARD_FRAME_TYPE)
             {
                 ESP_LOGE(TAG, "No response!");
                 return ESP_ERR_INVALID_STATE;
             }
             ESP_LOGI(TAG, "Verify short address");
-            frame = dali_transmit_frame_and_wait_for_backward_frame(handle, DALI_FIRSTBYTE_VERIFY_SHORT_ADDRESS, get_dali_address_byte(short_address), 100);
+            frame = dali_transmit_frame_and_wait_for_backward_frame(handle, DALI_FIRSTBYTE_VERIFY_SHORT_ADDRESS, get_dali_command_address_byte(short_address), 100);
 
             if (frame.type != DALI_BACKWARD_FRAME_TYPE)
             {
                 ESP_LOGE(TAG, "No response!");
                 return ESP_ERR_NOT_FOUND;
             }
-            else if (frame.firstbyte != get_dali_address_byte(short_address))
+            else if (frame.firstbyte != get_dali_command_address_byte(short_address))
             {
-                ESP_LOGE(TAG, "Short address not as expected %d != %d", frame.firstbyte, get_dali_address_byte(short_address));
+                ESP_LOGE(TAG, "Short address not as expected %d != %d", frame.firstbyte, get_dali_command_address_byte(short_address));
                 return ESP_ERR_INVALID_RESPONSE;
             }
             ESP_LOGI(TAG, "Sending Withdraw");

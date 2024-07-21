@@ -2,6 +2,9 @@
 <html>
 <head>
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="shortcut icon" href="favicon.ico">
+    <link rel="apple-touch-icon image_src" href="apple-touch-icon.png">
+    <link rel="manifest" href="assets/site.webmanifest">
     <style>
         * {
             box-sizing: border-box;
@@ -27,6 +30,34 @@
         }
         #levelslider {
             width: 66%;
+        }
+        header {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            column-gap: 0em;
+            margin-top: 0.7em;
+            margin-bottom: 2em;
+            padding: 0 2em 0 2em;
+        }
+        button.nav {
+            
+            /* margin: 0.7em auto 0.7em auto; */
+            width: 80%;
+            padding: 0.2em 0.2em 0.2em 0.2em;
+            border-radius: 0.4em;
+            /* border-color: white; */
+            /* border-width: 0.1em; */
+            /* box-shadow: 0px 0px 5px 5px rgba(0, 0, 0, 0.171); */
+            border: solid rgb(159, 159, 159) 2px;
+            color: white;
+            font-size: 120%;
+            font-family: inherit;
+            
+            background-image: linear-gradient(to right, #281b2a, #432f5f);
+        }
+        header a{
+            display: block;
+            width: 100%;
         }
         button.levelbutton {
             margin: 0.7em auto 0.7em auto;
@@ -72,6 +103,12 @@
     </style>
 </head>
 <body>
+    <header>
+        <a href="/"><button class="nav " level="254">Levels</button></a>
+        <a href="/setup/"><button class="nav " level="254">Setup</button></a>
+        <a href="/ch/"><button class="nav " level="254">Channels</button></a>
+            
+    </header>
     <div>
         <button class="levelbutton magenta" level="254">Full</button>
         <button class="levelbutton purple" level="220" id="preset4">Daytime</button>

@@ -127,20 +127,25 @@ esp_err_t dali_send_twice(dali_transceiver_handle_t handle, uint8_t firstbyte, u
 }
 
 esp_err_t dali_set_level_block(dali_transceiver_handle_t handle, uint8_t short_address, uint8_t level){
-    BaseType_t success = dali_transmit_frame_and_wait(handle, get_dali_address_byte_setlevel(short_address), level, pdMS_TO_TICKS(100));
+    BaseType_t success = dali_transmit_frame_and_wait(handle, get_dali_setlevel_address_byte(short_address), level, pdMS_TO_TICKS(100));
     if (!success) return ESP_ERR_NOT_FINISHED;
     return ESP_OK;
 }
 
 esp_err_t dali_set_level_noblock(dali_transceiver_handle_t handle, uint8_t short_address, uint8_t level, int queuefull_timeout){
-    int frame = dali_transmit_frame(handle, get_dali_address_byte_setlevel(short_address), level, queuefull_timeout);
+    int frame = dali_transmit_frame(handle, get_dali_setlevel_address_byte(short_address), level, queuefull_timeout);
+    if (frame == pdFAIL) return ESP_ERR_NOT_FINISHED;
+    return ESP_OK;
+}
+esp_err_t dali_set_level_group_noblock(dali_transceiver_handle_t handle, uint8_t group, uint8_t level, int queuefull_timeout){
+    int frame = dali_transmit_frame(handle, get_dali_setlevel_group_byte(group), level, queuefull_timeout);
     if (frame == pdFAIL) return ESP_ERR_NOT_FINISHED;
     return ESP_OK;
 }
 
 int16_t dali_query_level(dali_transceiver_handle_t handle, uint8_t short_address){
     // returns -1 in case of no response
-    dali_frame_t frame = dali_transmit_frame_and_wait_for_backward_frame(handle, get_dali_address_byte(short_address), DALI_SECONDBYTE_QUERY_ACTUAL_LEVEL, pdMS_TO_TICKS(1000));
+    dali_frame_t frame = dali_transmit_frame_and_wait_for_backward_frame(handle, get_dali_command_address_byte(short_address), DALI_SECONDBYTE_QUERY_ACTUAL_LEVEL, pdMS_TO_TICKS(1000));
     if (frame.type == DALI_BACKWARD_FRAME_TYPE){
         return (int16_t) frame.firstbyte;
     }
@@ -149,7 +154,7 @@ int16_t dali_query_level(dali_transceiver_handle_t handle, uint8_t short_address
 }
 int16_t dali_query_dtr(dali_transceiver_handle_t handle, uint8_t short_address){
     // returns -1 in case of no response
-    dali_frame_t frame = dali_transmit_frame_and_wait_for_backward_frame(handle, get_dali_address_byte(short_address), DALI_SECONDBYTE_QUERY_DTR, pdMS_TO_TICKS(1000));
+    dali_frame_t frame = dali_transmit_frame_and_wait_for_backward_frame(handle, get_dali_command_address_byte(short_address), DALI_SECONDBYTE_QUERY_DTR, pdMS_TO_TICKS(1000));
     if (frame.type == DALI_BACKWARD_FRAME_TYPE){
         return (int16_t) frame.firstbyte;
     }
@@ -204,10 +209,10 @@ esp_err_t dali_set_fade_time(dali_transceiver_handle_t handle, uint8_t short_add
     if (dali_set_and_verify_dtr(handle, fade_time, short_address)) {
         return ESP_ERR_NOT_FINISHED;
     };
-    if (dali_send_twice(handle, get_dali_address_byte(short_address), DALI_SECONDBYTE_STORE_DTR_AS_FADE_TIME)) {
+    if (dali_send_twice(handle, get_dali_command_address_byte(short_address), DALI_SECONDBYTE_STORE_DTR_AS_FADE_TIME)) {
         return ESP_ERR_NOT_FINISHED;
     };
-    dali_frame_t frame = dali_transmit_frame_and_wait_for_backward_frame(handle, get_dali_address_byte(short_address), DALI_SECONDBYTE_QUERY_FADE_RATE, pdMS_TO_TICKS(1000));
+    dali_frame_t frame = dali_transmit_frame_and_wait_for_backward_frame(handle, get_dali_command_address_byte(short_address), DALI_SECONDBYTE_QUERY_FADE_RATE, pdMS_TO_TICKS(1000));
     if (frame.type == DALI_NO_FRAME_TYPE){
         ESP_LOGE(TAG, "No response to fade time query from control gear");
         return ESP_ERR_NOT_FOUND;
@@ -230,10 +235,10 @@ esp_err_t dali_set_power_on_level(dali_transceiver_handle_t handle, uint8_t shor
     if (dali_set_and_verify_dtr(handle, power_on_level, short_address)) {
         return ESP_ERR_NOT_FINISHED;
     };
-    if (dali_send_twice(handle, get_dali_address_byte(short_address), DALI_SECONDBYTE_STORE_DTR_AS_POWER_ON_LEVEL)) {
+    if (dali_send_twice(handle, get_dali_command_address_byte(short_address), DALI_SECONDBYTE_STORE_DTR_AS_POWER_ON_LEVEL)) {
         return ESP_ERR_NOT_FINISHED;
     };
-    dali_frame_t frame = dali_transmit_frame_and_wait_for_backward_frame(handle, get_dali_address_byte(short_address), DALI_SECONDBYTE_QUERY_POWER_ON_LEVEL, pdMS_TO_TICKS(1000));
+    dali_frame_t frame = dali_transmit_frame_and_wait_for_backward_frame(handle, get_dali_command_address_byte(short_address), DALI_SECONDBYTE_QUERY_POWER_ON_LEVEL, pdMS_TO_TICKS(1000));
     if (frame.type == DALI_NO_FRAME_TYPE){
         ESP_LOGE(TAG, "No response to power on level query from control gear");
         return ESP_ERR_NOT_FOUND;
@@ -255,10 +260,10 @@ esp_err_t dali_set_system_failure_level(dali_transceiver_handle_t handle, uint8_
     if (dali_set_and_verify_dtr(handle, system_failure_level, short_address)) {
         return ESP_ERR_NOT_FINISHED;
     };
-    if (dali_send_twice(handle, get_dali_address_byte(short_address), DALI_SECONDBYTE_STORE_DTR_AS_SYSTEM_FAILURE_LEVEL)) {
+    if (dali_send_twice(handle, get_dali_command_address_byte(short_address), DALI_SECONDBYTE_STORE_DTR_AS_SYSTEM_FAILURE_LEVEL)) {
         return ESP_ERR_NOT_FINISHED;
     };
-    dali_frame_t frame = dali_transmit_frame_and_wait_for_backward_frame(handle, get_dali_address_byte(short_address), DALI_SECONDBYTE_QUERY_SYSTEM_FAILURE_LEVEL, pdMS_TO_TICKS(1000));
+    dali_frame_t frame = dali_transmit_frame_and_wait_for_backward_frame(handle, get_dali_command_address_byte(short_address), DALI_SECONDBYTE_QUERY_SYSTEM_FAILURE_LEVEL, pdMS_TO_TICKS(1000));
     if (frame.type == DALI_NO_FRAME_TYPE){
         ESP_LOGE(TAG, "No response to system failure level query from control gear");
         return ESP_ERR_NOT_FOUND;

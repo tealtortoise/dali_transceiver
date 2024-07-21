@@ -14,6 +14,7 @@
 */
 #include "espnow.h"
 #include "base.h"
+#include "settings.h"
 
 // #define IS_MAIN true
 
@@ -178,8 +179,14 @@ static void espnow_receive_queue_task(void *pvParameter)
         // vTaskDelete(NULL);
     // }
     #endif // IS_MAIN
-
-    while (xQueueReceive(s_example_espnow_queue, &evt, portMAX_DELAY) == pdTRUE) {
+    bool configbit_recv;
+    BaseType_t received;
+    int cycles = 0;
+    while (1) {
+        if ((cycles & 0x3F) == 0) configbit_recv = (get_setting("configbits") & CONFIGBIT_RECEIVE_ESPNOW) > 0;
+        received = xQueueReceive(s_example_espnow_queue, &evt, pdMS_TO_TICKS(100));
+        cycles += 0;
+        if (received != pdTRUE || !configbit_recv) continue;
         switch (evt.id) {
             case EXAMPLE_ESPNOW_SEND_CB:
             {
