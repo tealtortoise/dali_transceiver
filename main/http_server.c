@@ -16,6 +16,11 @@
 #include <nvs_flash.h>
 #include <sys/param.h>
 #include "esp_netif.h"
+#include "esp_app_format.h"
+// #include "esp_system.h"
+
+#include "esp_ota_ops.h"
+#include "esp_flash_partitions.h"
 // #include "protocol_examples_common.h"
 #include "utils.c"
 // #include "esp_tls_crypto.h"
@@ -55,6 +60,10 @@ static char responsebuffer[BUF_SIZE];
 static char recbuffer[REC_BUF_SIZE];
 
 extern int setpoint;
+
+
+#define OTABUFSIZE 0x7FFF
+static char ota_write_data[OTABUFSIZE + 1] = { 0 };
 
 
 api_endpoint_t registers[NUM_ENDPOINTS];
@@ -277,6 +286,120 @@ static esp_err_t current_setpoint_handler(httpd_req_t *req){
     return ESP_OK;
 }
 
+static esp_err_t otaupdate(httpd_req_t *req){
+    // return httpd_resp_send_500(req);
+    // char* buffer = malloc(1024);
+    int bytes;
+    ESP_LOGI(TAG, "Received POST OTAUpdate %i bytes", req->content_len);
+    
+    
+    esp_err_t err;
+    /* update handle : set by esp_ota_begin(), must be freed via esp_ota_end() */
+    esp_ota_handle_t update_handle = 0 ;
+    const esp_partition_t *update_partition = NULL;
+
+    ESP_LOGI(TAG, "Starting OTA example");
+
+    const esp_partition_t *configured = esp_ota_get_boot_partition();
+    const esp_partition_t *running = esp_ota_get_running_partition();
+
+    if (configured != running) {
+        ESP_LOGW(TAG, "Configured OTA boot partition at offset 0x%08"PRIx32", but running from offset 0x%08"PRIx32,
+                 configured->address, running->address);
+        ESP_LOGW(TAG, "(This can happen if either the OTA boot data or preferred boot image become corrupted somehow.)");
+    }
+    ESP_LOGI(TAG, "Running partition type %d subtype %d (offset 0x%08"PRIx32")",
+             running->type, running->subtype, running->address);
+
+
+    update_partition = esp_ota_get_next_update_partition(NULL);
+    ESP_LOGI(TAG, "Writing to partition subtype %d at offset 0x%"PRIx32,
+             update_partition->subtype, update_partition->address);
+    assert(update_partition != NULL);
+
+    esp_app_desc_t new_app_info;
+    bool image_header_was_checked = false;
+    int binary_file_length = 0;
+    while (1){
+        bytes = httpd_req_recv(req, ota_write_data, _MIN(req->content_len, OTABUFSIZE));
+        if (bytes > 1) 
+        {
+            ESP_LOGI(TAG, "Recv %i bytes", bytes);
+            // printf(".");
+            // fflush(stdout);
+            if (image_header_was_checked == false) {
+                esp_app_desc_t new_app_info;
+                if (bytes > sizeof(esp_image_header_t) + sizeof(esp_image_segment_header_t) + sizeof(esp_app_desc_t)) {
+                    // check current version with downloading
+                    memcpy(&new_app_info, &ota_write_data[sizeof(esp_image_header_t) + sizeof(esp_image_segment_header_t)], sizeof(esp_app_desc_t));
+                    ESP_LOGI(TAG, "New firmware version: %s", new_app_info.version);
+
+                    esp_app_desc_t running_app_info;
+                    if (esp_ota_get_partition_description(running, &running_app_info) == ESP_OK) {
+                        ESP_LOGI(TAG, "Running firmware version: %s", running_app_info.version);
+                    }
+
+                    const esp_partition_t* last_invalid_app = esp_ota_get_last_invalid_partition();
+                    esp_app_desc_t invalid_app_info;
+                    if (esp_ota_get_partition_description(last_invalid_app, &invalid_app_info) == ESP_OK) {
+                        ESP_LOGI(TAG, "Last invalid firmware version: %s", invalid_app_info.version);
+                    }
+                    image_header_was_checked = true;
+
+                    err = esp_ota_begin(update_partition, OTA_SIZE_UNKNOWN, &update_handle);
+                    if (err != ESP_OK) {
+                        ESP_LOGE(TAG, "esp_ota_begin failed (%s)", esp_err_to_name(err));
+                        return httpd_resp_send_500(req);
+                    }
+                    ESP_LOGI(TAG, "esp_ota_begin succeeded");
+                } else {
+                    ESP_LOGE(TAG, "received package is not fit len");
+                    return httpd_resp_send_500(req);
+                }
+            }
+            err = esp_ota_write( update_handle, (const void *)ota_write_data, bytes);
+            if (err != ESP_OK) {
+                return httpd_resp_send_500(req);
+            }
+            binary_file_length += bytes;
+            ESP_LOGD(TAG, "Written image length %d", binary_file_length);
+        }
+        else
+        {
+            ESP_LOGI(TAG, "Recv returned 0 bytes");
+            sprintf(responsebuffer, "OK");
+            httpd_resp_send(req, responsebuffer, HTTPD_RESP_USE_STRLEN);
+
+            err = esp_ota_end(update_handle);
+            if (err != ESP_OK) {
+                if (err == ESP_ERR_OTA_VALIDATE_FAILED) {
+                    ESP_LOGE(TAG, "Image validation failed, image is corrupted");
+                }
+                ESP_LOGE(TAG, "esp_ota_end failed (%s)!", esp_err_to_name(err));
+                return httpd_resp_send_500(req);
+            }
+            
+
+            err = esp_ota_set_boot_partition(update_partition);
+            if (err != ESP_OK) {
+                ESP_LOGE(TAG, "esp_ota_set_boot_partition failed (%s)!", esp_err_to_name(err));
+                return httpd_resp_send_500(req);
+            }
+            ESP_LOGI(TAG, "OTA Update complete -> restart system!");
+            vTaskDelay(pdMS_TO_TICKS(1000));
+            esp_restart();
+            return ESP_OK;
+            break;
+        }
+        vTaskDelay(1);
+    }
+    
+    sprintf(responsebuffer, "OK");
+    httpd_resp_send(req, responsebuffer, HTTPD_RESP_USE_STRLEN);
+    // free(buffer);
+    return ESP_OK;
+}
+
 static esp_err_t rest_put_channel_handler(httpd_req_t *req){
     parse_uri(req->uri);
     bool put = req->method == HTTP_PUT;
@@ -403,9 +526,25 @@ static esp_err_t file_handler(httpd_req_t *req){
     responsebuffer[fsize] = 0;
 
     int urilen = strlen(uri);
-    if (strcmp(uri + urilen - 4, ".ico") == 0) httpd_resp_set_type(req, "image/x-icon");
-    if (strcmp(uri + urilen - 4, ".png") == 0) httpd_resp_set_type(req, "image/png");
-    if (strcmp(uri + urilen - 5, ".html") == 0) httpd_resp_set_type(req, "text/html");
+    if (strcmp(uri + urilen - 4, ".ico") == 0)
+    {
+        httpd_resp_set_type(req, "image/x-icon");
+        httpd_resp_set_hdr(req, "cache-control", "max-age=300");
+    }
+    if (strcmp(uri + urilen - 4, ".png") == 0)
+    {
+        httpd_resp_set_type(req, "image/png");
+        httpd_resp_set_hdr(req, "cache-control", "max-age=300");
+    }
+    if (strcmp(uri + urilen - 5, ".html") == 0)
+    {
+        httpd_resp_set_type(req, "text/html");
+    }
+    if (strcmp(uri + urilen - 4, ".css") == 0)
+    {
+        httpd_resp_set_type(req, "text/css");
+        httpd_resp_set_hdr(req, "cache-control", "max-age=30");
+    }
     httpd_resp_send(req, responsebuffer, fsize);
     return ESP_OK;
 
@@ -480,6 +619,12 @@ static const httpd_uri_t rest_get_channel_level = {
     .handler   = rest_put_channel_handler,
     .user_ctx  = NULL
 };
+static const httpd_uri_t post_ota = {
+    .uri       = "/otaupdate/",
+    .method    = HTTP_POST,
+    .handler   = otaupdate,
+    .user_ctx  = NULL
+};
 // static const httpd_uri_t set_alarm = {
 //     .uri       = "/setpoint/current/",
 //     .method    = HTTP_GET,
@@ -520,6 +665,7 @@ static httpd_handle_t start_webserver(networking_ctx_t *ctx)
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.uri_match_fn = httpd_uri_match_wildcard;
     config.global_user_ctx = ctx;
+    config.max_uri_handlers = 10;
     config.lru_purge_enable = true;
 
     // Start the httpd server
@@ -528,6 +674,7 @@ static httpd_handle_t start_webserver(networking_ctx_t *ctx)
         // Set URI handlers
         ESP_LOGI(TAG, "Registering URI handlers");
         httpd_register_uri_handler(server, &hello);
+        httpd_register_uri_handler(server, &post_ota);
         httpd_register_uri_handler(server, &rest_put_channel_level);
         httpd_register_uri_handler(server, &rest_get_channel_level);
         httpd_register_uri_handler(server, &get_setpoint);

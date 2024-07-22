@@ -2,105 +2,10 @@
 <html>
 <head>
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link rel="shortcut icon" href="favicon.ico">
-    <link rel="apple-touch-icon image_src" href="apple-touch-icon.png">
-    <link rel="manifest" href="assets/site.webmanifest">
-    <style>
-        * {
-            box-sizing: border-box;
-        } 
-        body {
-            background-color: black;
-            color:white;
-            padding-top: 1em;
-            
-            font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        }
-        .slidecontainer {
-            margin: 1em auto 1px auto;
-            width:80%;
-        }
-        .slidecontainer span {
-            font-size: 240%;
-            width: 32%;
-            display:inline-block;
-        }
-        span.updating {
-            color: #e0dc70;
-        }
-        #levelslider {
-            width: 66%;
-        }
-        header {
-            display: grid;
-            grid-template-columns: 1fr 1fr 1fr;
-            column-gap: 0em;
-            margin-top: 0.7em;
-            margin-bottom: 2em;
-            padding: 0 2em 0 2em;
-        }
-        button.nav {
-            
-            /* margin: 0.7em auto 0.7em auto; */
-            width: 80%;
-            padding: 0.2em 0.2em 0.2em 0.2em;
-            border-radius: 0.4em;
-            /* border-color: white; */
-            /* border-width: 0.1em; */
-            /* box-shadow: 0px 0px 5px 5px rgba(0, 0, 0, 0.171); */
-            border: solid rgb(159, 159, 159) 2px;
-            color: white;
-            font-size: 120%;
-            font-family: inherit;
-            
-            background-image: linear-gradient(to right, #281b2a, #432f5f);
-        }
-        header a{
-            display: block;
-            width: 100%;
-        }
-        button.levelbutton {
-            margin: 0.7em auto 0.7em auto;
-            width: 80%;
-            padding-top: 0.5em;
-            padding-bottom: 0.5em;
-            display: block;
-            border-radius: 10em;
-            /* border-color: white; */
-            /* border-width: 0.1em; */
-            /* box-shadow: 0px 0px 5px 5px rgba(0, 0, 0, 0.171); */
-            border-style: none;
-            color: white;
-            font-size: 160%;
-            font-family: inherit;
-        }
-        .red {
-            /* background-color: rgb(235, 47, 57); */
-            background-image: linear-gradient(to right, #a71414, #e03753);
-        }
-        .purple {
-            /* background-color: rgb(156, 68, 228); */
-            
-            background-image: linear-gradient(to right, #622d95, #956ec9);
-        }
-        .teal {
-            /* background-color: rgb(14, 193, 124); */
-            background-image: linear-gradient(to right, #3655ac, #17adac);
-        }
-        .green {
-            /* background-color: rgb(175, 212, 8); */
-            background-image: linear-gradient(to right, #25874a, #36ac65);
-        }
-        .magenta {
-            /* background-color: rgb(212, 8, 124); */
-            background-image: linear-gradient(to right, #8b1659, #ba3988);
-        }
-        .orange {
-            /* background-color: rgb(243, 102, 15); */
-            
-            background-image: linear-gradient(to right, #cb3604, #ad8a21);
-        }
-    </style>
+    <link rel="shortcut icon" href="/favicon.ico">
+    <link rel="apple-touch-icon image_src" href="/apple-touch-icon.png">
+    <link rel="manifest" href="/site.webmanifest">
+    <link rel="stylesheet" type="text/css" href="/styles.css">
 </head>
 <body>
     <header>
@@ -135,14 +40,6 @@
                     // let text = response.text()
                     return response.text();
                 })
-                // .then((st) => {
-                //     if (el != null) {
-                //         el.value = st;
-                //         console.log("Got ", st, uri, el, el.value);
-                //         return;
-                //     }
-                //     return st;
-                // })
                 .catch(error => {
                     console.error('There was a problem with your fetch operation:', error);
                 });

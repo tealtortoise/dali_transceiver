@@ -268,7 +268,6 @@ esp_err_t read_level_luts(level_t lut[]){
         linebuffer[40] = 0;
         // sprintf(linebuffer, "test,0");
 
-        printf(linebuffer);
         if (linebuffer[0] == '#') continue;
 
         for (int i = 1; i <= 64; i++){

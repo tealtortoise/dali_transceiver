@@ -7,6 +7,9 @@
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "driver/gpio.h"
+
+#include "esp_ota_ops.h"
+#include "esp_flash_partitions.h"
 #include "driver/gptimer.h"
 #include "driver/ledc.h"
 
@@ -43,6 +46,7 @@
 
 #define MAX_UPDATE_PERIOD_US 1500000
 
+#define HASH_LEN 32 /* SHA-256 digest length */
 
 static const char *TAG = "main loop";
 
@@ -497,9 +501,79 @@ void random_setpointer_task(void *params){
     }
 }
 
+static bool diagnostic(void)
+{
+    // gpio_config_t io_conf;
+    // io_conf.intr_type    = GPIO_PIN_INTR_DISABLE;
+    // io_conf.mode         = GPIO_MODE_INPUT;
+    // io_conf.pin_bit_mask = (1ULL << CONFIG_EXAMPLE_GPIO_DIAGNOSTIC);
+    // io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
+    // io_conf.pull_up_en   = GPIO_PULLUP_ENABLE;
+    // gpio_config(&io_conf);
+
+    ESP_LOGI(TAG, "Diagnostics (5 sec)...");
+    // vTaskDelay(5000 / portTICK_PERIOD_MS);
+
+    // bool diagnostic_is_ok = gpio_get_level(CONFIG_EXAMPLE_GPIO_DIAGNOSTIC);
+
+    // gpio_reset_pin(CONFIG_EXAMPLE_GPIO_DIAGNOSTIC);
+    // return diagnostic_is_ok;
+    return true;
+}
+
+
+static void print_sha256 (const uint8_t *image_hash, const char *label)
+{
+    char hash_print[HASH_LEN * 2 + 1];
+    hash_print[HASH_LEN * 2] = 0;
+    for (int i = 0; i < HASH_LEN; ++i) {
+        sprintf(&hash_print[i * 2], "%02x", image_hash[i]);
+    }
+    ESP_LOGI(TAG, "%s: %s", label, hash_print);
+}
+
+
 void app_main(void)
 {
+    ESP_LOGI(TAG, "It worked (twice)!!!!");
     initialise_logbuffer();
+
+    uint8_t sha_256[HASH_LEN] = { 0 };
+    esp_partition_t partition;
+
+    // get sha256 digest for the partition table
+    partition.address   = ESP_PARTITION_TABLE_OFFSET;
+    partition.size      = ESP_PARTITION_TABLE_MAX_LEN;
+    partition.type      = ESP_PARTITION_TYPE_DATA;
+    esp_partition_get_sha256(&partition, sha_256);
+    print_sha256(sha_256, "SHA-256 for the partition table: ");
+
+    // get sha256 digest for bootloader
+    partition.address   = ESP_BOOTLOADER_OFFSET;
+    partition.size      = ESP_PARTITION_TABLE_OFFSET;
+    partition.type      = ESP_PARTITION_TYPE_APP;
+    esp_partition_get_sha256(&partition, sha_256);
+    print_sha256(sha_256, "SHA-256 for bootloader: ");
+
+    // get sha256 digest for running partition
+    esp_partition_get_sha256(esp_ota_get_running_partition(), sha_256);
+    print_sha256(sha_256, "SHA-256 for current firmware: ");
+
+    const esp_partition_t *running = esp_ota_get_running_partition();
+    esp_ota_img_states_t ota_state;
+    if (esp_ota_get_state_partition(running, &ota_state) == ESP_OK) {
+        if (ota_state == ESP_OTA_IMG_PENDING_VERIFY) {
+            // run diagnostic function ...
+            bool diagnostic_is_ok = diagnostic();
+            if (diagnostic_is_ok) {
+                ESP_LOGI(TAG, "Diagnostics completed successfully! Continuing execution ...");
+                esp_ota_mark_app_valid_cancel_rollback();
+            } else {
+                ESP_LOGE(TAG, "Diagnostics failed! Start rollback to the previous version ...");
+                esp_ota_mark_app_invalid_rollback_and_reboot();
+            }
+        }
+    }
     // sprintf(logbuffer, "This is a log");
     srand(time(NULL));
     vTaskPrioritySet(NULL, 6);

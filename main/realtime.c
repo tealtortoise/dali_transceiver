@@ -16,7 +16,7 @@ void rtc_task(void* params){
     esp_sntp_config_t config = ESP_NETIF_SNTP_DEFAULT_CONFIG("pool.ntp.org");
     ESP_ERROR_CHECK(esp_netif_sntp_init(&config));
     ESP_LOGI(TAG, "Started SNTP");
-    ESP_ERROR_CHECK(esp_netif_sntp_sync_wait(pdMS_TO_TICKS(10000)));
+    ESP_ERROR_CHECK(esp_netif_sntp_sync_wait(pdMS_TO_TICKS(20000)));
 
     time_t now;
     char strftime_buf[64];
