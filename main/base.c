@@ -83,7 +83,7 @@ void log_string(char* logstring){
     if (buffer_remaining)
     {
         bytes_copied = _MIN(buffer_remaining, len);
-        strncpy(logbuffer + logbufferpos, tempbuffer, bytes_copied);
+        memcpy(logbuffer + logbufferpos, tempbuffer, bytes_copied);
         // ESP_LOGI(TAG, "Copied %i into end of buffer", bytes_copied);
         logbufferpos += bytes_copied;
     }

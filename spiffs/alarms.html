@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html>
+
 <head>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
@@ -8,393 +9,408 @@
     <link rel="manifest" href="/site.webmanifest">
     <link rel="stylesheet" type="text/css" href="/styles.css">
 
- 
+
 </head>
+
 <body>
-    
+
     <header>
         <a href="/"><button class="nav " level="254">Levels</button></a>
         <a href="/setup/"><button class="nav " level="254">Setup</button></a>
         <a href="/ch/"><button class="nav " level="254">Channels</button></a>
-            
-    </header>
-<main>
-    <div class="alarmunit">
-        <!-- <span>#</span> -->
-        <span>Brightness 0 → 254</span>
-        <span>Time HHMM</span>
-        <span>Fade Time (sec)</span>
-        <span>On</span>
-        <!-- <span class="alarmnumber">1</span> -->
-        <input class="alarmsetpoint" id="setpoint1" value="0">
-        <input class="alarmtime" id="alarmtime1" value="0">
-        <input class ="alarmfade" id="fadetime1" value="0">
-        <div class="checkbox-wrapper-20">
-            <div class="switch">
-              <input id="enable1" class="input" type="checkbox" />
-              <label for="enable1" class="slider"></label>
-            </div>
-          </div>
-        <!-- <span class="alarmnumber">2</span> -->
-        <input class="alarmsetpoint" id="setpoint2" value="0">
-        <input class="alarmtime" id="alarmtime2" value="0">
-        <input class ="alarmfade" id="fadetime2" value="0">
-        <div class="checkbox-wrapper-20">
-            <div class="switch">
-              <input id="enable2" class="input" type="checkbox" />
-              <label for="enable2" class="slider"></label>
-            </div>
-          </div>
-        <!-- <span class="alarmnumber">3</span> -->
-        <input class="alarmsetpoint" id="setpoint3" value="0">
-        <input class="alarmtime" id="alarmtime3" value="0">
-        <input class ="alarmfade" id="fadetime3" value="0">
-        
-        <div class="checkbox-wrapper-20">
-            <div class="switch">
-              <input id="enable3" class="input" type="checkbox" />
-              <label for="enable3" class="slider"></label>
-            </div>
-          </div>
-        <input class="alarmsetpoint" id="setpoint4" value="0">
-        <input class="alarmtime" id="alarmtime4" value="0">
-        <input class ="alarmfade" id="fadetime4" value="0">
-        <div class="checkbox-wrapper-20">
-            <div class="switch">
-              <input id="enable4" class="input" type="checkbox" />
-              <label for="enable4" class="slider"></label>
-            </div>
-          </div>
-    </div>
-    <div class="settingsunit">
-        <div class="settingname">Default Fade Time (ms)</div>
-        <input class="setting" id="default_fadetime">
-        <div class="settingname">Full Power Limit (0-256)</div>
-        <input class="setting" id="full_power">
-        <div class="settingname">Preset 1 Brightness</div>
-        <input class="setting" id="preset1">
-        <div class="settingname">Preset 2 Brightness</div>
-        <input class="setting" id="preset2">
-        <div class="settingname">Preset 3 Brightness</div>
-        <input class="setting" id="preset3">
-        <div class="settingname">Preset 4 Brightness</div>
-        <input class="setting" id="preset4">
-        <div class="settingname">DALI1 Channel</div>
-        <input class="setting" id="dali1_channel">
-        <div class="settingname">DALI2 Channel</div>
-        <input class="setting" id="dali2_channel">
-        <div class="settingname">DALI3 Channel</div>
-        <input class="setting" id="dali3_channel">
-        <div class="settingname">DALI4 Channel</div>
-        <input class="setting" id="dali4_channel">
-    </div>
-    <div class="channelinfo">For DALI short addresses use 0 <= channel <= 63. For DALI groups use 100 <= group <= 115. For DALI Broadcast use 200. -1 will disable channel.</div>
-    <div class="settingsunit">
-        <div class="settingname">Use Relay 1</div>
-        
-        <div class="checkbox-wrapper-20">
-            <div class="switch">
-              <input id="configbit1" class="input" type="checkbox" />
-              <label for="configbit1" class="slider"></label>
-            </div>
-        </div>
-        <div class="settingname">Use Relay 2</div>
-        
-        <div class="checkbox-wrapper-20">
-            <div class="switch">
-              <input id="configbit2" class="input" type="checkbox" />
-              <label for="configbit2" class="slider"></label>
-            </div>
-        </div>
-        <div class="settingname">Use DALI</div>
-        <div class="checkbox-wrapper-20">
-            <div class="switch">
-              <input id="configbit3" class="input" type="checkbox" />
-              <label for="configbit3" class="slider"></label>
-            </div>
-        </div>
-        <div class="settingname">Use 0-10v 1</div>
-        <div class="checkbox-wrapper-20">
-            <div class="switch">
-              <input id="configbit4" class="input" type="checkbox" />
-              <label for="configbit4" class="slider"></label>
-            </div>
-        </div>
-        <div class="settingname">Use 0-10v 2</div>
-        <div class="checkbox-wrapper-20">
-            <div class="switch">
-              <input id="configbit5" class="input" type="checkbox" />
-              <label for="configbit5" class="slider"></label>
-            </div>
-        </div>
-        <div class="settingname">Send ESPNOW</div>
-        <div class="checkbox-wrapper-20">
-            <div class="switch">
-              <input id="configbit6" class="input" type="checkbox" />
-              <label for="configbit6" class="slider"></label>
-            </div>
-        </div>
-        <div class="settingname">Receive ESPNOW</div>
-        <div class="checkbox-wrapper-20">
-            <div class="switch">
-              <input id="configbit7" class="input" type="checkbox" />
-              <label for="configbit7" class="slider"></label>
-            </div>
-        </div>
-    </div>
-    <button class="update">Update</button>
-</main>
 
-<script>
-    "use strict";
-    let modified = false;
-    
-    let inputs = Array.from(document.getElementsByTagName("input"));
-    function pad(num) {
-        num = num.toString();
-        while (num.length < 2) num = "0" + num;
-        return num;
-    }
-    function get(uri, el) {
-        const options = {
-        method: 'GET',
+    </header>
+    <main>
+        <div class="alarmunit">
+            <!-- <span>#</span> -->
+            <span>Brightness 0 → 254</span>
+            <span>Time HHMM</span>
+            <span>Fade Time (sec)</span>
+            <span>On</span>
+            <!-- <span class="alarmnumber">1</span> -->
+            <input class="alarmsetpoint" id="setpoint1" value="0">
+            <input class="alarmtime" id="alarmtime1" value="0">
+            <input class="alarmfade" id="fadetime1" value="0">
+            <div class="checkbox-wrapper-20">
+                <div class="switch">
+                    <input id="enable1" class="input" type="checkbox" />
+                    <label for="enable1" class="slider"></label>
+                </div>
+            </div>
+            <!-- <span class="alarmnumber">2</span> -->
+            <input class="alarmsetpoint" id="setpoint2" value="0">
+            <input class="alarmtime" id="alarmtime2" value="0">
+            <input class="alarmfade" id="fadetime2" value="0">
+            <div class="checkbox-wrapper-20">
+                <div class="switch">
+                    <input id="enable2" class="input" type="checkbox" />
+                    <label for="enable2" class="slider"></label>
+                </div>
+            </div>
+            <!-- <span class="alarmnumber">3</span> -->
+            <input class="alarmsetpoint" id="setpoint3" value="0">
+            <input class="alarmtime" id="alarmtime3" value="0">
+            <input class="alarmfade" id="fadetime3" value="0">
+
+            <div class="checkbox-wrapper-20">
+                <div class="switch">
+                    <input id="enable3" class="input" type="checkbox" />
+                    <label for="enable3" class="slider"></label>
+                </div>
+            </div>
+            <input class="alarmsetpoint" id="setpoint4" value="0">
+            <input class="alarmtime" id="alarmtime4" value="0">
+            <input class="alarmfade" id="fadetime4" value="0">
+            <div class="checkbox-wrapper-20">
+                <div class="switch">
+                    <input id="enable4" class="input" type="checkbox" />
+                    <label for="enable4" class="slider"></label>
+                </div>
+            </div>
+        </div>
+        <div class="settingsunit">
+            <div class="settingname">Default Fade Time (ms)</div>
+            <input class="setting" id="default_fadetime">
+            <div class="settingname">Full Power Limit (0-256)</div>
+            <input class="setting" id="full_power">
+            <div class="settingname">Preset 1 Brightness</div>
+            <input class="setting" id="preset1">
+            <div class="settingname">Preset 2 Brightness</div>
+            <input class="setting" id="preset2">
+            <div class="settingname">Preset 3 Brightness</div>
+            <input class="setting" id="preset3">
+            <div class="settingname">Preset 4 Brightness</div>
+            <input class="setting" id="preset4">
+            <div class="settingname">DALI1 Channel</div>
+            <input class="setting" id="dali1_channel">
+            <div class="settingname">DALI2 Channel</div>
+            <input class="setting" id="dali2_channel">
+            <div class="settingname">DALI3 Channel</div>
+            <input class="setting" id="dali3_channel">
+            <div class="settingname">DALI4 Channel</div>
+            <input class="setting" id="dali4_channel">
+        </div>
+        <div class="channelinfo">For DALI short addresses use 0 &lt;= channel &lt;= 63. For DALI groups use 100 &lt;= group &lt;= 115.
+                For DALI Broadcast use 200. -1 will disable channel.</div>
+                <div class="settingsunit">
+                    <div class="settingname">Use Relay 1</div>
+
+                    <div class="checkbox-wrapper-20">
+                        <div class="switch">
+                            <input id="configbit1" class="input" type="checkbox" />
+                            <label for="configbit1" class="slider"></label>
+                        </div>
+                    </div>
+                    <div class="settingname">Use Relay 2</div>
+
+                    <div class="checkbox-wrapper-20">
+                        <div class="switch">
+                            <input id="configbit2" class="input" type="checkbox" />
+                            <label for="configbit2" class="slider"></label>
+                        </div>
+                    </div>
+                    <div class="settingname">Use DALI</div>
+                    <div class="checkbox-wrapper-20">
+                        <div class="switch">
+                            <input id="configbit3" class="input" type="checkbox" />
+                            <label for="configbit3" class="slider"></label>
+                        </div>
+                    </div>
+                    <div class="settingname">Use 0-10v 1</div>
+                    <div class="checkbox-wrapper-20">
+                        <div class="switch">
+                            <input id="configbit4" class="input" type="checkbox" />
+                            <label for="configbit4" class="slider"></label>
+                        </div>
+                    </div>
+                    <div class="settingname">Use 0-10v 2</div>
+                    <div class="checkbox-wrapper-20">
+                        <div class="switch">
+                            <input id="configbit5" class="input" type="checkbox" />
+                            <label for="configbit5" class="slider"></label>
+                        </div>
+                    </div>
+                    <div class="settingname">Send ESPNOW</div>
+                    <div class="checkbox-wrapper-20">
+                        <div class="switch">
+                            <input id="configbit6" class="input" type="checkbox" />
+                            <label for="configbit6" class="slider"></label>
+                        </div>
+                    </div>
+                    <div class="settingname">Receive ESPNOW</div>
+                    <div class="checkbox-wrapper-20">
+                        <div class="switch">
+                            <input id="configbit7" class="input" type="checkbox" />
+                            <label for="configbit7" class="slider"></label>
+                        </div>
+                    </div>
+                </div>
+                <button class="update" id="update">Update</button>
+    </main>
+
+    <script>
+        "use strict";
+        let getEl = (st) => document.getElementById(st);
+        let modified = false;
+
+        let inputs = Array.from(document.getElementsByTagName("input"));
+        function pad(num) {
+            num = num.toString();
+            while (num.length < 2) num = "0" + num;
+            return num;
+        }
+        function get(uri, el) {
+            const options = {
+                method: 'GET',
+            };
+            return fetch(uri, options)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    // let text = response.text()
+                    return response.text();
+                })
+                .then((st) => {
+                    if (el != null) {
+                        el.value = st;
+                        el.setAttribute("serverval", st);
+                        console.log("Got ", st, uri, el, el.value);
+                        return;
+                    }
+                    return st;
+                })
+                .catch(error => {
+                    console.error('There was a problem with your fetch operation:', error);
+                });
+        }
+
+        function send(uri, value, el) {
+            if (el) {
+                let ui_value = el.type == "checkbox" ? el.checked : el.value;
+                if (el && el.getAttribute("serverval") == value) return Promise.resolve();
+            }
+            const options = {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/plain'
+                },
+                body: `${value}`
+            };
+
+            // Make the PUT request using the fetch API
+            return fetch(uri, options)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    if (el != null) {
+                        if (el.type == "checkbox") {
+                            console.log(el);
+                            let label = el.nextElementSibling;
+                            label.classList.remove("modified");
+                            label.classList.add("saved");
+                        } else {
+                            el.className = "saved";
+                        }
+                    }
+                    return response;
+                })
+                .catch(error => {
+                    console.error('There was a problem with your fetch operation:', error);
+                });
         };
-        return fetch(uri, options)
-            .then(response => {
-                if (!response.ok) {
-                throw new Error('Network response was not ok');
-                }
-                // let text = response.text()
-                return response.text();
+
+        function buttonclick(ev) {
+            let promises = [];
+            inputs.forEach((el) => {
+                if (el.type != "checkbox") el.className = "";
             })
-            .then((st) => {
-                if (el != null) {
-                    el.value = st;
-                    el.setAttribute("serverval", st);
-                    console.log("Got ", st, uri, el, el.value);
+            inputs.forEach(restoreIfBlank);
+            for (let i = 1; i <= 4; i++) {
+                let alarmnum = i;
+                let alarmtime_el = getEl("alarmtime" + alarmnum);
+                let fadetime_el = getEl("fadetime" + alarmnum);
+                let setpoint_el = getEl("setpoint" + alarmnum);
+                let enable_el = getEl("enable" + alarmnum);
+                let preset_el = getEl("preset" + i);
+                let alarmtime = alarmtime_el.value;
+                let fadetime = parseInt(fadetime_el.value, 10) * 1000;
+                let setpoint = parseInt(setpoint_el.value, 10);
+                let enabled = enable_el.checked ? 1 : 0;
+                let preset = preset_el.value;
+
+                if (setpoint > 254 || setpoint < 0) {
+                    console.log("Bad setpoint");
+                    setpoint_el.classList.add("error");
                     return;
                 }
-                return st;
-            })
-            .catch(error => {
-                console.error('There was a problem with your fetch operation:', error);
-            });
-    }
-
-    function send(uri, value,el){
-        const options = {
-        method: 'PUT',
-        headers: {
-            'Content-Type': 'application/plain'
-        },
-        body: `${value}`
-        };
-
-        // Make the PUT request using the fetch API
-        return fetch(uri, options)
-            .then(response => {
-                if (!response.ok) {
-                throw new Error('Network response was not ok');
+                if (alarmtime.length == 0) {
+                    alarmtime_el.value = "1200";
+                    alarmtime = "1200";
                 }
-                if (el != null) {
-                    if (el.type == "checkbox"){
-                        console.log(el);
+                else if (alarmtime.length != 4) {
+                    alarmtime_el.classList.add("error");
+                    return;
+                }
+                let hour = parseInt(alarmtime.substring(0, 2), 10);
+                let min = parseInt(alarmtime.substring(2, 4), 10);
+                if (min > 59 || min < 0) {
+                    console.log("min not valid");
+                    alarmtime_el.classList.add("error");
+                    return;
+                }
+                if (hour < 0 || hour > 23) {
+                    console.log("hour not valid");
+                    alarmtime_el.classList.add("error");
+                    return;
+                }
+                if (preset < 0) {
+                    preset = 0;
+                }
+                else if (preset > 254) {
+                    preset = 254;
+                }
+
+                send(`/api/alarmmin/${alarmnum}/`, min, alarmtime_el);
+                send(`/api/alarmhour/${alarmnum}/`, hour, alarmtime_el);
+                send(`/api/alarmfade/${alarmnum}/`, fadetime, fadetime_el);
+                send(`/api/alarmsetpoint/${alarmnum}/`, setpoint, setpoint_el);
+                send(`/api/alarmenable/${alarmnum}/`, enabled, enable_el);
+                send(`/api/preset/${alarmnum}/`, preset, preset_el);
+            }
+            let default_fadetime_el = getEl("default_fadetime");
+            let default_fadetime = default_fadetime_el.value;
+            if (default_fadetime >= 0 && default_fadetime < 36000001) {
+                promises.push(send("/api/default_fade/", default_fadetime, default_fadetime_el));
+            } else {
+                default_fadetime_el.className = "error";
+                return;
+            }
+            let full_power_el = getEl("full_power");
+            let full_power = full_power_el.value;
+            if (full_power >= 0 && full_power <= 256) {
+                promises.push(send("/api/full_power/", full_power, full_power_el));
+            }
+            for (let i = 1; i <= 4; i++) {
+                let channel_el = getEl("dali" + i + "_channel");
+                let channel = channel_el.value;
+                send("/api/" + channel_el.id + "/", channel, channel_el);
+            }
+            let configbits = 0;
+            for (let bit = 0; bit <= 6; bit++) {
+                let status = getEl("configbit" + (bit + 1)).checked;
+                configbits = configbits | (status << bit);
+            }
+            if (getEl("configbit1").getAttribute("serverval") != configbits) {
+                promises.push(send("/api/configbits/", configbits).then(() => {
+                    for (let bit = 0; bit <= 6; bit++) {
+                        let el = getEl("configbit" + (bit + 1));
                         let label = el.nextElementSibling;
                         label.classList.remove("modified");
                         label.classList.add("saved");
-                    } else {
-                        el.className = "saved";
                     }
-                }
-                return response;
+                }));
+            }
+            Promise.all(promises).then(() => {
+                console.log("All done");
+                getEl("update").innerHTML = "Updated!";
+
             })
-            .catch(error => {
-                console.error('There was a problem with your fetch operation:', error);
+        }
+        for (let i = 1; i <= 4; i++) {
+            let uri = `/api/alarmsetpoint/${i}/`;
+            get(uri, getEl(`setpoint${i}`));
+            uri = `/api/preset/${i}/`;
+            get(uri, getEl("preset" + i));
+            uri = `/api/alarmfade/${i}/`;
+            get(uri).then((st) => {
+                let fadeel = getEl(`fadetime${i}`);
+                fadeel.value = Math.floor(st / 1000 + 0.5);
+                fadeel.setAttribute("serverval", st);
             });
-    };
 
-    function buttonclick(ev) {
-        let promises = [];
-        inputs.forEach((el) => {
-            if (el.type != "checkbox") el.className = "";
-        })
-        inputs.forEach(restoreIfBlank);
-        for (let i = 1; i <= 4; i++){
-            let alarmnum = i;
-            let alarmtime_el = document.getElementById("alarmtime" + alarmnum);
-            let fadetime_el = document.getElementById("fadetime" + alarmnum);
-            let setpoint_el = document.getElementById("setpoint" + alarmnum);
-            let enable_el = document.getElementById("enable" + alarmnum);
-            let preset_el = document.getElementById("preset" + i);
-            let alarmtime = alarmtime_el.value;
-            let fadetime =  parseInt(fadetime_el.value, 10) * 1000;
-            let setpoint =  parseInt(setpoint_el.value, 10);
-            let enabled = enable_el.checked ? 1 : 0;
-            let preset = preset_el.value;
+            uri = `/api/alarmenable/${i}/`;
+            get(uri).then((st) => {
+                let enable_el = getEl(`enable${i}`);
+                enable_el.checked = st == "1";
+                enable_el.setAttribute("serverval", st);
+            });
+            uri = `/api/alarmhour/${i}/`;
+            let hour;
+            let hour_prom = get(uri).then((st) => {
+                hour = st;
+            });
+            uri = `/api/alarmmin/${i}/`;
+            let min;
+            let min_prom = get(uri).then((st) => {
+                min = st;
+            })
+            uri = `/api/preset/${i}/`;
+            Promise.all([min_prom, hour_prom]).then(() => {
+                let time_el = getEl(`alarmtime${i}`);
+                time_el.value = pad(hour) + pad(min);
+                time_el.setAttribute("serverval", pad(hour) + pad(min));
+            });
+        }
+        get("/api/default_fade/", getEl("default_fadetime"));
+        get("/api/full_power/", getEl("full_power"));
 
-            if (setpoint > 254 || setpoint < 0){
-                console.log("Bad setpoint");
-                setpoint_el.classList.add("error");
-                return;
-            }
-            if (alarmtime.length == 0) {
-                alarmtime_el.value = "1200";
-                alarmtime = "1200";
-            }
-            else if (alarmtime.length != 4)
-            {
-                alarmtime_el.classList.add("error");
-                return;
-            }
-            let hour = parseInt(alarmtime.substring(0, 2), 10);
-            let min = parseInt(alarmtime.substring(2,4), 10);
-            if (min > 59 || min < 0) {
-                console.log("min not valid");
-                alarmtime_el.classList.add("error");
-                return;
-            }
-            if (hour < 0 || hour > 23) {
-                console.log("hour not valid");
-                alarmtime_el.classList.add("error");
-                return;
-            }
-            if (preset < 0) {
-                preset = 0;
-            }
-            else if (preset > 254) {
-                preset = 254;
-            }
-
-            send(`/api/alarmmin/${alarmnum}/`, min, alarmtime_el);
-            send(`/api/alarmhour/${alarmnum}/`, hour, alarmtime_el);
-            send(`/api/alarmfade/${alarmnum}/`, fadetime, fadetime_el);
-            send(`/api/alarmsetpoint/${alarmnum}/`, setpoint, setpoint_el);
-            send(`/api/alarmenable/${alarmnum}/`, enabled, enable_el);
-            send(`/api/preset/${alarmnum}/`, preset, preset_el);
-        }
-        let default_fadetime_el = document.getElementById("default_fadetime");
-        let default_fadetime = default_fadetime_el.value;
-        if (default_fadetime >=0 && default_fadetime < 36000001){
-            promises.push(send("/api/default_fade/", default_fadetime, default_fadetime_el ));
-        } else {
-            default_fadetime_el.className = "error";
-            return;
-        }
-        let full_power_el = document.getElementById("full_power");
-        let full_power = full_power_el.value;
-        if (full_power >=0 && full_power <= 256){
-            promises.push(send("/api/full_power/", full_power, full_power_el));
-        }
-        for (let i = 1; i <= 4; i++){
-            let channel_el = document.getElementById("dali" + i + "_channel");
-            let channel = channel_el.value;
-            send("/api/" + channel_el.id + "/", channel, channel_el);
-        }
-        let configbits = 0;
-        for (let bit = 0; bit <= 6; bit ++){
-            let status = document.getElementById("configbit" + (bit + 1)).checked;
-            configbits = configbits | (status << bit);
-        }
-
-        promises.push(send("/api/configbits/", configbits).then(() => {
-            for (let bit = 0; bit <= 6; bit ++){
-                let el = document.getElementById("configbit" + (bit + 1));
-                let label = el.nextElementSibling;
-                label.classList.remove("modified");
-                label.classList.add("saved");
-            }
-        }));
-        Promise.all(promises).then(() => {
-            console.log("All done");
-        })
-    }
-    for (let i = 1; i <= 4; i++ ){
-        let uri = `/api/alarmsetpoint/${i}/`;
-        get(uri, document.getElementById(`setpoint${i}`));
-        uri = `/api/preset/${i}/`;
-        get(uri, document.getElementById("preset" + i));
-        uri = `/api/alarmfade/${i}/`;
-        get(uri).then((st) => {
-            if (parseInt(st, 10) > 0){
-                document.getElementById(`fadetime${i}`).value = Math.floor(st / 1000 + 0.5);
-            }
-        });
-        
-        uri = `/api/alarmenable/${i}/`;
-        get(uri).then((st) => {
-            document.getElementById(`enable${i}`).checked = st == "1";
-        });
-        uri = `/api/alarmhour/${i}/`;
-        let hour;
-        let hour_prom = get(uri).then((st) => {
-            hour = st;
-        });
-        uri = `/api/alarmmin/${i}/`;
-        let min;
-        let min_prom = get(uri).then((st) => {
-            min = st;
-        })
-        uri = `/api/preset/${i}/`;
-        Promise.all([min_prom, hour_prom]).then(() => {
-            document.getElementById(`alarmtime${i}`).value = pad(hour) + pad(min);
-        });
-    }
-    get("/api/default_fade/", document.getElementById("default_fadetime"));
-    get("/api/full_power/", document.getElementById("full_power"));
-
-    for (let i = 1; i <= 4; i++){
-            let channel_el = document.getElementById("dali" + i + "_channel");
+        for (let i = 1; i <= 4; i++) {
+            let channel_el = getEl("dali" + i + "_channel");
             get("/api/" + channel_el.id + "/", channel_el);
-    }
+        }
 
-    get("/api/configbits/").then((bits) =>
-        {
-            for (let bit = 0; bit <= 6; bit ++){
+        get("/api/configbits/").then((bits) => {
+            for (let bit = 0; bit <= 6; bit++) {
                 let status = (bits >> bit) & 1;
-                document.getElementById("configbit" + (bit + 1)).checked = status;
+                let configbit_el = getEl("configbit" + (bit + 1));
+                configbit_el.checked = status;
+                configbit_el.setAttribute("serverval", bits)
             }
         });
 
 
-    let buttons = Array.from(document.getElementsByTagName("button"));
-    buttons.forEach((button_el) => {
-        console.log("addedonclick");
-        button_el.onclick = buttonclick;
-    });
-
-    function clearInput(ev){
-        console.log("cleared");
-        let el = ev.srcElement;
-        el.setAttribute("serverval", ev.srcElement.value);
-        el.value = "";
-        inputs.forEach((el_) => {
-            if (el_ !== el) restoreIfBlank(el_);
+        let buttons = Array.from(document.getElementsByTagName("button"));
+        buttons.forEach((button_el) => {
+            console.log("addedonclick");
+            button_el.onclick = buttonclick;
         });
-        
-    };
-    function markModified(ev){
-        console.log("modified");
-        modified = true;
-        
-        if (ev.srcElement.type == "checkbox"){
-            let label = ev.srcElement.nextElementSibling;
-            label.classList.add("modified");
-            label.classList.remove("saved");
-        } else {
-            ev.srcElement.className = "modified";
-        }
-    };
 
-    function restoreIfBlank(el) {
-        // let el = ev.srcElement;
-        if (el.value == "") el.value = el.getAttribute("serverval");
-    }
-    inputs.forEach((input_el) => {
-        input_el.onfocus = clearInput;
-    });
-    inputs.forEach((input_el) => {
-        input_el.onchange = markModified;
-    });
-</script>
+        function clearInput(ev) {
+            console.log("cleared");
+            let el = ev.srcElement;
+            el.setAttribute("serverval", ev.srcElement.value);
+            el.value = "";
+            inputs.forEach((el_) => {
+                if (el_ !== el) restoreIfBlank(el_);
+            });
+
+        };
+        function markModified(ev) {
+            console.log("modified");
+            modified = true;
+
+            if (ev.srcElement.type == "checkbox") {
+                let label = ev.srcElement.nextElementSibling;
+                label.classList.add("modified");
+                label.classList.remove("saved");
+            } else {
+                ev.srcElement.className = "modified";
+            }
+        };
+
+        function restoreIfBlank(el) {
+            // let el = ev.srcElement;
+            if (el.value == "") el.value = el.getAttribute("serverval");
+        }
+        inputs.forEach((input_el) => {
+            input_el.onfocus = clearInput;
+        });
+        inputs.forEach((input_el) => {
+            input_el.onchange = markModified;
+        });
+    </script>
 </body>
+
 </html>

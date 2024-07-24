@@ -35,7 +35,7 @@ extern nvs_handle_t nvs_handle_;
 
 extern TaskHandle_t espnowtask;
 
-#define LOGBUFFER_SIZE 0xFFFF
+#define LOGBUFFER_SIZE 0x8000
 
 extern volatile DRAM_ATTR char logbuffer[LOGBUFFER_SIZE];
 

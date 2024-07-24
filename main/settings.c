@@ -235,7 +235,7 @@ esp_err_t setup_nvs_spiffs_settings(){
     if (nvs_updated) {
     }
     TaskHandle_t task;
-    xTaskCreate(commit_task, "nvs commit task", 2048, NULL, 1, &task);
+    xTaskCreate(commit_task, "nvs commit task", 2400, NULL, 1, &task);
     return ESP_OK;
 }
 

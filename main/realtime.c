@@ -10,14 +10,17 @@
 static const char* TAG = "SNTP";
 
 static int alarm_minute = 41;
-void rtc_task(void* params){
 
-    
+void rtc_task(void* params){
     esp_sntp_config_t config = ESP_NETIF_SNTP_DEFAULT_CONFIG("pool.ntp.org");
     ESP_ERROR_CHECK(esp_netif_sntp_init(&config));
     ESP_LOGI(TAG, "Started SNTP");
-    ESP_ERROR_CHECK(esp_netif_sntp_sync_wait(pdMS_TO_TICKS(20000)));
-
+    esp_err_t err = esp_netif_sntp_sync_wait(pdMS_TO_TICKS(20000));
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "SNTP Sync Timeout!");
+        ESP_LOGE(TAG, "SNTP Sync Timeout!");
+        vTaskDelete(NULL);
+    }
     time_t now;
     char strftime_buf[64];
     struct tm timeinfo;
@@ -30,6 +33,8 @@ void rtc_task(void* params){
     strftime(strftime_buf, sizeof(strftime_buf), "%c", &timeinfo);
     ESP_LOGI(TAG, "The current date/time in UK is: %s", strftime_buf);
     
+
+
     struct tm *tm_struct;
     int hour;
     int minute;

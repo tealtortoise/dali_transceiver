@@ -390,8 +390,8 @@ esp_err_t setup_espnow_common(TaskHandle_t *sending_minitask_handle, TaskHandle_
 
     // TaskHandle_t temptask;
 
-    xTaskCreate(espnow_receive_queue_task, "espnow_receive_queue_task", 8192 , espnow_ctx, 4, NULL);
-    xTaskCreate(espnow_send_task, "espnow_send_task", 4096, espnow_ctx, 4, sending_minitask_handle);
+    xTaskCreate(espnow_receive_queue_task, "espnow_receive_queue_task", 3200, espnow_ctx, 4, NULL);
+    xTaskCreate(espnow_send_task, "espnow_send_task", 3200, espnow_ctx, 4, sending_minitask_handle);
     // *sending_minitask_handle = temptask;
     return ESP_OK;
 }

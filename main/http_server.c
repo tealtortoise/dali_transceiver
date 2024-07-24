@@ -26,15 +26,16 @@
 // #include "esp_tls_crypto.h"
 #include <esp_http_server.h>
 #include "esp_event.h"
+#include "base.h"
 #include "esp_netif.h"
 // #include "esp_tls.h"
 #include "dali.h"
+// #include "base.h"
 
 #if !CONFIG_IDF_TARGET_LINUX
 #include <esp_wifi.h>
 #include <esp_system.h>
 #include "nvs_flash.h"
-#include "base.h"
 #include "html.c"
 #include "http_server.h"
 #include "settings.h"
@@ -49,27 +50,18 @@
 
 static const char *TAG = "http server";
 
-#define BUF_SIZE 0x7FFF
+#define BUF_SIZE 0x1000
 
 #define REC_BUF_SIZE 256
 
 #define NO_DIGITS_FOUND -98765413
 
-#define NUM_ENDPOINTS 17
-static char responsebuffer[BUF_SIZE];
-static char recbuffer[REC_BUF_SIZE];
+static char httpd_temp_buffer[BUF_SIZE];
+
+
+static char templogbuffer[1024];
 
 extern int setpoint;
-
-
-#define OTABUFSIZE 0x7FFF
-static char ota_write_data[OTABUFSIZE + 1] = { 0 };
-
-
-api_endpoint_t registers[NUM_ENDPOINTS];
-
-void populate_registers(){
-}
 
 int get_int_from_uri(char* uri){
     char numberlevel[5];
@@ -147,22 +139,22 @@ void parse_uri(char* uri){
     // printf("subint3 %i\n", substring_ints[2]);
 }
 
-int* get_endpoint_ptr(){
-    bool nomatch;
-    int* reg;
-    for (int i=0; i < NUM_ENDPOINTS; i++){
-        // registers[i].name[15] = 0;
-        // ESP_LOGI(TAG, "Looking for register '%s' with '%s'", substrings[0], registers[i].name);
-        nomatch = strcmp(substrings[0], registers[i].name);
-        if (!nomatch){
-            ESP_LOGI(TAG, "Matched %s", substrings[0]);
-            reg = registers[i].array;
-            return reg;
-        }
-    }
-    ESP_LOGI(TAG, "Didn't find any known endpoint");
-    return 0;
-}
+// int* get_endpoint_ptr(){
+//     bool nomatch;
+//     int* reg;
+//     for (int i=0; i < NUM_ENDPOINTS; i++){
+//         // registers[i].name[15] = 0;
+//         // ESP_LOGI(TAG, "Looking for register '%s' with '%s'", substrings[0], registers[i].name);
+//         nomatch = strcmp(substrings[0], registers[i].name);
+//         if (!nomatch){
+//             ESP_LOGI(TAG, "Matched %s", substrings[0]);
+//             reg = registers[i].array;
+//             return reg;
+//         }
+//     }
+//     ESP_LOGI(TAG, "Didn't find any known endpoint");
+//     return 0;
+// }
 
 static esp_err_t rest_get_handler(httpd_req_t *req){
     parse_uri(req->uri);
@@ -176,34 +168,38 @@ static esp_err_t rest_get_handler(httpd_req_t *req){
     else if (substring_count == 2 && substring_ints[1] != GET_SETTING_NOT_FOUND)
     {
         value = get_setting_indexed(substrings[0], index);
-        // ESP_LOGI(TAG, "Looking for %s index %i from %s", substrings[0], index, substrings[1]);
     }
     else
     {
         value = GET_SETTING_NOT_FOUND;
     }
     if (value == GET_SETTING_NOT_FOUND) {
-        sprintf(responsebuffer, "Not found");
+        sprintf(httpd_temp_buffer, "Not found");
+        sprintf(templogbuffer,"%s: URI '%s', setting NOT FOUND", TAG, req->uri);
+
         httpd_resp_set_status(req, HTTPD_404);
-        httpd_resp_send(req, responsebuffer, HTTPD_RESP_USE_STRLEN);
+        httpd_resp_send(req, httpd_temp_buffer, HTTPD_RESP_USE_STRLEN);
     }
     else
     {
-        sprintf(responsebuffer, "%i", value);
+        sprintf(httpd_temp_buffer, "%i", value);
+        sprintf(templogbuffer,"%s: URI '%s', returning %i", TAG, req->uri, value);
     }
-    httpd_resp_send(req, responsebuffer, HTTPD_RESP_USE_STRLEN);
+    
+    log_string(templogbuffer);
+    httpd_resp_send(req, httpd_temp_buffer, HTTPD_RESP_USE_STRLEN);
     return ESP_OK;
 }
 
 static esp_err_t rest_put_handler(httpd_req_t *req){
     parse_uri(req->uri);
 
-    int bytes = httpd_req_recv(req, recbuffer, 255);
-    recbuffer[bytes] = 0;
+    int bytes = httpd_req_recv(req, httpd_temp_buffer, 255);
+    httpd_temp_buffer[bytes] = 0;
     int data;
-    int datarecv = sscanf(recbuffer, "%i", &data);
-    ESP_LOGI(TAG, "===== Received PUT at %s (%s)", req->uri, recbuffer);
-    ESP_LOGD(TAG, "Received %s (%i) %i", recbuffer, data, datarecv);
+    int datarecv = sscanf(httpd_temp_buffer, "%i", &data);
+    ESP_LOGI(TAG, "===== Received PUT at %s (%s)", req->uri, httpd_temp_buffer);
+    ESP_LOGD(TAG, "Received %s (%i) %i", httpd_temp_buffer, data, datarecv);
     int value = GET_SETTING_NOT_FOUND;
     int exists = 0;
     int existing = GET_SETTING_NOT_FOUND;
@@ -226,16 +222,16 @@ static esp_err_t rest_put_handler(httpd_req_t *req){
     
     if (exists == 0) {
         ESP_LOGI(TAG, "Returning 404");
-        sprintf(responsebuffer, "Not found");
+        sprintf(httpd_temp_buffer, "Not found");
         httpd_resp_set_status(req, HTTPD_404);
-        httpd_resp_send(req, responsebuffer, HTTPD_RESP_USE_STRLEN);
+        httpd_resp_send(req, httpd_temp_buffer, HTTPD_RESP_USE_STRLEN);
         return ESP_OK;
     }
     else if (datarecv != 1)
     {
         httpd_resp_set_status(req, HTTPD_400);
-        sprintf(responsebuffer, "No int found");
-        httpd_resp_send(req, responsebuffer, HTTPD_RESP_USE_STRLEN);
+        sprintf(httpd_temp_buffer, "No int found");
+        httpd_resp_send(req, httpd_temp_buffer, HTTPD_RESP_USE_STRLEN);
         return ESP_OK;
     }
 
@@ -255,8 +251,8 @@ static esp_err_t rest_put_handler(httpd_req_t *req){
     {
         ESP_LOGI(TAG, "URI '%s' unchanged (%i)", req->uri, existing);
     }
-    sprintf(responsebuffer, "OK");
-    httpd_resp_send(req, responsebuffer, HTTPD_RESP_USE_STRLEN);
+    sprintf(httpd_temp_buffer, "OK");
+    httpd_resp_send(req, httpd_temp_buffer, HTTPD_RESP_USE_STRLEN);
     return ESP_OK;
 }
 
@@ -265,24 +261,24 @@ static esp_err_t setpoint_get_handler(httpd_req_t *req)
 {
     int ns = get_int_from_uri(req->uri);
     if ((ns >= 0) && (ns <=254)) {
-        sprintf(responsebuffer, response, ns);
+        sprintf(httpd_temp_buffer, response, ns);
     }
     else 
     {
-        sprintf(responsebuffer, response, 0);
+        sprintf(httpd_temp_buffer, response, 0);
     };
     // req->sess_ctx;
     networking_ctx_t *ctx = httpd_get_global_user_ctx(req->handle);
     setpoint = ns;
     xTaskNotifyIndexed(ctx->mainloop_task, SETPOINT_SLEW_NOTIFY_INDEX, USE_DEFAULT_FADETIME, eSetValueWithOverwrite);
 
-    httpd_resp_send(req, responsebuffer, HTTPD_RESP_USE_STRLEN);
+    httpd_resp_send(req, httpd_temp_buffer, HTTPD_RESP_USE_STRLEN);
     return ESP_OK;
 }
 
 static esp_err_t current_setpoint_handler(httpd_req_t *req){
-    sprintf(responsebuffer, "%i", setpoint);
-    httpd_resp_send(req, responsebuffer, HTTPD_RESP_USE_STRLEN);
+    sprintf(httpd_temp_buffer, "%i", setpoint);
+    httpd_resp_send(req, httpd_temp_buffer, HTTPD_RESP_USE_STRLEN);
     return ESP_OK;
 }
 
@@ -321,7 +317,7 @@ static esp_err_t otaupdate(httpd_req_t *req){
     bool image_header_was_checked = false;
     int binary_file_length = 0;
     while (1){
-        bytes = httpd_req_recv(req, ota_write_data, _MIN(req->content_len, OTABUFSIZE));
+        bytes = httpd_req_recv(req, httpd_temp_buffer, _MIN(req->content_len, BUF_SIZE));
         if (bytes > 1) 
         {
             ESP_LOGI(TAG, "Recv %i bytes", bytes);
@@ -331,7 +327,7 @@ static esp_err_t otaupdate(httpd_req_t *req){
                 esp_app_desc_t new_app_info;
                 if (bytes > sizeof(esp_image_header_t) + sizeof(esp_image_segment_header_t) + sizeof(esp_app_desc_t)) {
                     // check current version with downloading
-                    memcpy(&new_app_info, &ota_write_data[sizeof(esp_image_header_t) + sizeof(esp_image_segment_header_t)], sizeof(esp_app_desc_t));
+                    memcpy(&new_app_info, &httpd_temp_buffer[sizeof(esp_image_header_t) + sizeof(esp_image_segment_header_t)], sizeof(esp_app_desc_t));
                     ESP_LOGI(TAG, "New firmware version: %s", new_app_info.version);
 
                     esp_app_desc_t running_app_info;
@@ -357,7 +353,7 @@ static esp_err_t otaupdate(httpd_req_t *req){
                     return httpd_resp_send_500(req);
                 }
             }
-            err = esp_ota_write( update_handle, (const void *)ota_write_data, bytes);
+            err = esp_ota_write( update_handle, (const void *)httpd_temp_buffer, bytes);
             if (err != ESP_OK) {
                 return httpd_resp_send_500(req);
             }
@@ -367,8 +363,8 @@ static esp_err_t otaupdate(httpd_req_t *req){
         else
         {
             ESP_LOGI(TAG, "Recv returned 0 bytes");
-            sprintf(responsebuffer, "OK");
-            httpd_resp_send(req, responsebuffer, HTTPD_RESP_USE_STRLEN);
+            sprintf(httpd_temp_buffer, "OK");
+            httpd_resp_send(req, httpd_temp_buffer, HTTPD_RESP_USE_STRLEN);
 
             err = esp_ota_end(update_handle);
             if (err != ESP_OK) {
@@ -386,16 +382,15 @@ static esp_err_t otaupdate(httpd_req_t *req){
                 return httpd_resp_send_500(req);
             }
             ESP_LOGI(TAG, "OTA Update complete -> restart system!");
-            vTaskDelay(pdMS_TO_TICKS(1000));
+            vTaskDelay(pdMS_TO_TICKS(4000));
             esp_restart();
             return ESP_OK;
-            break;
         }
         vTaskDelay(1);
     }
     
-    sprintf(responsebuffer, "OK");
-    httpd_resp_send(req, responsebuffer, HTTPD_RESP_USE_STRLEN);
+    sprintf(httpd_temp_buffer, "OK");
+    httpd_resp_send(req, httpd_temp_buffer, HTTPD_RESP_USE_STRLEN);
     // free(buffer);
     return ESP_OK;
 }
@@ -409,11 +404,11 @@ static esp_err_t rest_put_channel_handler(httpd_req_t *req){
     int* override_ptr;
     if (put) {
             
-        int bytes = httpd_req_recv(req, recbuffer, 255);
-        recbuffer[bytes] = 0;
-        int datarecv = sscanf(recbuffer, "%i", &data);
-        ESP_LOGI(TAG, "===== Received PUT at %s (%s)", req->uri, recbuffer);
-        ESP_LOGD(TAG, "Received %s (%i) %i", recbuffer, data, datarecv);
+        int bytes = httpd_req_recv(req, httpd_temp_buffer, 255);
+        httpd_temp_buffer[bytes] = 0;
+        int datarecv = sscanf(httpd_temp_buffer, "%i", &data);
+        ESP_LOGI(TAG, "===== Received PUT at %s (%s)", req->uri, httpd_temp_buffer);
+        ESP_LOGD(TAG, "Received %s (%i) %i", httpd_temp_buffer, data, datarecv);
         ESP_LOGI(TAG, "Trying to set override for channel %s: %i", channelname, data);
     }
     char* chname;
@@ -460,17 +455,17 @@ static esp_err_t rest_put_channel_handler(httpd_req_t *req){
     if (put)
     {
         *override_ptr = data;
-        sprintf(responsebuffer, "OK");
+        sprintf(httpd_temp_buffer, "OK");
         ESP_LOGI(TAG, "PUT: Set %s to %i", chname, data);
         xTaskNotifyIndexed(ctx->mainloop_task, SETPOINT_SLEW_NOTIFY_INDEX, USE_DEFAULT_FADETIME, eSetValueWithOverwrite);
     }
     else
     {
-        sprintf(responsebuffer, "%i", *override_ptr);
+        sprintf(httpd_temp_buffer, "%i", *override_ptr);
         ESP_LOGI(TAG, "GET: %s is %i", chname, *override_ptr);
     }
     
-    httpd_resp_send(req, responsebuffer, HTTPD_RESP_USE_STRLEN);
+    httpd_resp_send(req, httpd_temp_buffer, HTTPD_RESP_USE_STRLEN);
     return ESP_OK;
 }
 
@@ -509,22 +504,6 @@ static esp_err_t file_handler(httpd_req_t *req){
     }
 
 
-    fseek(in_file, 0, SEEK_END);
-    long fsize = ftell(in_file);
-    fseek(in_file, 0, SEEK_SET);
-
-    if (fsize > BUF_SIZE - 1) {
-        fclose(in_file);
-        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Buffer too small");
-        return ESP_ERR_NO_MEM;
-    }
-    
-    
-    fread(responsebuffer, fsize, 1, in_file);
-    fclose(in_file);
-
-    responsebuffer[fsize] = 0;
-
     int urilen = strlen(uri);
     if (strcmp(uri + urilen - 4, ".ico") == 0)
     {
@@ -545,7 +524,36 @@ static esp_err_t file_handler(httpd_req_t *req){
         httpd_resp_set_type(req, "text/css");
         httpd_resp_set_hdr(req, "cache-control", "max-age=30");
     }
-    httpd_resp_send(req, responsebuffer, fsize);
+
+    fseek(in_file, 0, SEEK_END);
+    long fsize = ftell(in_file);
+    fseek(in_file, 0, SEEK_SET);
+
+    if (fsize > BUF_SIZE - 1) {
+        int sent_bytes = 0;
+        int bytes_to_send;
+        while (1) {
+            bytes_to_send = _MIN(BUF_SIZE, fsize - sent_bytes);
+            if (bytes_to_send > 0) fread(httpd_temp_buffer, bytes_to_send, 1, in_file);
+            httpd_resp_send_chunk(req, httpd_temp_buffer, bytes_to_send);
+            
+            if (bytes_to_send == 0) break;
+            sent_bytes += bytes_to_send;
+        }
+        // fclose(in_file);
+        // httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Buffer too small");
+        // return ESP_ERR_NO_MEM;
+    }
+    else
+    {
+        fread(httpd_temp_buffer, fsize, 1, in_file);
+        httpd_resp_send(req, httpd_temp_buffer, fsize);
+    }
+    fclose(in_file);
+
+    // httpd_temp_buffer[fsize] = 0;
+
+    // httpd_resp_send(req, httpd_temp_buffer, fsize);
     return ESP_OK;
 
 }
@@ -625,24 +633,7 @@ static const httpd_uri_t post_ota = {
     .handler   = otaupdate,
     .user_ctx  = NULL
 };
-// static const httpd_uri_t set_alarm = {
-//     .uri       = "/setpoint/current/",
-//     .method    = HTTP_GET,
-//     .handler   = current_setpoint_handler,
-//     .user_ctx  = NULL
-// };
 
-/* This handler allows the custom error handling functionality to be
- * tested from client side. For that, when a PUT request 0 is sent to
- * URI /ctrl, the /hello and /echo URIs are unregistered and following
- * custom error handler http_404_error_handler() is registered.
- * Afterwards, when /hello or /echo is requested, this custom error
- * handler is invoked which, after sending an error message to client,
- * either closes the underlying socket (when requested URI is /echo)
- * or keeps it open (when requested URI is /hello). This allows the
- * client to infer if the custom error handler is functioning as expected
- * by observing the socket state.
- */
 esp_err_t http_404_error_handler(httpd_req_t *req, httpd_err_code_t err)
 {
     if (strcmp("/hello", req->uri) == 0) {
@@ -665,6 +656,7 @@ static httpd_handle_t start_webserver(networking_ctx_t *ctx)
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.uri_match_fn = httpd_uri_match_wildcard;
     config.global_user_ctx = ctx;
+    config.max_open_sockets = 10;
     config.max_uri_handlers = 10;
     config.lru_purge_enable = true;
 
@@ -733,28 +725,11 @@ httpd_handle_t setup_httpserver(networking_ctx_t *extractx)
     ctx->extra_ctx = extractx;
     ESP_ERROR_CHECK(nvs_flash_init());
 
-    
-    // FILE *in_file  = fopen("/spiffs/html.html", "r"); // read only
-
-    // if (in_file == NULL)
-    // {  
-        // ESP_LOGE(TAG, "Error! Could not open file");
-    // }
-    // char line[1000];
-    // fgets( line, 1000, in_file );
-    // printf(line);
-    // vTaskDelay(10000000);
-
-    // ESP_ERROR_CHECK(esp_event_loop_create_default());
-
-    // ESP_ERROR_CHECK(example_connect());
-
     /* Register event handlers to stop the server when Wi-Fi or Ethernet is disconnected,
      * and re-start it upon connection.
      */
     ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &connect_handler, ctx));
     ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, &disconnect_handler, ctx));
-    populate_registers();
     server = start_webserver(extractx);
     return server;
 }

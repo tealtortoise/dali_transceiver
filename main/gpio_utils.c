@@ -93,7 +93,7 @@ void setup_relays(int configbits){
     timeout_data.level1 = 0;
     timeout_data.level2 = 0;
     timeout_data.turnoff_delay = RELAY_TURNOFF_DELAY_S;
-    xTaskCreate(relay_timeout_task, "relaytimeout", 2048, NULL, 1, &task_);
+    xTaskCreate(relay_timeout_task, "relaytimeout", 2400, NULL, 1, &task_);
 }
 
 int get_and_log_buttons(){
