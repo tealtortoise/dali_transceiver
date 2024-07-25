@@ -35,9 +35,9 @@ extern nvs_handle_t nvs_handle_;
 
 extern TaskHandle_t espnowtask;
 
-#define LOGBUFFER_SIZE 0x8000
+#define LOGBUFFER_SIZE 0x4000
 
-extern volatile DRAM_ATTR char logbuffer[LOGBUFFER_SIZE];
+extern char logbuffer[LOGBUFFER_SIZE + 16];
 
 extern int logbufferpos;
 
@@ -86,7 +86,7 @@ uint64_t get_system_time_us(uint64_t offset);
 
 void initialise_logbuffer();
 
-void log_string(char *logstring);
+void log_string(char *logstring, int bytes_to_log, bool addtime);
 
 typedef struct {
     const char name[24];

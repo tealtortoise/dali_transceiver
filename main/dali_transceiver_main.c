@@ -12,6 +12,8 @@
 #include "driver/gpio.h"
 #include "driver/uart.h"
 
+#include "soc/uart_periph.h"
+
 #include "esp_ota_ops.h"
 #include "esp_flash_partitions.h"
 #include "driver/gptimer.h"
@@ -68,9 +70,9 @@ void setup_networking(void *params)
     }
 }
 
+static char uartbuf[2048];
 void uart_log_task(void *params)
 {
-    // char buffer[256];
 
     //     int pipefd[2];
     //     pipe2(pipefd, 0); // O_NONBLOCK);
@@ -87,33 +89,36 @@ void uart_log_task(void *params)
     //     vTaskDelay(pdMS_TO_TICKS(500));
     // }
 
-    // uart_config_t uart_config = {
-    //     .baud_rate = 115200,
-    //     .data_bits = UART_DATA_8_BITS,
-    //     .parity    = UART_PARITY_DISABLE,
-    //     .stop_bits = UART_STOP_BITS_1,
-    //     .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
-    //     .source_clk = UART_SCLK_DEFAULT,
-    // };
+    uart_config_t uart_config = {
+        .baud_rate = 115200,
+        .data_bits = UART_DATA_8_BITS,
+        .parity    = UART_PARITY_DISABLE,
+        .stop_bits = UART_STOP_BITS_1,
+        .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
+        .source_clk = UART_SCLK_DEFAULT,
+    };
 
-    // ESP_ERROR_CHECK(uart_driver_install(0, 256 * 2, 0, 0, NULL, 0));
-    // ESP_ERROR_CHECK(uart_param_config(0, &uart_config));
-    // ESP_ERROR_CHECK(uart_set_pin(0, 16, 17, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
-
+    ESP_ERROR_CHECK(uart_driver_install(1, 512 * 2, 0, 0, NULL, 0));
+    ESP_ERROR_CHECK(uart_param_config(1, &uart_config));
+    ESP_ERROR_CHECK(uart_set_pin(1, 15, 9, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
+    esp_rom_gpio_connect_out_signal(9, UART_PERIPH_SIGNAL(0, SOC_UART_TX_PIN_IDX), false, false);
+    int len;
     while (1)
     {
-        vTaskDelay(1000);
-        // int len = uart_read_bytes(0, buffer, (256 - 1), pdMS_TO_TICKS(2000));
+        // vTaskDelay(1000);
+        len = uart_read_bytes(1, uartbuf, (2048 - 1), pdMS_TO_TICKS(2000));
         // Write data back to the UART
         // uart_write_bytes(0, (const char *) buffer, len);
-        // if (len) {
-        // buffer[len] = '\0';
-        // ESP_LOGI(TAG, "Recv str: %s", (char *) buffer);
-        // }
-        // else
-        // {
-        // ESP_LOGI(TAG, "No bytes received");
-        // }
+        if (len) {
+            // uartbuf[len] = 0;
+
+            log_string(uartbuf, len, false);
+        }
+        else
+        {
+            // ESP_LOGI(TAG, "No bytes received");
+            // log_string("no data oh noes :(");
+        }
     }
 }
 
@@ -170,7 +175,7 @@ void primary()
 {
     setup_relays(get_setting("configbits"));
     TaskHandle_t uarttask;
-    xTaskCreate(uart_log_task, "uart loopback", 2048, NULL, 1, &uarttask);
+    xTaskCreate(uart_log_task, "uart loopback", 4096, NULL, 1, &uarttask);
 
     level_overrides_t level_overrides = {
         .dali1 = -1,
@@ -186,7 +191,8 @@ void primary()
         .level_overrides = &level_overrides};
     TaskHandle_t networktask;
     xTaskCreate(setup_networking, "setup_networking", 4096, (void *)&networking_ctx, 2, &networktask);
-
+    
+    gpio_set_level(LED2_GPIO, 1);
     zeroten_handle_t pwm1;
     zeroten_handle_t pwm2;
     // ESP_ERROR_CHECK(setup_0_10v_channel(LED1_GPIO, CALIBRATION_PWM_LOG, &pwm1));
@@ -248,6 +254,23 @@ void primary()
     int dali4_lvl_to_send = setpoint;
     int espnow_lvl_to_send = setpoint;
     bool dali_broadcast = false;
+    // level_t lev_el;
+    
+    // for (int i=0; i< 5; i++){
+    //     lev_el = levellut[i];
+    //     ESP_LOGI(TAG, "Level %i: %d, %d, %d", i, lev_el.zeroten1_lvl, lev_el.zeroten2_lvl, lev_el.dali1_lvl);
+    // }
+    level_t subslevel = {
+        .zeroten1_lvl = 0,
+        .zeroten2_lvl = 0,
+        .dali1_lvl = 0,
+        .dali2_lvl = 0,
+        .dali3_lvl = 0,
+        .dali4_lvl = 0,
+        .espnow_lvl = 0,
+        .relay1 = 0,
+        .relay2 = 0,
+    };
     while (1)
     {
         actual_looptime = (esp_timer_get_time() - reftime);
@@ -262,6 +285,7 @@ void primary()
             current_time = esp_timer_get_time();
             if (received == pdTRUE)
             {
+                ESP_LOGI(TAG, "Received new setpoint %i local fade %i", local_setpoint, local_fadetime);
                 random_looptime = (rand() & 127);
                 tick_inc = 1;
                 configbits = get_setting("configbits");
@@ -306,7 +330,8 @@ void primary()
             //         (configbits & CONFIGBIT_USE_0_10v2) > 0,
             //         (configbits & CONFIGBIT_TRANSMIT_ESPNOW) > 0,
             //         (configbits & CONFIGBIT_RECEIVE_ESPNOW) > 0);
-            sprintf(templogbuffer, "IDLE. Config: Rly1: %s, Rly2: %s, DALI: %s, 0-10v1: %s, 0-10v2:%s, ESPNOW Snd %s, Recv %s",
+            ESP_LOGI(TAG, "IDLE. SP: %i, Config: Rly1: %s, Rly2: %s, DALI: %s, 0-10v1: %s, 0-10v2:%s, ESPNOW Snd %s, Recv %s",
+                    local_setpoint, 
                     (configbits & CONFIGBIT_USE_RELAY1) ? "ON" : "OFF",
                     (configbits & CONFIGBIT_USE_RELAY2) ? "ON" : "OFF",
                     (configbits & CONFIGBIT_USE_DALI) ? "ON" : "OFF",
@@ -314,15 +339,15 @@ void primary()
                     (configbits & CONFIGBIT_USE_0_10v2) ? "ON" : "OFF",
                     (configbits & CONFIGBIT_TRANSMIT_ESPNOW) ? "ON" : "OFF",
                     (configbits & CONFIGBIT_RECEIVE_ESPNOW) ? "ON" : "OFF");
-            // printf(templogbuffer);
-            log_string(templogbuffer);
             ESP_LOGI(TAG, "Min free heap %i", heap_caps_get_minimum_free_size(MALLOC_CAP_8BIT));
             ESP_LOGI(TAG, "Free heap %i", heap_caps_get_free_size(MALLOC_CAP_8BIT));
+        
             // list_tasks();
         }
 
         fade_remaining = local_setpoint - actual_level;
         level_el = levellut[actual_level];
+        // level_el = subslevel;
         manage_relay_timeouts(configbits, level_el.relay1, level_el.relay2);
 
         if (espnowtask != NULL && (configbits & CONFIGBIT_TRANSMIT_ESPNOW))
@@ -414,7 +439,9 @@ void primary()
         // sprintf(templogbuffer, "%s: Snt %i->%i Fade %i Intvl %llu", TAG, actual_level, local_setpoint, fadetime, target_looptime);
         // log_string(templogbuffer);
 
-        sprintf(templogbuffer, "%s: Lvl %i->%i { 0-10v1 %d, 0-10v2 %d, DALI1 %d, `DALI2 %d, DALI3 %d, DALI4 %d, ESPNOW %d, Rly1 %d, Rly2 %d LpTm %i", TAG, actual_level, local_setpoint,
+        ESP_LOGI(TAG, "Lvl %i->%i { 0-10v1 %d, 0-10v2 %d, DALI1 %d, `DALI2 %d, DALI3 %d, DALI4 %d, ESPNOW %d, Rly1 %d, Rly2 %d LpTm %i",
+                actual_level,
+                local_setpoint,
                 zeroten1_lvl_to_send,
                 zeroten2_lvl_to_send,
                 dali1_lvl_to_send,
@@ -425,7 +452,6 @@ void primary()
                 level_el.relay1,
                 level_el.relay2,
                 (int)actual_looptime);
-        log_string(templogbuffer);
     }
 }
 
@@ -452,14 +478,14 @@ static bool diagnostic(void)
     // io_conf.pull_up_en   = GPIO_PULLUP_ENABLE;
     // gpio_config(&io_conf);
 
-    ESP_LOGI(TAG, "Diagnostics (5 sec)...");
-    // vTaskDelay(5000 / portTICK_PERIOD_MS);
+    ESP_LOGI(TAG, "Diagnostics (3 sec)...");
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
 
     // bool diagnostic_is_ok = gpio_get_level(CONFIG_EXAMPLE_GPIO_DIAGNOSTIC);
 
     // gpio_reset_pin(CONFIG_EXAMPLE_GPIO_DIAGNOSTIC);
     // return diagnostic_is_ok;
-    return true;
+    return get_and_log_buttons() != 4;       ;
 }
 
 static void print_sha256(const uint8_t *image_hash, const char *label)
@@ -476,6 +502,9 @@ static void print_sha256(const uint8_t *image_hash, const char *label)
 void app_main(void)
 {
     ESP_LOGI(TAG, "It worked (three times)!!!!");
+
+    configure_gpio();
+    gpio_set_level(LED1_GPIO, 1);
     initialise_logbuffer();
 
     uint8_t sha_256[HASH_LEN] = {0};
@@ -501,8 +530,11 @@ void app_main(void)
 
     const esp_partition_t *running = esp_ota_get_running_partition();
     esp_ota_img_states_t ota_state;
-    if (esp_ota_get_state_partition(running, &ota_state) == ESP_OK)
+    esp_err_t getstate = esp_ota_get_state_partition(running, &ota_state) == ESP_OK;
+    ESP_LOGI(TAG, "Get ota state result %i", getstate);
+    if (getstate)
     {
+        ESP_LOGI(TAG, "Ota state is %i",ota_state);
         if (ota_state == ESP_OTA_IMG_PENDING_VERIFY)
         {
             // run diagnostic function ...
@@ -522,8 +554,7 @@ void app_main(void)
     // sprintf(logbuffer, "This is a log");
     srand(time(NULL));
     vTaskPrioritySet(NULL, 6);
-    configure_gpio();
-    rotate_gpio_outputs();
+    // rotate_gpio_outputs();
     setup_nvs_spiffs_settings();
     read_level_luts(levellut);
     TaskHandle_t randomtask;
@@ -543,7 +574,7 @@ void app_main(void)
     };
     int resistor_level;
     int received;
-    setup_adc(adcconfig);
+    // setup_adc(adcconfig);
 
     // while(1){
     // received = xTaskNotifyWaitIndexed(LIGHT_LEVEL_NOTIFY_INDEX, 0, 0, &resistor_level, 100);

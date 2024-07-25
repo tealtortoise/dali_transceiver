@@ -187,7 +187,7 @@ static esp_err_t rest_get_handler(httpd_req_t *req){
         sprintf(templogbuffer,"%s: URI '%s', returning %i", TAG, req->uri, value);
     }
     
-    log_string(templogbuffer);
+    // log_string(templogbuffer);
     httpd_resp_send(req, httpd_temp_buffer, HTTPD_RESP_USE_STRLEN);
     return ESP_OK;
 }
@@ -271,6 +271,7 @@ static esp_err_t setpoint_get_handler(httpd_req_t *req)
     // req->sess_ctx;
     networking_ctx_t *ctx = httpd_get_global_user_ctx(req->handle);
     setpoint = ns;
+    ESP_LOGI(TAG, "Wifi Notify %i", ns);
     xTaskNotifyIndexed(ctx->mainloop_task, SETPOINT_SLEW_NOTIFY_INDEX, USE_DEFAULT_FADETIME, eSetValueWithOverwrite);
 
     httpd_resp_send(req, httpd_temp_buffer, HTTPD_RESP_USE_STRLEN);
@@ -559,12 +560,20 @@ static esp_err_t file_handler(httpd_req_t *req){
 
 static esp_err_t file_uploader(httpd_req_t *req){
     char* uri = req->uri;
+    
+    // sprintf(templogbuffer,"%s: POST URI: '%s'", TAG, req->uri);
+    
+    // log_string(templogbuffer);
+    ESP_LOGI(TAG, "POST at URI %s",uri);
     strcpy(filename, spiffsfolder);
     strcat(filename, uri);
-    if (access(filename, F_OK) != 0){
-        httpd_resp_send_404(req);
-        return ESP_FAIL;
-    }
+    // sprintf(templogbuffer,"%s: POST at filename '%s' - access == %i", TAG, filename, access(filename, F_OK));
+    // log_string(templogbuffer);
+    
+    // if (access(filename, F_OK) != 0){
+    //     httpd_resp_send_404(req);
+    //     return ESP_FAIL;
+    // }
     int bytes_recv;
     int bytes_tot = 0;
     FILE *f = fopen(filename, "w");
@@ -576,9 +585,41 @@ static esp_err_t file_uploader(httpd_req_t *req){
     }
     fclose(f);
     sprintf(httpd_temp_buffer, "Uploaded %i bytes to '%s'", bytes_tot, filename);
-    httpd_resp_send(httpd_temp_buffer, httpd_temp_buffer, HTTPD_RESP_USE_STRLEN);
+    httpd_resp_send(req, httpd_temp_buffer, HTTPD_RESP_USE_STRLEN);
+    if (strcmp(filename, "/spiffs/levelluts.csv") == 0){
+        read_level_luts(levellut);
+    }
     return ESP_OK;
 }
+
+static esp_err_t view_luts(httpd_req_t* req){
+    
+    httpd_resp_set_type(req, "text/plain");
+    level_t lev;
+    for (int i = 0; i<= 254; i++){
+        lev = levellut[i];
+        sprintf(httpd_temp_buffer, "LUT Level %i: 0-10v1: %d, 0-10v2: %d, DALI1: %d, DALI2: %d, DALI3: %d, DALI4: %d, ESPNOW: %d, Rly1: %d, Rly2: %d\n", i,
+             lev.zeroten1_lvl,
+             lev.zeroten2_lvl,
+             lev.dali1_lvl,
+             lev.dali2_lvl,
+             lev.dali3_lvl,
+             lev.dali4_lvl,
+             lev.espnow_lvl,
+             lev.relay1,
+             lev.relay2
+             );
+        httpd_resp_sendstr_chunk(req, httpd_temp_buffer);
+    }
+    httpd_resp_send_chunk(req, httpd_temp_buffer, 0);
+    return ESP_OK;
+}
+
+static esp_err_t restart(httpd_req_t* req){
+    esp_restart();
+    return ESP_OK;
+}
+
 
 static char logbuffercopy[LOGBUFFER_SIZE];
 
@@ -591,11 +632,13 @@ static esp_err_t logbuffer_handler(httpd_req_t *req){
     
     // responsebuffer[fsize] = 0;
     // logbuffer[10] = 0;
-    int bytes_at_end = (LOGBUFFER_SIZE - logbufferpos - 1);
-    memcpy(logbuffercopy, logbuffer + logbufferpos, bytes_at_end);
-    memcpy(logbuffercopy + bytes_at_end, logbuffer, LOGBUFFER_SIZE - bytes_at_end);
+    // int bytes_at_end = (LOGBUFFER_SIZE - logbufferpos - 1);
+    // memcpy(logbuffercopy, logbuffer + logbufferpos, bytes_at_end);
+    // memcpy(logbuffercopy + bytes_at_end, logbuffer, LOGBUFFER_SIZE - bytes_at_end);
     httpd_resp_set_type(req, "text/plain");
-    httpd_resp_send(req, logbuffercopy,LOGBUFFER_SIZE);
+    httpd_resp_send_chunk(req, logbuffer + logbufferpos, LOGBUFFER_SIZE - logbufferpos);
+    httpd_resp_send_chunk(req, logbuffer, logbufferpos);
+    httpd_resp_send_chunk(req, logbuffer, 0);
     return ESP_OK;
 
 }
@@ -611,6 +654,12 @@ static const httpd_uri_t files = {
     .uri       = "/?*",
     .method    = HTTP_GET,
     .handler   = file_handler,
+    .user_ctx  = NULL
+};
+static const httpd_uri_t file_upload = {
+    .uri       = "/?*",
+    .method    = HTTP_POST,
+    .handler   = file_uploader,
     .user_ctx  = NULL
 };
 static const httpd_uri_t get_setpoint = {
@@ -649,6 +698,18 @@ static const httpd_uri_t rest_get_channel_level = {
     .handler   = rest_put_channel_handler,
     .user_ctx  = NULL
 };
+static const httpd_uri_t view_luts_endpoint = {
+    .uri       = "/luts/",
+    .method    = HTTP_GET,
+    .handler   = view_luts,
+    .user_ctx  = NULL
+};
+static const httpd_uri_t restart_endpoint = {
+    .uri       = "/restart/",
+    .method    = HTTP_POST,
+    .handler   = restart,
+    .user_ctx  = NULL
+};
 static const httpd_uri_t post_ota = {
     .uri       = "/otaupdate/",
     .method    = HTTP_POST,
@@ -679,7 +740,7 @@ static httpd_handle_t start_webserver(networking_ctx_t *ctx)
     config.uri_match_fn = httpd_uri_match_wildcard;
     config.global_user_ctx = ctx;
     config.max_open_sockets = 10;
-    config.max_uri_handlers = 10;
+    config.max_uri_handlers = 16;
     config.lru_purge_enable = true;
 
     // Start the httpd server
@@ -689,6 +750,8 @@ static httpd_handle_t start_webserver(networking_ctx_t *ctx)
         ESP_LOGI(TAG, "Registering URI handlers");
         httpd_register_uri_handler(server, &hello);
         httpd_register_uri_handler(server, &post_ota);
+        httpd_register_uri_handler(server, &view_luts_endpoint);
+        httpd_register_uri_handler(server, &restart_endpoint);
         httpd_register_uri_handler(server, &rest_put_channel_level);
         httpd_register_uri_handler(server, &rest_get_channel_level);
         httpd_register_uri_handler(server, &get_setpoint);
@@ -696,6 +759,7 @@ static httpd_handle_t start_webserver(networking_ctx_t *ctx)
         httpd_register_uri_handler(server, &rest_put);
         httpd_register_uri_handler(server, &log_get);
         httpd_register_uri_handler(server, &files);
+        httpd_register_uri_handler(server, &file_upload);
         // httpd_register_uri_handler(server, &echo);
         // httpd_register_uri_handler(server, &ctrl);
         return server;

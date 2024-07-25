@@ -25,7 +25,7 @@ preset4,220
 full_power,256
 default_fade,1800
 configbits,124
-dali1_channel,8
-dali2_channel,9
-dali3_channel,3
-dali4_channel,4
+dali1_channel,-1
+dali2_channel,0
+dali3_channel,1
+dali4_channel,2

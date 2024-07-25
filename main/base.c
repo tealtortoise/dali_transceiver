@@ -9,6 +9,7 @@
 #include "freertos/task.h"
 #include "esp_err.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 
 #include "driver/gpio.h"
 
@@ -27,6 +28,7 @@ int fadetime = 50;
 int duty = -1;
 int maxduty = -1;
 
+char logbuffer[LOGBUFFER_SIZE + 16];
 
 volatile level_t levellut[255];
 
@@ -34,8 +36,7 @@ TaskHandle_t espnowtask = NULL;
 
 struct timeval time_;
 
-
-volatile char logbuffer[LOGBUFFER_SIZE];
+// extern char logbuffer[LOGBUFFER_SIZE + 16];
 
 extern int logbufferpos = 0;
 
@@ -64,102 +65,66 @@ void initialise_logbuffer(){
     
     // sprintf(logbuffer, "This 2 is a log");
 }
-static char tempbuffer[512];
-void log_string(char* logstring){
-    printf("%s\n", logstring);
-    time_t rawtime;
-    struct tm * timeinfo;
+static char tempbuffer[64];
 
-    time ( &rawtime );
-    timeinfo = localtime ( &rawtime );
-    char* timestr = asctime(timeinfo);
-    strcpy(tempbuffer, timestr);
-    tempbuffer[25] = ' ';
-    tempbuffer[24] = ' ';
-    strcpy(tempbuffer + 26, logstring);
-    int len = strlen(tempbuffer);
+static uint64_t last_log = 0;
+static uint64_t nowtime = 0;
+void log_string(char* logstring, int bytes_to_log, bool addtime){
+    return;
+    // for (int i = 0; i < 4096; i++){
+    //     if (logstring[i] == 0) {
+    //         if (i == 0) {
+    //             sprintf(logstring, "NO DATA");
+    //         }
+    //         break;
+    //     }
+    //     if (logstring[i] != 10 && logstring[i] != 13 && logstring[i] < 32) logstring[i] = ' ';
+    // }
+
+    if (addtime) {
+        nowtime = esp_timer_get_time();
+        if ((nowtime - last_log) > 1000000) {
+            time_t rawtime;
+            struct tm * timeinfo;
+
+            time ( &rawtime );
+            timeinfo = localtime ( &rawtime );
+            char* timestr = asctime(timeinfo);
+            strncpy(tempbuffer, timestr, 24);
+            tempbuffer[25] = '\n ';
+            tempbuffer[24] = ' ';
+            last_log = nowtime;
+            log_string(tempbuffer, 26, false);
+        }
+    }
+    int len = bytes_to_log;
     int buffer_remaining = LOGBUFFER_SIZE - logbufferpos - 1;
     int bytes_copied = 0;
-    if (buffer_remaining)
+    if (buffer_remaining > 0)
     {
         bytes_copied = _MIN(buffer_remaining, len);
-        memcpy(logbuffer + logbufferpos, tempbuffer, bytes_copied);
+        if ((logbuffer + logbufferpos + bytes_copied) > (logbuffer + LOGBUFFER_SIZE)) {
+            ESP_ERROR_CHECK(ESP_ERR_NOT_ALLOWED);
+        }
+        // memcpy(logbuffer + logbufferpos, logstring, bytes_copied);
         // ESP_LOGI(TAG, "Copied %i into end of buffer", bytes_copied);
         logbufferpos += bytes_copied;
     }
     if (bytes_copied < len){
         logbufferpos = 0;
         
-        strncpy(logbuffer + logbufferpos, tempbuffer + bytes_copied, (len - bytes_copied));
+        if ((logbuffer + logbufferpos + (len - bytes_copied)) > (logbuffer + LOGBUFFER_SIZE)) {
+            ESP_ERROR_CHECK(ESP_ERR_NOT_ALLOWED);
+        }
+        // strncpy(logbuffer + logbufferpos, logstring + bytes_copied, (len - bytes_copied));
         // ESP_LOGI(TAG, "Copied %i bytes remaining into start", len- bytes_copied);
-        logbufferpos += len-bytes_copied;
+        logbufferpos += len - bytes_copied;
     }
-    logbuffer[logbufferpos] = '\n';
+    // logbuffer[logbufferpos] = '\n';
     logbufferpos += 1;
+    if (logbufferpos > (LOGBUFFER_SIZE - 1))
+    {
+        logbufferpos = 0;
+    }
+    // logbufferpos = 0;
 }
-
-// static const api_endpoint_t alarm2_hour_endpoint = {
-//     .name = "alarm2_hour",
-//     .array = &alarm2_hour
-// };
-// static const api_endpoint_t alarm3_hour_endpoint = {
-//     .name = "alarm3_hour",
-//     .array = &alarm3_hour
-
-// };
-// static const api_endpoint_t alarm1_min_endpoint = {
-//     .name = "alarm1_min",
-//     .array = &alarm1_min
-// };
-// static const api_endpoint_t alarm2_min_endpoint = {
-//     .name = "alarm2_min",
-//     .array = &alarm2_min
-// };
-// static const api_endpoint_t alarm3_min_endpoint = {
-//     .name = "alarm3_min",
-//     .array = &alarm3_min
-// };
-// static const api_endpoint_t alarm1_fade_endpoint = {
-//     .name = "alarm1_fade",
-//     .array = &alarm1_fade
-// };
-// static const api_endpoint_t alarm2_fade_endpoint = {
-//     .name = "alarm2_fade",
-//     .array = &alarm2_fade
-// };
-// static const api_endpoint_t alarm3_fade_endpoint = {
-//     .name = "alarm3_fade",
-//     .array = &alarm3_fade
-// };
-// static const api_endpoint_t alarm1_setpoint_endpoint = {
-//     .name = "alarm1_setpoint",
-//     .array = &alarm1_setpoint
-// };
-// static const api_endpoint_t alarm2_setpoint_endpoint = {
-//     .name = "alarm2_setpoint",
-//     .array = &alarm2_setpoint
-// };
-// static const api_endpoint_t alarm3_setpoint_endpoint = {
-//     .name = "alarm3_setpoint",
-//     .array = &alarm3_setpoint
-// };
-// static const api_endpoint_t alarm1_enable_endpoint = {
-//     .name = "alarm1_enable",
-//     .array = &alarm1_enable
-// };
-// static const api_endpoint_t alarm2_enable_endpoint = {
-//     .name = "alarm2_enable",
-//     .array = &alarm2_enable
-// };
-// static const api_endpoint_t alarm3_enable_endpoint = {
-//     .name = "alarm3_enable",
-//     .array = &alarm3_enable
-// };
-// static const api_endpoint_t default_fadetime_endpoint = {
-//     .name = "default_fadetime",
-//     .array = &default_fadetime
-// };
-// static const api_endpoint_t full_power_endpoint = {
-//     .name = "full_power",
-//     .array = &full_power
-// };

@@ -258,6 +258,7 @@ esp_err_t read_level_luts(level_t lut[]){
     int row_idx;
     char* lutlinebuffer = malloc(128);
     size_t levet_t_size = sizeof(level_t);
+    int total_rows = 0;
     while (1){
         commapos = -1;
         lastcommapos = -1;
@@ -266,7 +267,7 @@ esp_err_t read_level_luts(level_t lut[]){
         cell_int = -1;
         out = fgets(linebuffer, 128, lutfile);
         linebuffer[40] = 0;
-        // sprintf(linebuffer, "test,0");
+        // ESP_LOGI(TAG, "CSV Line %s", linebuffer);
 
         if (linebuffer[0] == '#') continue;
 
@@ -303,6 +304,10 @@ esp_err_t read_level_luts(level_t lut[]){
                 // ESP_LOGI(TAG, "%d, %d", lut[4].dali1_lvl, lut[5].dali2_lvl);
             }
         }
+
+        // ESP_LOGI(TAG, "Level %i: 0-10v %d", row_idx, levellut[row_idx].dali1_lvl);
+        total_rows += 1;
+        
         // vTaskDelay(500);
         if (commapos == -1) {
             ESP_LOGE(TAG, "Could't find comma in line"); 
@@ -312,7 +317,7 @@ esp_err_t read_level_luts(level_t lut[]){
         // ESP_LOGI(TAG, "Found comma at pos %i in %s", commapos, linebuffer);
         if (out == NULL) break;
     }
-
+    ESP_LOGI(TAG, "Finished loading LUTS (found %i)", total_rows);
     fclose(lutfile);
     return ESP_OK;
 }

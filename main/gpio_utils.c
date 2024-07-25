@@ -168,6 +168,9 @@ void configure_gpio(){
     configure_output_pin(PWM_010v_GPIO, 0);
     configure_output_pin(PWM_010v2_GPIO, 0);
     configure_output_pin(TX_GPIO, 1);
+    
+    // ESP_ERROR_CHECK(gpio_set_drive_capability(16, GPIO_DRIVE_CAP_0));
+
 
     configure_input_pin(RX_GPIO, 0, GPIO_INTR_POSEDGE);
     configure_input_pin(AIN_GPIO, 0, GPIO_INTR_DISABLE);

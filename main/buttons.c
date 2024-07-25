@@ -197,7 +197,7 @@ void setup_button_interrupts(TaskHandle_t mainlooptask, zeroten_handle_t pwm1, z
     task_ctx->pwm1 = pwm1;
     task_ctx->pwm2 = pwm2;
 
-    xTaskCreate(button_monitor_task, "button-monitor-task", 3048, (void*) task_ctx, 7, &button_task_handle);
+    // xTaskCreate(button_monitor_task, "button-monitor-task", 3048, (void*) task_ctx, 7, &button_task_handle);
 
     ESP_ERROR_CHECK(gpio_isr_handler_add(BUT1_GPIO, button1_isr, (void*) mainlooptask));
     ESP_ERROR_CHECK(gpio_isr_handler_add(BUT2_GPIO, button2_isr, (void*) mainlooptask));
