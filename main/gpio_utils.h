@@ -51,7 +51,7 @@ void setup_relays(int configbits);
 
 int get_and_log_buttons();
 
-void rotate_gpio_outputs_forever();
+void rotate_gpio_outputs();
 
 void configure_gpio();
 

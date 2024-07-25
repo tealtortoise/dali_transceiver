@@ -109,11 +109,11 @@ int get_and_log_buttons(){
     return 7 ^ (but1 | (but2 << 1) | (but3 << 2));
 }
 
-void rotate_gpio_outputs_forever(){
+void rotate_gpio_outputs(){
     int state = 1;
     int output_idx = 0;
     uint8_t dip_address;
-    while (1) {
+    for (int i = 0; i < 8; i++) {
         for (int i=0; i < OUTPUT_PIN_COUNT; i++){
             ESP_LOGI(TAG, "Setting %s (%i) to %i", OUTPUT_PIN_NAMES[i], OUTPUT_PINS[i], state);
             gpio_set_level(OUTPUT_PINS[i], state);

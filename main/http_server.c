@@ -58,6 +58,7 @@ static const char *TAG = "http server";
 
 static char httpd_temp_buffer[BUF_SIZE];
 
+char filename[128];
 
 static char templogbuffer[1024];
 
@@ -477,7 +478,6 @@ static const char* spiffsfolder = "/spiffs";
 
 static esp_err_t file_handler(httpd_req_t *req){
     char* uri = req->uri;
-    char filename[64];
     if (strcmp(uri, "/") == 0) {
         strcpy(filename, index_filename);
     }
@@ -555,7 +555,29 @@ static esp_err_t file_handler(httpd_req_t *req){
 
     // httpd_resp_send(req, httpd_temp_buffer, fsize);
     return ESP_OK;
+}
 
+static esp_err_t file_uploader(httpd_req_t *req){
+    char* uri = req->uri;
+    strcpy(filename, spiffsfolder);
+    strcat(filename, uri);
+    if (access(filename, F_OK) != 0){
+        httpd_resp_send_404(req);
+        return ESP_FAIL;
+    }
+    int bytes_recv;
+    int bytes_tot = 0;
+    FILE *f = fopen(filename, "w");
+    while (1) {
+        bytes_recv = httpd_req_recv(req, httpd_temp_buffer, BUF_SIZE);
+        if (bytes_recv == 0) break;
+        fwrite(httpd_temp_buffer, 1, bytes_recv, f);
+        bytes_tot += bytes_recv;
+    }
+    fclose(f);
+    sprintf(httpd_temp_buffer, "Uploaded %i bytes to '%s'", bytes_tot, filename);
+    httpd_resp_send(httpd_temp_buffer, httpd_temp_buffer, HTTPD_RESP_USE_STRLEN);
+    return ESP_OK;
 }
 
 static char logbuffercopy[LOGBUFFER_SIZE];

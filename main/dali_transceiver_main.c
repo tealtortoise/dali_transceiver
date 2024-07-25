@@ -523,7 +523,7 @@ void app_main(void)
     srand(time(NULL));
     vTaskPrioritySet(NULL, 6);
     configure_gpio();
-    // rotate_gpio_outputs_forever();
+    rotate_gpio_outputs();
     setup_nvs_spiffs_settings();
     read_level_luts(levellut);
     TaskHandle_t randomtask;
