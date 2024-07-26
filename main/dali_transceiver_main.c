@@ -1,6 +1,7 @@
 #include <math.h>
 #include <time.h>
 #include <stdlib.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <unistd.h>
 #include "freertos/FreeRTOS.h"
@@ -101,7 +102,7 @@ void uart_log_task(void *params)
     ESP_ERROR_CHECK(uart_driver_install(1, 512 * 2, 0, 0, NULL, 0));
     ESP_ERROR_CHECK(uart_param_config(1, &uart_config));
     ESP_ERROR_CHECK(uart_set_pin(1, 15, 9, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
-    esp_rom_gpio_connect_out_signal(9, UART_PERIPH_SIGNAL(0, SOC_UART_TX_PIN_IDX), false, false);
+    // esp_rom_gpio_connect_out_signal(9, UART_PERIPH_SIGNAL(0, SOC_UART_TX_PIN_IDX), false, false);
     int len;
     while (1)
     {
@@ -170,12 +171,43 @@ void transmit_setlevel_dali_channel(dali_transceiver_handle_t transceiver, int c
     return;
 }
 
-static char templogbuffer[256];
+static char templogbuffer[0x4000];
+static SemaphoreHandle_t printf_mutex;
+int buffer_vprint(const char *format, va_list args)
+{  
+    int result;
+    if (xSemaphoreTake(printf_mutex, pdMS_TO_TICKS(1000)) == pdTRUE){
+
+        int strsize = vsnprintf(templogbuffer, 0, format, args);
+        
+        char* tempbuf = malloc(strsize + 2);
+        vsnprintf(tempbuf, strsize, format, args);
+        if (tempbuf[strsize -1] != '\n'){
+            tempbuf[strsize-1] = '\n';
+            tempbuf[strsize] = 0;
+        }
+        log_string(tempbuf, strsize, true);
+        fputs(tempbuf, stdout);
+        xSemaphoreGive(printf_mutex);
+        free(tempbuf);
+    }
+    
+    result = 0;
+    // BaseType_t success = xSemaphoreTake(log_mutex, pdMS_TO_TICKS(1000));
+    // if (success == pdTRUE) {
+        // log_string(templogbuffer, strlen(templogbuffer), false);
+        // xSemaphoreGive(log_mutex);
+    // }
+    // va_end(args);
+
+    return result;
+}
+
 void primary()
 {
     setup_relays(get_setting("configbits"));
     TaskHandle_t uarttask;
-    xTaskCreate(uart_log_task, "uart loopback", 4096, NULL, 1, &uarttask);
+    // xTaskCreate(uart_log_task, "uart loopback", 4096, NULL, 1, &uarttask);
 
     level_overrides_t level_overrides = {
         .dali1 = -1,
@@ -322,14 +354,6 @@ void primary()
             dali3_channel = get_setting("dali3_channel");
             dali4_channel = get_setting("dali4_channel");
 
-            // sprintf(templogbuffer, "IDLE. Config: Relay1: %i, Relay2: %i, DALI: %i, 0-10v 1: %i, 0-10v 2:%i, Send ESPNOW %i, Recv ESPNOW %i",
-            //         (configbits & CONFIGBIT_USE_RELAY1) > 0,
-            //         (configbits & CONFIGBIT_USE_RELAY2) > 0,
-            //         (configbits & CONFIGBIT_USE_DALI) > 0,
-            //         (configbits & CONFIGBIT_USE_0_10v1) > 0,
-            //         (configbits & CONFIGBIT_USE_0_10v2) > 0,
-            //         (configbits & CONFIGBIT_TRANSMIT_ESPNOW) > 0,
-            //         (configbits & CONFIGBIT_RECEIVE_ESPNOW) > 0);
             ESP_LOGI(TAG, "IDLE. SP: %i, Config: Rly1: %s, Rly2: %s, DALI: %s, 0-10v1: %s, 0-10v2:%s, ESPNOW Snd %s, Recv %s",
                     local_setpoint, 
                     (configbits & CONFIGBIT_USE_RELAY1) ? "ON" : "OFF",
@@ -506,6 +530,8 @@ void app_main(void)
     configure_gpio();
     gpio_set_level(LED1_GPIO, 1);
     initialise_logbuffer();
+    printf_mutex = xSemaphoreCreateMutex();
+    esp_log_set_vprintf(buffer_vprint);
 
     uint8_t sha_256[HASH_LEN] = {0};
     esp_partition_t partition;

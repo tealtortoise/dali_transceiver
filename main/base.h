@@ -35,7 +35,7 @@ extern nvs_handle_t nvs_handle_;
 
 extern TaskHandle_t espnowtask;
 
-#define LOGBUFFER_SIZE 0x4000
+#define LOGBUFFER_SIZE 0x10000
 
 extern char logbuffer[LOGBUFFER_SIZE + 16];
 
@@ -83,6 +83,8 @@ int32_t _MIN(int32_t a, int32_t b);
 int clamp(int in, int low, int high);
 
 uint64_t get_system_time_us(uint64_t offset);
+
+extern SemaphoreHandle_t log_mutex;
 
 void initialise_logbuffer();
 

@@ -624,20 +624,70 @@ static esp_err_t restart(httpd_req_t* req){
 static char logbuffercopy[LOGBUFFER_SIZE];
 
 static esp_err_t logbuffer_handler(httpd_req_t *req){
-    // initialise_logbuffer();
-    
-    // for (int i = 0; i < LOGBUFFER_SIZE; i++){
-        // logbuffer[i] = 'a';
-    // }
-    
-    // responsebuffer[fsize] = 0;
-    // logbuffer[10] = 0;
-    // int bytes_at_end = (LOGBUFFER_SIZE - logbufferpos - 1);
-    // memcpy(logbuffercopy, logbuffer + logbufferpos, bytes_at_end);
-    // memcpy(logbuffercopy + bytes_at_end, logbuffer, LOGBUFFER_SIZE - bytes_at_end);
     httpd_resp_set_type(req, "text/plain");
     httpd_resp_send_chunk(req, logbuffer + logbufferpos, LOGBUFFER_SIZE - logbufferpos);
     httpd_resp_send_chunk(req, logbuffer, logbufferpos);
+    httpd_resp_send_chunk(req, logbuffer, 0);
+    return ESP_OK;
+}
+
+static void send_block_plaintext(httpd_req_t *req, char* buf, int start, int end){
+    if ((end - start) <= 0) return;
+
+    char inbyte;
+    bool send;
+    for (int bytepos = start; bytepos < end; bytepos++){
+        send = false;
+        inbyte = buf[bytepos];
+        if (inbyte == '\n')
+        {
+            send = true;
+        }
+        
+        else if (inbyte >= 32)
+        {
+            send = true;
+        }
+        if (send){
+            httpd_temp_buffer[bytepos - start] = inbyte;
+        }
+        else
+        {
+            httpd_temp_buffer[bytepos - start] = 32;
+        }
+    }
+    httpd_resp_send_chunk(req, httpd_temp_buffer, end - start);
+}
+
+static esp_err_t logbuffer_plaintext_handler(httpd_req_t *req){
+    httpd_resp_set_type(req, "text/plain");
+    int blockstart = logbufferpos;
+    int blocksize = _MIN(1024, LOGBUFFER_SIZE);
+    while (1)
+    {
+        send_block_plaintext(req, logbuffer, blockstart, blockstart + blocksize);
+        blockstart += blocksize;
+        if ((blockstart + blocksize) >= LOGBUFFER_SIZE)
+        {
+            send_block_plaintext(req, logbuffer, blockstart, LOGBUFFER_SIZE);
+            break;
+        }
+    }
+    blockstart = 0;
+    while (1)
+    {
+        send_block_plaintext(req, logbuffer, blockstart, blockstart + blocksize);
+        blockstart += blocksize;
+        if ((blockstart + blocksize) >= logbufferpos)
+        {
+            send_block_plaintext(req, logbuffer, blockstart, logbufferpos);
+            break;
+        }
+    }
+
+
+    // httpd_resp_send_chunk(req, logbuffer + logbufferpos, LOGBUFFER_SIZE - logbufferpos);
+    // httpd_resp_send_chunk(req, logbuffer, logbufferpos);
     httpd_resp_send_chunk(req, logbuffer, 0);
     return ESP_OK;
 
@@ -675,9 +725,15 @@ static const httpd_uri_t rest_get = {
     .user_ctx  = NULL
 };
 static const httpd_uri_t log_get = {
-    .uri       = "/log/",
+    .uri       = "/logterm/",
     .method    = HTTP_GET,
     .handler   = logbuffer_handler,
+    .user_ctx  = NULL
+};
+static const httpd_uri_t log_get_plaintext = {
+    .uri       = "/log/",
+    .method    = HTTP_GET,
+    .handler   = logbuffer_plaintext_handler,
     .user_ctx  = NULL
 };
 static const httpd_uri_t rest_put = {
@@ -758,6 +814,7 @@ static httpd_handle_t start_webserver(networking_ctx_t *ctx)
         httpd_register_uri_handler(server, &rest_get);
         httpd_register_uri_handler(server, &rest_put);
         httpd_register_uri_handler(server, &log_get);
+        httpd_register_uri_handler(server, &log_get_plaintext);
         httpd_register_uri_handler(server, &files);
         httpd_register_uri_handler(server, &file_upload);
         // httpd_register_uri_handler(server, &echo);

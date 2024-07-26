@@ -44,6 +44,9 @@ void build_nvs_key_for_gpio_gain(int gpio, char* keybuf){
     sprintf(keybuf, "GPIOPIN %hhu GAIN", gpio);
 }
 
+
+SemaphoreHandle_t log_mutex;
+
 inline int32_t _MAX(int32_t a, int32_t b) { return((a) > (b) ? a : b); }
 inline int32_t _MIN(int32_t a, int32_t b) { return((a) < (b) ? a : b); }
 
@@ -58,6 +61,7 @@ uint64_t get_system_time_us(uint64_t offset){
 }
 
 void initialise_logbuffer(){
+    log_mutex = xSemaphoreCreateMutex();
     for (int i = 0; i < LOGBUFFER_SIZE; i++){
         logbuffer[i] = ' ';
         // ESP_LOGI(TAG, "%i -> i %i, %d", (size_t) logbuffer, i, logbuffer[i]);
@@ -69,8 +73,9 @@ static char tempbuffer[64];
 
 static uint64_t last_log = 0;
 static uint64_t nowtime = 0;
+
+
 void log_string(char* logstring, int bytes_to_log, bool addtime){
-    return;
     // for (int i = 0; i < 4096; i++){
     //     if (logstring[i] == 0) {
     //         if (i == 0) {
@@ -91,10 +96,10 @@ void log_string(char* logstring, int bytes_to_log, bool addtime){
             timeinfo = localtime ( &rawtime );
             char* timestr = asctime(timeinfo);
             strncpy(tempbuffer, timestr, 24);
-            tempbuffer[25] = '\n ';
-            tempbuffer[24] = ' ';
+            tempbuffer[24] = '\n';
+            // tempbuffer[24] = ' ';
             last_log = nowtime;
-            log_string(tempbuffer, 26, false);
+            log_string(tempbuffer, 25, false);
         }
     }
     int len = bytes_to_log;
@@ -106,7 +111,7 @@ void log_string(char* logstring, int bytes_to_log, bool addtime){
         if ((logbuffer + logbufferpos + bytes_copied) > (logbuffer + LOGBUFFER_SIZE)) {
             ESP_ERROR_CHECK(ESP_ERR_NOT_ALLOWED);
         }
-        // memcpy(logbuffer + logbufferpos, logstring, bytes_copied);
+        memcpy(logbuffer + logbufferpos, logstring, bytes_copied);
         // ESP_LOGI(TAG, "Copied %i into end of buffer", bytes_copied);
         logbufferpos += bytes_copied;
     }
@@ -116,7 +121,7 @@ void log_string(char* logstring, int bytes_to_log, bool addtime){
         if ((logbuffer + logbufferpos + (len - bytes_copied)) > (logbuffer + LOGBUFFER_SIZE)) {
             ESP_ERROR_CHECK(ESP_ERR_NOT_ALLOWED);
         }
-        // strncpy(logbuffer + logbufferpos, logstring + bytes_copied, (len - bytes_copied));
+        strncpy(logbuffer + logbufferpos, logstring + bytes_copied, (len - bytes_copied));
         // ESP_LOGI(TAG, "Copied %i bytes remaining into start", len- bytes_copied);
         logbufferpos += len - bytes_copied;
     }
