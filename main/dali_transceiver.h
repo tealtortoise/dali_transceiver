@@ -22,17 +22,13 @@ typedef struct {
     dali_parser_config_t parser_config;
 } dali_transceiver_config_t;
 
-typedef struct {
-    QueueHandle_t dali_received_frame_queue;
-    dali_transmitter_handle_t transmitter;
-    uint32_t frameidpass;
-} dali_transceiver_t;
-
-typedef struct dali_transceiver_t *dali_transceiver_handle_t;
-
 extern dali_transceiver_config_t dali_transceiver_sensible_default_config;
 
 esp_err_t dali_setup_transceiver(dali_transceiver_config_t config, dali_transceiver_handle_t *handle);
+
+bool start_receiver(dali_transceiver_handle_t handle, bool wait);
+
+bool stop_receiver_and_clear_queues(dali_transceiver_handle_t handle);
 
 uint32_t dali_transmit_frame(dali_transceiver_handle_t handle, uint8_t firstbyte, uint8_t secondbyte, int queuefull_timeout);
 

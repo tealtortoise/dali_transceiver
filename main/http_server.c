@@ -30,17 +30,15 @@
 #include "esp_netif.h"
 // #include "esp_tls.h"
 #include "dali.h"
+#include "dali_utils.h"
 // #include "base.h"
 
-#if !CONFIG_IDF_TARGET_LINUX
 #include <esp_wifi.h>
 #include <esp_system.h>
 #include "nvs_flash.h"
 #include "html.c"
 #include "http_server.h"
 #include "settings.h"
-// #include "esp_eth.h"
-#endif  // !CONFIG_IDF_TARGET_LINUX
 
 #define EXAMPLE_HTTP_QUERY_KEY_MAX_LEN  (64)
 
@@ -690,7 +688,73 @@ static esp_err_t logbuffer_plaintext_handler(httpd_req_t *req){
     // httpd_resp_send_chunk(req, logbuffer, logbufferpos);
     httpd_resp_send_chunk(req, logbuffer, 0);
     return ESP_OK;
+}
 
+static esp_err_t commission(httpd_req_t* req){
+    networking_ctx_t *ctx = httpd_get_global_user_ctx(req->handle);
+    
+    ESP_LOGI(TAG, "HTTPD Command queue %i", (int) ctx->dali_command_queue);
+    ESP_LOGI(TAG, "HTTPD Command queue %i", (int) ctx->dali_command_queue);
+    ESP_LOGI(TAG, "HTTPD Command queue %i", (int) ctx->dali_command_queue);
+    dali_command_t command = {
+        .command = DALI_COMMAND_COMMISSION,
+        .address = 0,
+    };
+    if (ctx->dali_command_queue != NULL) 
+    {
+        xQueueSend(ctx->dali_command_queue, &command, pdMS_TO_TICKS(1000));
+        httpd_resp_send(req, "OK", HTTPD_RESP_USE_STRLEN);
+        return ESP_OK;
+    }
+    httpd_resp_send_500(req);
+    return ESP_FAIL;
+}
+
+static esp_err_t power_on_level(httpd_req_t* req){
+    networking_ctx_t *ctx = httpd_get_global_user_ctx(req->handle);
+    parse_uri(req->uri);
+    bool put = req->method == HTTP_PUT;
+    int data = -1;
+    
+    char* channelname = substring_ints[1];
+    int* override_ptr;
+    if (put) {
+            
+        int bytes = httpd_req_recv(req, httpd_temp_buffer, 255);
+        httpd_temp_buffer[bytes] = 0;
+        int datarecv = sscanf(httpd_temp_buffer, "%i", &data);
+        ESP_LOGI(TAG, "===== Received PUT at %s (%s)", req->uri, httpd_temp_buffer);
+        ESP_LOGD(TAG, "Received %s (%i) %i", httpd_temp_buffer, data, datarecv);
+    }
+    uint8_t cmd = 255;
+    dali_command_t command = {
+        .command = cmd,
+        .address = channelname,
+        .value = data
+    };
+    if (strcmp(substrings[0], "set-power-on-level") == 0)
+    {
+        command.command = DALI_COMMAND_SET_POWER_ON_LEVEL;
+        ESP_LOGI(TAG, "Setting power on level for address %d to %d", command.address, command.value);
+    }
+    else if (strcmp(substrings[0], "set-failsafe-level") == 0)
+    {
+        command.command = DALI_COMMAND_SET_FAILSAFE_LEVEL;
+        ESP_LOGI(TAG, "Setting failsafe level for address %d to %d", command.address, command.value);
+    }
+    else
+    {
+        httpd_resp_send_404(req);
+        return ESP_FAIL;
+    }
+    if (ctx->dali_command_queue != NULL) 
+    {
+        xQueueSend(ctx->dali_command_queue, &command, pdMS_TO_TICKS(1000));
+        httpd_resp_send(req, "OK", HTTPD_RESP_USE_STRLEN);
+        return ESP_OK;
+    }
+    httpd_resp_send_500(req);
+    return ESP_FAIL;
 }
 
 static const httpd_uri_t hello = {
@@ -766,6 +830,24 @@ static const httpd_uri_t restart_endpoint = {
     .handler   = restart,
     .user_ctx  = NULL
 };
+static const httpd_uri_t commission_endpoint = {
+    .uri       = "/dali/commission/",
+    .method    = HTTP_POST,
+    .handler   = commission,
+    .user_ctx  = NULL
+};
+static const httpd_uri_t power_on_level_endpoint = {
+    .uri       = "/dali/set-power-on-level/*?",
+    .method    = HTTP_PUT,
+    .handler   = power_on_level,
+    .user_ctx  = NULL
+};
+static const httpd_uri_t failsafe_level_endpoint = {
+    .uri       = "/dali/set-failsafe-level/*?",
+    .method    = HTTP_PUT,
+    .handler   = power_on_level,
+    .user_ctx  = NULL
+};
 static const httpd_uri_t post_ota = {
     .uri       = "/otaupdate/",
     .method    = HTTP_POST,
@@ -796,7 +878,7 @@ static httpd_handle_t start_webserver(networking_ctx_t *ctx)
     config.uri_match_fn = httpd_uri_match_wildcard;
     config.global_user_ctx = ctx;
     config.max_open_sockets = 10;
-    config.max_uri_handlers = 16;
+    config.max_uri_handlers = 18;
     config.lru_purge_enable = true;
 
     // Start the httpd server
@@ -807,6 +889,9 @@ static httpd_handle_t start_webserver(networking_ctx_t *ctx)
         httpd_register_uri_handler(server, &hello);
         httpd_register_uri_handler(server, &post_ota);
         httpd_register_uri_handler(server, &view_luts_endpoint);
+        httpd_register_uri_handler(server, &commission_endpoint);
+        httpd_register_uri_handler(server, &power_on_level_endpoint);
+        httpd_register_uri_handler(server, &failsafe_level_endpoint);
         httpd_register_uri_handler(server, &restart_endpoint);
         httpd_register_uri_handler(server, &rest_put_channel_level);
         httpd_register_uri_handler(server, &rest_get_channel_level);

@@ -129,7 +129,7 @@ void wifi_init_sta(void)
 }
 
 
-void setup_wifi()
+void setup_wifi(networking_ctx_t *ctx)
 {
     
     ESP_ERROR_CHECK(esp_netif_init());
@@ -138,7 +138,8 @@ void setup_wifi()
     wifi_init_sta();
     esp_wifi_set_ps(WIFI_PS_NONE);
     // TaskHandle_t espnow_send_task;
-    ESP_ERROR_CHECK(setup_espnow_common(&espnowtask, xTaskGetCurrentTaskHandle()));
+    ESP_ERROR_CHECK(setup_espnow_common(&espnowtask, ctx->mainloop_task));
+    setup_espnow_receiver();
 
 }
 

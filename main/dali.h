@@ -49,16 +49,7 @@ typedef struct {
     // uint32_t num;
 } dali_rmt_received_frame_t;
 
-typedef struct {
-    uint16_t time;
-    int8_t edgetype;
-} edge_t;
 
-typedef struct {
-    edge_t edges[64];
-    uint8_t length;
-}
-edgeframe;
 
 
 #define EDGETYPE_RISING 1
@@ -103,6 +94,8 @@ edgeframe;
 // #define DALI_SECONDBYTE_VERIFY_SHORT_ADDRESS 0
 #define DALI_SECONDBYTE_COMPARE 0
 #define DALI_SECONDBYTE_WITHDRAW 0
+
+#define DALI_YES 0xFF
 
 uint8_t get_dali_command_address_byte(uint8_t address);
 

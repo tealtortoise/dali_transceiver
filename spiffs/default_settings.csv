@@ -18,9 +18,9 @@ alarmsetpoint1,0
 alarmsetpoint2,1
 alarmsetpoint3,2
 alarmsetpoint4,3
-preset1,25
-preset2,60
-preset3,160
+preset1,60
+preset2,120
+preset3,181
 preset4,220
 full_power,256
 default_fade,1800

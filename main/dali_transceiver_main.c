@@ -62,7 +62,7 @@ nvs_handle_t mainloop_nvs_handle;
 void setup_networking(void *params)
 {
     networking_ctx_t *ctx = (networking_ctx_t *)params;
-    setup_wifi();
+    setup_wifi(ctx);
     setup_sntp(ctx->mainloop_task);
     httpd_handle_t httpd = setup_httpserver(ctx);
     while (1)
@@ -220,6 +220,7 @@ void primary()
 
     networking_ctx_t networking_ctx = {
         .mainloop_task = xTaskGetCurrentTaskHandle(),
+        .dali_command_queue = NULL,
         .level_overrides = &level_overrides};
     TaskHandle_t networktask;
     xTaskCreate(setup_networking, "setup_networking", 4096, (void *)&networking_ctx, 2, &networktask);
@@ -244,7 +245,11 @@ void primary()
 
     dali_transceiver_handle_t dali_transceiver;
     ESP_ERROR_CHECK(dali_setup_transceiver(transceiver_config, &dali_transceiver));
-
+    networking_ctx.dali_command_queue = dali_setup_command_queue(dali_transceiver);
+    ESP_LOGI(TAG, "Command queue %i", (int) networking_ctx.dali_command_queue);
+    ESP_LOGI(TAG, "Command queue %i", (int) networking_ctx.dali_command_queue);
+    ESP_LOGI(TAG, "Command queue %i", (int) networking_ctx.dali_command_queue);
+    ESP_LOGI(TAG, "Command queue %i", (int) networking_ctx.dali_command_queue);
     // dali_set_system_failure_level(dali_transceiver, 8, 10);
     // dali_set_system_failure_level(dali_transceiver, 9, 10);
     dali_broadcast_level_noblock(dali_transceiver, 30);
@@ -385,7 +390,7 @@ void primary()
                 espnow_lvl_to_send = level_el.espnow_lvl;
             }
             xTaskNotifyIndexed(espnowtask,
-                               SETPOINT_SLEW_NOTIFY_INDEX,
+                               LIGHT_LEVEL_NOTIFY_INDEX,
                                espnow_lvl_to_send,
                                eSetValueWithOverwrite);
         }

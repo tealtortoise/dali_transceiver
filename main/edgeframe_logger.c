@@ -13,25 +13,12 @@
 
 static const char *ELTAG = "edgeframe_isr";
 
-typedef struct {
-    QueueHandle_t queue;
-    uint8_t gpio_pin;
-    gptimer_handle_t timer;
-    uint32_t timeout;
-    bool invert;
-    edgeframe edgeframe_template;
-    uint8_t edgeframe_isr_state;
-    uint8_t edgeframe_isr_numedges;
-    uint64_t edgeframe_tempcount;
-    // uint64_t edgeframe_startcount;
-} edgeframe_isr_ctx;
-
 #define EDGEFRAME_STATE_IDLE 0
 #define EDGEFRAME_STATE_LOGGING 1
 
 bool IRAM_ATTR timeout_isr(gptimer_handle_t timer, const gptimer_alarm_event_data_t *edata, void *user_ctx) {
     BaseType_t high_task_awoken = pdFALSE;
-    edgeframe_isr_ctx *ctx = (edgeframe_isr_ctx*) user_ctx;
+    edgeframe_isr_ctx_t *ctx = (edgeframe_isr_ctx_t*) user_ctx;
 
     gptimer_get_raw_count(ctx->timer, (uint64_t *)&(ctx->edgeframe_tempcount));
     ctx->edgeframe_template.length = ctx->edgeframe_isr_numedges + 1;
@@ -58,7 +45,7 @@ bool IRAM_ATTR timeout_isr(gptimer_handle_t timer, const gptimer_alarm_event_dat
 // };
 
 void IRAM_ATTR input_edgelog_isr(void *params) {
-    edgeframe_isr_ctx *ctx = (edgeframe_isr_ctx*) params;
+    edgeframe_isr_ctx_t *ctx = (edgeframe_isr_ctx_t*) params;
     gptimer_get_raw_count(ctx->timer, (uint64_t*) &ctx->edgeframe_tempcount);
     switch (ctx->edgeframe_isr_state){
         case EDGEFRAME_STATE_IDLE: {
@@ -97,7 +84,7 @@ void IRAM_ATTR input_edgelog_isr(void *params) {
 }
 
 
-gptimer_handle_t configure_edgeframe_timer(edgeframe_isr_ctx *ctx){
+gptimer_handle_t configure_edgeframe_timer(edgeframe_isr_ctx_t *ctx){
     gptimer_handle_t gptimer = NULL;
     gptimer_config_t timer_config = {
         .clk_src = GPTIMER_CLK_SRC_DEFAULT,
@@ -116,21 +103,39 @@ gptimer_handle_t configure_edgeframe_timer(edgeframe_isr_ctx *ctx){
     return gptimer;
 }
 
-QueueHandle_t start_edgelogger(uint8_t gpio, bool invert) {
-    QueueHandle_t edgeframe_queue = xQueueCreate(4, sizeof(edgeframe));
+void enable_state_sync_task(void* params){
+    edgeframe_isr_ctx_t* ctx = (edgeframe_isr_ctx_t*) params;
+    bool oldstate = ctx->enabled;
+    bool newstate = ctx->enabled;
+    while (1)
+    {
+        newstate = ctx->enabled;
+        if (newstate !=oldstate) {       
+            gpio_set_intr_type(ctx->gpio_pin, newstate ? GPIO_INTR_ANYEDGE: GPIO_INTR_DISABLE);
+        }
+        oldstate = newstate;
+        vTaskDelay(1);
+    }
+}
+
+edgeframe_isr_ctx_t* setup_edgelogger(uint8_t gpio, bool invert, bool enabled) {
+    QueueHandle_t edgeframe_queue = xQueueCreate(16, sizeof(edgeframe));
     assert(edgeframe_queue);
 
-    edgeframe_isr_ctx *ctx = heap_caps_malloc(sizeof(edgeframe_isr_ctx), MALLOC_CAP_INTERNAL);
+    edgeframe_isr_ctx_t *ctx = heap_caps_malloc(sizeof(edgeframe_isr_ctx_t), MALLOC_CAP_INTERNAL);
 
     ctx->gpio_pin = gpio;
+    ctx->enabled = enabled;
     ctx->queue = edgeframe_queue;
     ctx->timeout = 416 * 3;
     ctx->invert = invert;
     ctx->timer = configure_edgeframe_timer(ctx);
     ctx->edgeframe_isr_state = EDGEFRAME_STATE_IDLE;
-
+    // vTaskDelay(pdMS_TO_TICKS(5000));
     // gpio_set_intr_type(gpio, invert ? GPIO_INTR_POSEDGE: GPIO_INTR_NEGEDGE);
-    gpio_set_intr_type(gpio, GPIO_INTR_ANYEDGE);
+    gpio_set_intr_type(gpio, enabled ? GPIO_INTR_ANYEDGE: GPIO_INTR_DISABLE);
+    TaskHandle_t synctask;
+    xTaskCreate(enable_state_sync_task, "intr_sync", 3200, (void*) ctx, 15, &synctask);
     gpio_pin_glitch_filter_config_t glitch_config = {
         .clk_src = GLITCH_FILTER_CLK_SRC_DEFAULT,
         .gpio_num = gpio
@@ -138,8 +143,8 @@ QueueHandle_t start_edgelogger(uint8_t gpio, bool invert) {
     gpio_glitch_filter_handle_t glitch_filter;
     gpio_new_pin_glitch_filter(&glitch_config, &glitch_filter);
 
-    ESP_ERROR_CHECK(gpio_isr_handler_add(gpio, input_edgelog_isr, (edgeframe_isr_ctx*) ctx));
-    return edgeframe_queue;
+    ESP_ERROR_CHECK(gpio_isr_handler_add(gpio, input_edgelog_isr, (edgeframe_isr_ctx_t*) ctx));
+    return ctx;
 }
 
 

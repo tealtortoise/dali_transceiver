@@ -2,7 +2,6 @@
 
 static const char *TAG = "DALI transceiver";
 
-
 dali_transceiver_config_t dali_transceiver_sensible_default_config = {
     .invert_input = DALI_DONT_INVERT,
     .invert_output = DALI_DONT_INVERT,
@@ -27,17 +26,40 @@ esp_err_t dali_setup_transceiver(dali_transceiver_config_t config, dali_transcei
 
     dali_transceiver_t *transceiver = malloc(sizeof(dali_transceiver_t));
     transceiver->transmitter = transmitter;
+    if (config.receive_queue_size_frames <= 0) ESP_LOGW(TAG, "WARNING! Receive queue size 0 -> DALI Receiver disabled!!");
+    transceiver->edgeframe_isr_ctx = setup_edgelogger(config.receive_gpio_pin, config.invert_input, config.receive_queue_size_frames > 0);
+    QueueHandle_t edgeframe_queue = transceiver->edgeframe_isr_ctx->queue;
 
-    if (config.receive_queue_size_frames > 0)
-    {
-        ESP_LOGW(TAG, "WARNING! Receive queue size 0 -> DALI Receiver disabled!!");
-        QueueHandle_t edgeframe_queue = start_edgelogger(config.receive_gpio_pin, config.invert_input);
-
-        QueueHandle_t dali_received_frame_queue = start_dali_parser(edgeframe_queue, config.parser_config);
-        transceiver->dali_received_frame_queue = dali_received_frame_queue;
-    }
+    QueueHandle_t dali_received_frame_queue = start_dali_parser(edgeframe_queue, config.parser_config);
+    
+    transceiver->dali_received_frame_queue = dali_received_frame_queue;
+    transceiver->mainloop_task = xTaskGetCurrentTaskHandle();
+    
+    // }
     *handle = transceiver;
     return ESP_OK;
+}
+
+bool start_receiver(dali_transceiver_handle_t handle, bool wait){
+    dali_transceiver_t *transceiver = (dali_transceiver_t *) handle;
+    bool oldstate = transceiver->edgeframe_isr_ctx->enabled;
+    if (!oldstate) {
+        transceiver->edgeframe_isr_ctx->enabled = true;
+        if (wait) vTaskDelay(2);
+    }
+    return oldstate;
+}
+
+bool stop_receiver_and_clear_queues(dali_transceiver_handle_t handle){
+    dali_transceiver_t *transceiver = (dali_transceiver_t *) handle;
+    bool oldstate = transceiver->edgeframe_isr_ctx->enabled;
+    if (oldstate)
+    {
+        transceiver->edgeframe_isr_ctx->enabled = false;
+        vTaskDelay(2);
+        xQueueReset(transceiver->edgeframe_isr_ctx->queue);
+    }
+    return oldstate;
 }
 
 uint32_t dali_transmit_frame(dali_transceiver_handle_t handle, uint8_t firstbyte, uint8_t secondbyte ,int queuefull_timeout){
@@ -85,13 +107,19 @@ BaseType_t dali_transmit_frame_and_wait(dali_transceiver_handle_t handle, uint8_
 };
 
 dali_frame_t dali_transmit_frame_and_wait_for_backward_frame(dali_transceiver_handle_t handle, uint8_t firstbyte, uint8_t secondbyte, TickType_t ticks_to_wait){
+    
+    bool oldstate = start_receiver(handle, true);
     dali_transceiver_t *transceiver = (dali_transceiver_t *) handle;
     BaseType_t success = dali_transmit_frame_and_wait(handle, firstbyte, secondbyte, ticks_to_wait);
-    if (!success) return (dali_frame_t) {
-        .firstbyte = 0,
-        .secondbyte = 0,
-        .type = DALI_TRANSMIT_ERROR
-    };
+    if (!success)
+    {
+        if (!oldstate) stop_receiver_and_clear_queues(handle);
+        return (dali_frame_t) {
+            .firstbyte = 0,
+            .secondbyte = 0,
+            .type = DALI_TRANSMIT_ERROR
+        };
+    }
 
     BaseType_t received;
     dali_frame_t _frame;
@@ -99,10 +127,14 @@ dali_frame_t dali_transmit_frame_and_wait_for_backward_frame(dali_transceiver_ha
         received = xQueueReceive(transceiver->dali_received_frame_queue, &_frame, 1);
         if (received && _frame.type != DALI_FORWARD_FRAME_TYPE) {
                 // dali_log_frame_prefix(_frame, "Received back:");
+                
+                if (!oldstate) stop_receiver_and_clear_queues(handle);
                 return _frame;
         }
     }
-    // ESP_LOGI(TTAG, "No return!");
+    ESP_LOGW(TAG, "No return!");
+    
+    if (!oldstate) stop_receiver_and_clear_queues(handle);
     return DALI_NO_FRAME;
 };
 
@@ -169,17 +201,21 @@ esp_err_t dali_broadcast_level_noblock(dali_transceiver_handle_t handle, uint8_t
 }
 
 esp_err_t dali_set_and_verify_dtr(dali_transceiver_handle_t handle, uint8_t broadcast_value, uint8_t short_address_verify){
+    
     BaseType_t success = dali_transmit_frame_and_wait(handle, DALI_FIRSTBYTE_SET_DTR, broadcast_value, pdMS_TO_TICKS(100));
     if (!success) return ESP_ERR_NOT_FINISHED;
+
     int16_t query = dali_query_dtr(handle, short_address_verify);
     if (query != broadcast_value) {
         ESP_LOGE(TAG, "DTR verification failed %i != %d", query, broadcast_value);
+        
         return ESP_ERR_INVALID_RESPONSE;
     }
     return ESP_OK;
 }
 
 esp_err_t dali_configure_and_verify(dali_transceiver_handle_t handle, uint8_t firstbyte_config, uint8_t secondbyte_config, uint8_t firstbyte_verify, uint8_t secondbyte_verify, uint8_t correct_response_byte){
+    
     if (dali_send_twice(handle, firstbyte_config, secondbyte_config)) {
         return ESP_ERR_NOT_FINISHED;
     }
@@ -201,6 +237,7 @@ esp_err_t dali_configure_and_verify(dali_transceiver_handle_t handle, uint8_t fi
 }
 
 esp_err_t dali_set_fade_time(dali_transceiver_handle_t handle, uint8_t short_address, uint8_t fade_time){
+    
     ESP_LOGI(TAG, "Setting fade time on %d to %d", short_address, fade_time);
     if (fade_time > 15) {
         ESP_LOGE(TAG, "Fade time must be 0 <= time <= 15");
@@ -231,7 +268,6 @@ esp_err_t dali_set_fade_time(dali_transceiver_handle_t handle, uint8_t short_add
 
 esp_err_t dali_set_power_on_level(dali_transceiver_handle_t handle, uint8_t short_address, uint8_t power_on_level){
     ESP_LOGI(TAG, "Setting pwer on level on %d to %d", short_address, power_on_level);
-
     if (dali_set_and_verify_dtr(handle, power_on_level, short_address)) {
         return ESP_ERR_NOT_FINISHED;
     };

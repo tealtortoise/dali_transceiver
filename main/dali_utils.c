@@ -5,16 +5,16 @@
 static const char *TAG = "Dali Utils";
 
 void set_24bit_address(dali_transceiver_handle_t handle, uint32_t address){
-    dali_transmit_frame_and_wait(handle, DALI_FIRSTBYTE_SEARCH_HIGH, (address >> 16) & 0xff, 100);
-    dali_transmit_frame_and_wait(handle, DALI_FIRSTBYTE_SEARCH_MID, (address >> 8) & 0xff, 100);
-    dali_transmit_frame_and_wait(handle, DALI_FIRSTBYTE_SEARCH_LOW, (address >> 0) & 0xff, 100);
+    dali_transmit_frame_and_wait(handle, DALI_FIRSTBYTE_SEARCH_HIGH, (address >> 16) & 0xff, pdMS_TO_TICKS(1000));
+    dali_transmit_frame_and_wait(handle, DALI_FIRSTBYTE_SEARCH_MID, (address >> 8) & 0xff, pdMS_TO_TICKS(1000));
+    dali_transmit_frame_and_wait(handle, DALI_FIRSTBYTE_SEARCH_LOW, (address >> 0) & 0xff, pdMS_TO_TICKS(1000));
 }
 
 bool search_below(dali_transceiver_handle_t handle, uint32_t end){
     dali_transceiver_t *transceiver = (dali_transceiver_t *) handle;
     ESP_LOGI(TAG, "Searching to %#08lx", end);
     set_24bit_address(handle, end);
-    dali_frame_t frame = dali_transmit_frame_and_wait_for_backward_frame(handle, DALI_FIRSTBYTE_COMPARE, DALI_SECONDBYTE_COMPARE, 10);
+    dali_frame_t frame = dali_transmit_frame_and_wait_for_backward_frame(handle, DALI_FIRSTBYTE_COMPARE, DALI_SECONDBYTE_COMPARE, pdMS_TO_TICKS(100));
     return (frame.type != DALI_NO_FRAME_TYPE);
 }
 
@@ -60,11 +60,11 @@ void remove_fake(uint32_t address){
 
 esp_err_t _dali_assign_short_addresses(dali_transceiver_handle_t handle, int start_address){
     ESP_LOGI(TAG, "Commissioning started - initialise");
-    dali_transmit_frame_and_wait(handle, DALI_FIRSTBYTE_INITALISE, DALI_SECONDBYTE_INITIALISE_ALL, 10);
-    dali_transmit_frame_and_wait(handle, DALI_FIRSTBYTE_INITALISE, DALI_SECONDBYTE_INITIALISE_ALL, 10);
+    dali_transmit_frame_and_wait(handle, DALI_FIRSTBYTE_INITALISE, DALI_SECONDBYTE_INITIALISE_ALL, pdMS_TO_TICKS(100));
+    dali_transmit_frame_and_wait(handle, DALI_FIRSTBYTE_INITALISE, DALI_SECONDBYTE_INITIALISE_ALL, pdMS_TO_TICKS(100));
     ESP_LOGI(TAG, "Randomize");
-    dali_transmit_frame_and_wait(handle, DALI_FIRSTBYTE_RANDOMIZE, DALI_SECONDBYTE_RANDOMIZE, 10);
-    dali_transmit_frame_and_wait(handle, DALI_FIRSTBYTE_RANDOMIZE, DALI_SECONDBYTE_RANDOMIZE, 10);
+    dali_transmit_frame_and_wait(handle, DALI_FIRSTBYTE_RANDOMIZE, DALI_SECONDBYTE_RANDOMIZE, pdMS_TO_TICKS(100));
+    dali_transmit_frame_and_wait(handle, DALI_FIRSTBYTE_RANDOMIZE, DALI_SECONDBYTE_RANDOMIZE, pdMS_TO_TICKS(100));
 
     int short_address = start_address;
     bool more = true;
@@ -79,7 +79,7 @@ esp_err_t _dali_assign_short_addresses(dali_transceiver_handle_t handle, int sta
         bool found = false;
         uint32_t lastend = end;
         while (cont){
-            vTaskDelay(10);
+            vTaskDelay(pdMS_TO_TICKS(100));
             ESP_LOGI(TAG, "Searching %#08lx - %#08lx", start, end);
             present = search_below(handle, end);
             if (present) {
@@ -125,49 +125,96 @@ esp_err_t _dali_assign_short_addresses(dali_transceiver_handle_t handle, int sta
             }
             ESP_LOGI(TAG, "Assigning short address to %#08lx", end);
             ESP_LOGI(TAG, "Programming short address %u", short_address);
-            frame = dali_transmit_frame_and_wait_for_backward_frame(handle, 
+            dali_transmit_frame_and_wait(handle, 
                 DALI_FIRSTBYTE_PROGRAM_SHORT_ADDRESS, 
-                get_dali_command_address_byte(short_address), 100);
-            if (frame.type != DALI_BACKWARD_FRAME_TYPE)
-            {
-                ESP_LOGE(TAG, "No response!");
-                return ESP_ERR_INVALID_STATE;
-            }
-            ESP_LOGI(TAG, "Verify short address");
-            frame = dali_transmit_frame_and_wait_for_backward_frame(handle, DALI_FIRSTBYTE_VERIFY_SHORT_ADDRESS, get_dali_command_address_byte(short_address), 100);
-
+                get_dali_command_address_byte(short_address), pdMS_TO_TICKS(100));
+            ESP_LOGI(TAG, "Verify short address...");
+            frame = dali_transmit_frame_and_wait_for_backward_frame(handle, DALI_FIRSTBYTE_VERIFY_SHORT_ADDRESS, get_dali_command_address_byte(short_address), pdMS_TO_TICKS(1000));
             if (frame.type != DALI_BACKWARD_FRAME_TYPE)
             {
                 ESP_LOGE(TAG, "No response!");
                 return ESP_ERR_NOT_FOUND;
             }
-            else if (frame.firstbyte != get_dali_command_address_byte(short_address))
+            else if (frame.firstbyte != DALI_YES)
             {
                 ESP_LOGE(TAG, "Short address not as expected %d != %d", frame.firstbyte, get_dali_command_address_byte(short_address));
                 return ESP_ERR_INVALID_RESPONSE;
             }
             ESP_LOGI(TAG, "Sending Withdraw");
-            dali_transmit_frame_and_wait(handle, DALI_FIRSTBYTE_WITHDRAW, DALI_SECONDBYTE_WITHDRAW, 10);
+            dali_transmit_frame_and_wait(handle, DALI_FIRSTBYTE_WITHDRAW, DALI_SECONDBYTE_WITHDRAW, pdMS_TO_TICKS(100));
+            dali_transmit_frame_and_wait(handle, DALI_FIRSTBYTE_WITHDRAW, DALI_SECONDBYTE_WITHDRAW, pdMS_TO_TICKS(100));
             short_address += 1;
+            ESP_LOGI(TAG, "Next short address will be %i", short_address);
+            vTaskDelay(pdMS_TO_TICKS(500));
             // remove_fake(end);
 
         }
-        vTaskDelay(pdMS_TO_TICKS(2000));
+        vTaskDelay(pdMS_TO_TICKS(8000));
     }
-    ESP_LOGI(TAG, "End provisioning");
+    ESP_LOGI(TAG, "End provisioning! Found %i devices", short_address - start_address);
     return ESP_OK;
 }
 
 esp_err_t dali_assign_short_addresses(dali_transceiver_handle_t handle, int start_address){
+    bool oldstate = start_receiver(handle, true);
+    dali_transceiver_t *transceiver = (dali_transceiver_t *) handle;
+    // bool oldstate = transceiver->
     esp_err_t response = _dali_assign_short_addresses(handle, start_address);
     if (response != ESP_OK){
         ESP_LOGE(TAG, "Commissioning failed");
     }
     ESP_LOGI(TAG, "Sending TERMINATE");
-    dali_transmit_frame_and_wait(handle, DALI_FIRSTBYTE_TERMINATE, DALI_SECONDBYTE_TERMINATE, 10);
-    dali_transmit_frame_and_wait(handle, DALI_FIRSTBYTE_TERMINATE, DALI_SECONDBYTE_TERMINATE, 10);
+    dali_transmit_frame_and_wait(handle, DALI_FIRSTBYTE_TERMINATE, DALI_SECONDBYTE_TERMINATE, pdMS_TO_TICKS(100));
+    dali_transmit_frame_and_wait(handle, DALI_FIRSTBYTE_TERMINATE, DALI_SECONDBYTE_TERMINATE, pdMS_TO_TICKS(100));
+    if (!oldstate) {
+        stop_receiver_and_clear_queues(handle);
+    }
     return response;
 }
+
+
+void dali_command_monitor_task(void* params){
+    dali_transceiver_t *transceiver = (dali_transceiver_t *) params;
+    BaseType_t received;
+    dali_command_t command;
+    while (1)
+    {
+        if (xQueueReceive(transceiver->dali_command_queue, &command, portMAX_DELAY))
+        {
+            switch (command.command)
+            {
+            case DALI_COMMAND_COMMISSION:
+                ESP_LOGI(TAG, "Received COMMISSION command...");
+                vTaskSuspend(transceiver->mainloop_task);
+                esp_err_t err = dali_assign_short_addresses(transceiver, command.address);
+                vTaskResume(transceiver->mainloop_task);
+                if (err) ESP_LOGE(TAG, "Commissioning returned error %i", err);
+                break;
+            case DALI_COMMAND_SET_POWER_ON_LEVEL:
+                ESP_LOGI(TAG, "Received SET_POWER_ON_LEVEL command...");
+                dali_set_power_on_level(transceiver, command.address, command.value);
+                break;
+            case DALI_COMMAND_SET_FAILSAFE_LEVEL:
+                ESP_LOGI(TAG, "Received SET_FAILSAFE_LEVEL command...");
+                dali_set_system_failure_level(transceiver, command.address, command.value);
+                break;
+            default:
+                ESP_LOGE(TAG, "Unknown command %i", command.command);
+                break;
+            }
+        }
+    }
+}
+
+QueueHandle_t dali_setup_command_queue(dali_transceiver_handle_t handle){
+    dali_transceiver_t *transceiver = (dali_transceiver_t *) handle;
+    QueueHandle_t commandqueue = xQueueCreate(32, sizeof(dali_command_t));
+    TaskHandle_t cmdtask;
+    xTaskCreate(dali_command_monitor_task, "dali-cmd-monitor", 8192, (void*) transceiver, 1, &cmdtask);
+    transceiver->dali_command_queue = commandqueue;
+    return commandqueue;
+}
+
 
     // while (1) {
     //     // ESP_LOGI(TAG, "Set dtr0 %d", 49);

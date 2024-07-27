@@ -48,6 +48,7 @@ int get_frame_type_from_duration(uint16_t duration){
 }
 
 void edgeframe_queue_log_task(void* params) {
+    
     // QueueHandle_t queue = (QueueHandle_t) params;
     parsestruct *pass = (parsestruct*) params;
     QueueHandle_t edgeinputqueue = pass->edgequeue;
@@ -60,9 +61,9 @@ void edgeframe_queue_log_task(void* params) {
     uint8_t log;    
     uint8_t record;
     uint8_t frameaction;
-    // vTaskDelay(pdMS_TO_TICKS(8000));
+    bool received;
     while (1) {
-        bool received = xQueueReceive(edgeinputqueue, &receivedframe, 101);
+        received = xQueueReceive(edgeinputqueue, &receivedframe, pdMS_TO_TICKS(2500));
         if (!received) continue;
         frame_duration = receivedframe.edges[receivedframe.length - 1].time;
         outputframe.type = get_frame_type_from_duration(frame_duration);
@@ -181,7 +182,9 @@ void edgeframe_queue_log_task(void* params) {
 
 
 QueueHandle_t start_dali_parser(QueueHandle_t edgequeue, dali_parser_config_t config) {
+    ESP_LOGI(TAG, "Starting dali parser...");
     QueueHandle_t daliframequeue = xQueueCreate(16, sizeof(dali_frame_t));
+    ESP_LOGI(TAG, "Frame queue size %i created", 16);
     // ESP_LOGI(PTAG, "Queue handle %u", (int)&daliframequeue);
     parsestruct *pass = malloc(sizeof(parsestruct));
     // const parsestruct pass = {
@@ -196,7 +199,8 @@ QueueHandle_t start_dali_parser(QueueHandle_t edgequeue, dali_parser_config_t co
     //     vTaskDelay(10);
     // }
     // if (sendsuccess != pdTRUE) ESP_LOGE(PTAG, "Dali output queue full");
+    ESP_LOGI(TAG, "Starting parsing and logging task");
     xTaskCreate((void *)edgeframe_queue_log_task, "edgeframe_queue_log_task",
-        9128, pass, 15, NULL);
+        16000, pass, 15, NULL);
     return daliframequeue;
 }

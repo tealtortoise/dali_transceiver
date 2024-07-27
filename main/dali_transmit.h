@@ -15,30 +15,6 @@ static const uint8_t DALI_ISR_STATE_STOP = 5;
 static const uint8_t DALI_ISR_STATE_SETTLING = 6;
 
 
-typedef struct {
-    uint8_t gpio_pin;
-    uint8_t state;
-    uint16_t data;
-    uint32_t notify_idx;
-    TaskHandle_t notify_task;
-    uint8_t bitpos;
-    gptimer_handle_t timer;
-    QueueHandle_t isr_queue;
-    QueueHandle_t transmit_queue;
-    uint8_t invert;
-    gptimer_alarm_config_t alarmconf;
-    uint16_t bitwork;
-    BaseType_t taskawoken;
-} dali_transmit_isr_ctx;
-
-typedef struct {
-    uint8_t number;
-    gptimer_handle_t timer;
-    dali_transmit_isr_ctx *ctx;
-    QueueHandle_t queue;
-    uint16_t frameidcounter;
-} dali_transmitter_handle_t;
-
 #define DALI_FRAME_ID_DONT_NOTIFY -1
 
 #define DALI_NOTIFY_COMPLETE_INDEX 4

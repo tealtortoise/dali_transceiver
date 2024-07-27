@@ -172,19 +172,13 @@ static void espnow_receive_queue_task(void *pvParameter)
 
     /* Start sending broadcast ESPNOW data. */
     espnow_ctx_t *espnow_ctx = (espnow_ctx_t *)pvParameter;
-    #ifdef IS_MAIN
-    // if (esp_now_send(espnow_ctx->dest_mac, espnow_ctx->buffer, espnow_ctx->len) != ESP_OK) {
-        // ESP_LOGE(TAG, "Send error");
-        // example_espnow_deinit(espnow_ctx);
-        // vTaskDelete(NULL);
-    // }
-    #endif // IS_MAIN
     bool configbit_recv = (get_setting("configbits") & CONFIGBIT_RECEIVE_ESPNOW) > 0;
     BaseType_t received;
     int cycles = 0;
     while (1) {
         if ((cycles & 0x3F) == 0) configbit_recv = (get_setting("configbits") & CONFIGBIT_RECEIVE_ESPNOW) > 0;
-        received = xQueueReceive(s_example_espnow_queue, &evt, pdMS_TO_TICKS(100));
+        received = xQueueReceive(s_example_espnow_queue, &evt, pdMS_TO_TICKS(1000));
+        // ESP_LOGI(TAG, "ESPNOW received success = %i", received);
         cycles += 0;
         if (received != pdTRUE) continue;
         switch (evt.id) {
@@ -235,6 +229,7 @@ static void espnow_receive_queue_task(void *pvParameter)
                 if (configbit_recv)
                 {
                     ESP_LOGI(TAG, "Level data received %d, type is %i", rxlevel, ret);
+                    setpoint = rxlevel;
                     xTaskNotifyIndexed(espnow_ctx->mainloop_task, SETPOINT_SLEW_NOTIFY_INDEX, USE_DEFAULT_FADETIME, eSetValueWithOverwrite);
                 }
                 free(recv_cb->data);
@@ -316,19 +311,22 @@ void espnow_send_task(void *pvParameter){
     espnow_ctx_t *espnow_ctx = (espnow_ctx_t *)pvParameter;
     uint32_t value;
     BaseType_t received;
+    esp_err_t err;
     example_espnow_data_t *data = (example_espnow_data_t*)espnow_ctx->buffer;
     while (1){
-    received = xTaskNotifyWaitIndexed(SETPOINT_SLEW_NOTIFY_INDEX, 0, 0, &value, 2001);
+    received = xTaskNotifyWaitIndexed(LIGHT_LEVEL_NOTIFY_INDEX, 0, 0, &value, 2001);
         if (received) {
             ESP_LOGI(TAG, "Received data to send via ESPNOW %lu", value);
             // data->payload[0] = (uint8_t) value;
             example_espnow_data_prepare(espnow_ctx, (uint8_t) value);
             // ESP_LOG_BUFFER_HEX(TAG, espnow_ctx->buffer, espnow_ctx->len);
-            esp_now_send(espnow_ctx->dest_mac, espnow_ctx->buffer, espnow_ctx->len);
+            err = esp_now_send(espnow_ctx->dest_mac, espnow_ctx->buffer, espnow_ctx->len);
+            if (err != ESP_OK) ESP_LOGE(TAG, "ESPNOW Send failure %i", err);
+
         }
         else
         {
-            ESP_LOGI(TAG, "Didn't receive ESPNow");
+            // ESP_LOGI(TAG, "Didn't receive ESPNow");
         }
     }
 }
@@ -396,7 +394,7 @@ esp_err_t setup_espnow_common(TaskHandle_t *sending_minitask_handle, TaskHandle_
     example_espnow_data_prepare(espnow_ctx, 0);
 
     // TaskHandle_t temptask;
-
+    ESP_LOGI(TAG, "Creating ESPNOW tasks....");
     xTaskCreate(espnow_receive_queue_task, "espnow_receive_queue_task", 3200, espnow_ctx, 4, NULL);
     xTaskCreate(espnow_send_task, "espnow_send_task", 3200, espnow_ctx, 4, sending_minitask_handle);
     // *sending_minitask_handle = temptask;

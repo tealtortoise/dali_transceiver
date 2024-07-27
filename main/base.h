@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
+#include "driver/gptimer.h"
 #include "nvs_flash.h"
 #include "nvs.h"
 
@@ -69,9 +70,76 @@ typedef struct {
 
 extern volatile level_t levellut[255];
 
+
+#define DALI_COMMAND_COMMISSION 1
+#define DALI_COMMAND_SET_FAILSAFE_LEVEL 2
+#define DALI_COMMAND_SET_POWER_ON_LEVEL 3
+
+typedef struct {
+    uint16_t time;
+    int8_t edgetype;
+} edge_t;
+
+typedef struct {
+    edge_t edges[64];
+    uint8_t length;
+}
+edgeframe;
+
+typedef struct {
+    QueueHandle_t queue;
+    uint8_t gpio_pin;
+    gptimer_handle_t timer;
+    uint32_t timeout;
+    bool invert;
+    edgeframe edgeframe_template;
+    uint8_t edgeframe_isr_state;
+    uint8_t edgeframe_isr_numedges;
+    uint64_t edgeframe_tempcount;
+    bool enabled;
+    // uint64_t edgeframe_startcount;
+} edgeframe_isr_ctx_t;
+
+typedef struct {
+    uint8_t gpio_pin;
+    uint8_t state;
+    uint16_t data;
+    uint32_t notify_idx;
+    TaskHandle_t notify_task;
+    uint8_t bitpos;
+    gptimer_handle_t timer;
+    QueueHandle_t isr_queue;
+    QueueHandle_t transmit_queue;
+    uint8_t invert;
+    gptimer_alarm_config_t alarmconf;
+    uint16_t bitwork;
+    BaseType_t taskawoken;
+} dali_transmit_isr_ctx;
+
+typedef struct {
+    uint8_t number;
+    gptimer_handle_t timer;
+    dali_transmit_isr_ctx *ctx;
+    QueueHandle_t queue;
+    uint16_t frameidcounter;
+} dali_transmitter_handle_t;
+
+
+typedef struct {
+    QueueHandle_t dali_received_frame_queue;
+    QueueHandle_t dali_command_queue;
+    dali_transmitter_handle_t transmitter;
+    uint32_t frameidpass;
+    edgeframe_isr_ctx_t* edgeframe_isr_ctx;
+    TaskHandle_t mainloop_task;
+} dali_transceiver_t;
+
+typedef struct dali_transceiver_t *dali_transceiver_handle_t;
+
 typedef struct {
     TaskHandle_t mainloop_task;
     level_overrides_t *level_overrides;
+    QueueHandle_t dali_command_queue;
 } networking_ctx_t;
 
 void build_nvs_key_for_gpio_gain(int gpio, char* keybuf);

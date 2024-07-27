@@ -38,7 +38,7 @@
 #define ESPNOW_WIFI_IF   ESP_IF_WIFI_AP
 #endif
 
-#define ESPNOW_QUEUE_SIZE           6
+#define ESPNOW_QUEUE_SIZE 6
 #define CONFIG_ESPNOW_CHANNEL 0
 #define CONFIG_ESPNOW_LMK "abcdefghabcdefgh"
 #define CONFIG_ESPNOW_PMK "abcdefghabcdefga"
