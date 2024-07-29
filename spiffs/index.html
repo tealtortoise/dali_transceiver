@@ -1,25 +1,31 @@
 <!DOCTYPE html>
 <html>
 <head>
+    <title>MulberryLight</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link rel="shortcut icon" href="/favicon.ico">
-    <link rel="apple-touch-icon image_src" href="/apple-touch-icon.png">
-    <link rel="manifest" href="/site.webmanifest">
-    <link rel="stylesheet" type="text/css" href="/styles.css">
+    <link rel="shortcut icon" href="favicon.ico">
+    <link rel="apple-touch-icon image_src" href="apple-touch-icon.png">
+    <link rel="manifest" href="site.webmanifest">
+    <link rel="stylesheet" type="text/css" href="styles.css">
 </head>
 <body>
     <header>
-        <a href="/"><button class="nav " level="254">Levels</button></a>
-        <a href="/setup/"><button class="nav " level="254">Setup</button></a>
-        <a href="/ch/"><button class="nav " level="254">Channels</button></a>
-            
+        <h1>
+            MulberryLight Living Room
+        </h1>
+        <nav>
+            <a href="/"><button class="nav selected" level="254">Levels</button></a>
+            <a href="/setup"><button class="nav " level="254">Setup</button></a>
+            <a href="/ch"><button class="nav " level="254">Channels</button></a>
+        </nav>
     </header>
     <div>
         <button class="levelbutton magenta" level="254">Full</button>
-        <button class="levelbutton purple" level="220" id="preset4">Daytime</button>
-        <button class="levelbutton teal" level="180" id="preset3">Low Daytime</button>
-        <button class="levelbutton green" level="30" id="preset2">Early evening</button>
-        <button class="levelbutton orange" level="10" id="preset1">Night-time</button>
+        <button class="levelbutton purple" level="240" id="preset5">Daytime High</button>
+        <button class="levelbutton teal" level="220" id="preset4">Daytime Low</button>
+        <button class="levelbutton green" level="180" id="preset3">Early evening</button>
+        <button class="levelbutton yellow" level="30" id="preset2">Night time</button>
+        <button class="levelbutton orange" level="10" id="preset1">Moonlight</button>
         <button class="levelbutton red" level="0" id="preset0">Switch Off</button>
     </div>
     <div class="slidecontainer">
@@ -44,7 +50,6 @@
                     console.error('There was a problem with your fetch operation:', error);
                 });
         }
-        var xhttp = new XMLHttpRequest();
         var ontimeout = 0;
         var waiting = 0;
         let slider = document.getElementById("levelslider");
@@ -63,10 +68,27 @@
 
         }
 
-        function send(setpoint){
-                console.log("Sending ", setpoint);
-                xhttp.open("GET", "/level/" + setpoint);
-                xhttp.send();
+        function send(setpoint) {
+            const options = {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/plain'
+                },
+                body: `${setpoint}`
+            };
+
+            // Make the PUT request using the fetch API
+            return fetch("/setpoint", options)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    levelind.classList.remove("updating");
+                    return response;
+                })
+                .catch(error => {
+                    console.error('There was a problem with your fetch operation:', error);
+                });
         };
 
         function sliderChangeFn() {
@@ -104,21 +126,10 @@
         });
         document.getElementById("levelslider").oninput = sliderChangeFn;
 
-        let changeBackToBlack = function() {
-            if (xhttp.readyState == 4 && xhttp.status == 200) {
-                levelind.classList.remove("updating");
-            }
-        };
-
-        xhttp.onreadystatechange = function() {
-            if (xhttp.readyState == 4 && xhttp.status == 200) {
-                levelind.innerHTML = levelToPercent(xhttp.responseText);
-                slider.value = xhttp.responseText;
-                xhttp.onreadystatechange = changeBackToBlack;
-            }
-        }
-        xhttp.open("GET", "/setpoint/current/");
-        xhttp.send();
+        get("/setpoint").then((sp) => {
+            levelind.innerHTML = levelToPercent(sp);
+            slider.value = sp;
+        });
         
     </script>
 </body>

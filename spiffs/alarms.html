@@ -1,24 +1,24 @@
 <!DOCTYPE html>
 <html>
-
-<head>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-    <link rel="shortcut icon" href="/favicon.ico">
-    <link rel="apple-touch-icon image_src" href="/apple-touch-icon.png">
-    <link rel="manifest" href="/site.webmanifest">
-    <link rel="stylesheet" type="text/css" href="/styles.css">
-
-
-</head>
+    <head>
+        <title>MulberryLight Setup</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <link rel="shortcut icon" href="favicon.ico">
+        <link rel="apple-touch-icon image_src" href="apple-touch-icon.png">
+        <link rel="manifest" href="site.webmanifest">
+        <link rel="stylesheet" type="text/css" href="styles.css">
+    </head>
 
 <body>
-
     <header>
-        <a href="/"><button class="nav " level="254">Levels</button></a>
-        <a href="/setup/"><button class="nav " level="254">Setup</button></a>
-        <a href="/ch/"><button class="nav " level="254">Channels</button></a>
-
+        <h1>
+            MulberryLight Living Room
+        </h1>
+        <nav>
+            <a href="/"><button class="nav " level="254">Levels</button></a>
+            <a href="/setup"><button class="nav " level="254">Setup</button></a>
+            <a href="/ch"><button class="nav " level="254">Channels</button></a>
+        </nav>
     </header>
     <main>
         <div class="alarmunit">
@@ -68,6 +68,7 @@
                 </div>
             </div>
         </div>
+        <button class="update" id="update1">Update all</button>
         <div class="settingsunit">
             <div class="settingname">Default Fade Time (ms)</div>
             <input class="setting" id="default_fadetime">
@@ -81,6 +82,8 @@
             <input class="setting" id="preset3">
             <div class="settingname">Preset 4 Brightness</div>
             <input class="setting" id="preset4">
+            <div class="settingname">Preset 5 Brightness</div>
+            <input class="setting" id="preset5">
             <div class="settingname">DALI1 Channel</div>
             <input class="setting" id="dali1_channel">
             <div class="settingname">DALI2 Channel</div>
@@ -89,6 +92,9 @@
             <input class="setting" id="dali3_channel">
             <div class="settingname">DALI4 Channel</div>
             <input class="setting" id="dali4_channel">
+            <div class="settingname">Lutfile number</div>
+            <input class="setting" id="lutfile">
+
         </div>
         <div class="channelinfo">For DALI short addresses use 0 &lt;= channel &lt;= 63. For DALI groups use 100 &lt;= group &lt;= 115.
                 For DALI Broadcast use 200. -1 will disable channel.</div>
@@ -145,7 +151,7 @@
                         </div>
                     </div>
                 </div>
-                <button class="update" id="update">Update</button>
+                <button class="update" id="update2">Update all</button>
     </main>
 
     <script>
@@ -227,18 +233,21 @@
                 if (el.type != "checkbox") el.className = "";
             })
             inputs.forEach(restoreIfBlank);
-            for (let i = 1; i <= 4; i++) {
+            for (let i = 1; i <= 5; i++) {
+                let preset_el = getEl("preset" + i);
+                let preset = preset_el.value;
+                send(`/api/preset/${i}/`, preset, preset_el);
+                if (i>4) break;
+
                 let alarmnum = i;
                 let alarmtime_el = getEl("alarmtime" + alarmnum);
                 let fadetime_el = getEl("fadetime" + alarmnum);
                 let setpoint_el = getEl("setpoint" + alarmnum);
                 let enable_el = getEl("enable" + alarmnum);
-                let preset_el = getEl("preset" + i);
                 let alarmtime = alarmtime_el.value;
                 let fadetime = parseInt(fadetime_el.value, 10) * 1000;
                 let setpoint = parseInt(setpoint_el.value, 10);
                 let enabled = enable_el.checked ? 1 : 0;
-                let preset = preset_el.value;
 
                 if (setpoint > 254 || setpoint < 0) {
                     console.log("Bad setpoint");
@@ -277,7 +286,6 @@
                 send(`/api/alarmfade/${alarmnum}/`, fadetime, fadetime_el);
                 send(`/api/alarmsetpoint/${alarmnum}/`, setpoint, setpoint_el);
                 send(`/api/alarmenable/${alarmnum}/`, enabled, enable_el);
-                send(`/api/preset/${alarmnum}/`, preset, preset_el);
             }
             let default_fadetime_el = getEl("default_fadetime");
             let default_fadetime = default_fadetime_el.value;
@@ -292,6 +300,10 @@
             if (full_power >= 0 && full_power <= 256) {
                 promises.push(send("/api/full_power/", full_power, full_power_el));
             }
+            let lutfile_el = getEl("lutfile");
+            let lutfile = lutfile_el.value;
+            promises.push(send("/api/lutfile/", lutfile, lutfile_el));
+
             for (let i = 1; i <= 4; i++) {
                 let channel_el = getEl("dali" + i + "_channel");
                 let channel = channel_el.value;
@@ -314,15 +326,19 @@
             }
             Promise.all(promises).then(() => {
                 console.log("All done");
-                getEl("update").innerHTML = "Updated!";
+                getEl("update1").innerHTML = "Updated!";
+                getEl("update2").innerHTML = "Updated!";
 
             })
         }
-        for (let i = 1; i <= 4; i++) {
-            let uri = `/api/alarmsetpoint/${i}/`;
-            get(uri, getEl(`setpoint${i}`));
+        let uri;
+        for (let i = 1; i <= 5; i++) {
             uri = `/api/preset/${i}/`;
             get(uri, getEl("preset" + i));
+            if (i>4) break;
+
+            uri = `/api/alarmsetpoint/${i}/`;
+            get(uri, getEl(`setpoint${i}`));
             uri = `/api/alarmfade/${i}/`;
             get(uri).then((st) => {
                 let fadeel = getEl(`fadetime${i}`);
@@ -346,7 +362,6 @@
             let min_prom = get(uri).then((st) => {
                 min = st;
             })
-            uri = `/api/preset/${i}/`;
             Promise.all([min_prom, hour_prom]).then(() => {
                 let time_el = getEl(`alarmtime${i}`);
                 time_el.value = pad(hour) + pad(min);
@@ -355,6 +370,7 @@
         }
         get("/api/default_fade/", getEl("default_fadetime"));
         get("/api/full_power/", getEl("full_power"));
+        get("/api/lutfile/", getEl("lutfile"));
 
         for (let i = 1; i <= 4; i++) {
             let channel_el = getEl("dali" + i + "_channel");
@@ -409,6 +425,14 @@
         });
         inputs.forEach((input_el) => {
             input_el.onchange = markModified;
+        });
+        inputs.forEach((input_el) => {
+            input_el.addEventListener("keypress", function(event) {
+                // If the user presses the "Enter" key on the keyboard
+                if (event.key === "Enter") {
+                    document.getElementById("update1").click();
+                }
+            }) 
         });
     </script>
 </body>

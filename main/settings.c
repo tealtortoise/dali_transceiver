@@ -239,13 +239,25 @@ esp_err_t setup_nvs_spiffs_settings(){
     return ESP_OK;
 }
 
+static char lutfilename[128];
 
 esp_err_t read_level_luts(level_t lut[]){
-    FILE *lutfile = fopen("/spiffs/levelluts.csv", "r");
+    int lutnumber = get_setting("lutfile");
+    sprintf(lutfilename, "/spiffs/levelluts%i.csv", lutnumber);
+    FILE *lutfile = fopen(lutfilename, "r");
+    
+    size_t levet_t_size = sizeof(level_t);
     if (lutfile == NULL)
     {
-        ESP_LOGE(TAG, "couldn't find levelluts.csv");
-        ESP_ERROR_CHECK(ESP_ERR_NOT_FOUND);
+        ESP_LOGE(TAG, "couldn't find %s, setting to default", lutfilename);
+        for (int row = 0; row <= 254; row++){
+            for (int column = 0; column < levet_t_size; column++){
+                uint8_t * byt = (size_t) lut + levet_t_size * row + column;
+                *byt = (uint8_t) row;
+            }
+        }
+        return ESP_OK;
+
     }
     int commapos = -1;
     int celllen = -1;
@@ -257,7 +269,6 @@ esp_err_t read_level_luts(level_t lut[]){
     int column_idx;
     int row_idx;
     char* lutlinebuffer = malloc(128);
-    size_t levet_t_size = sizeof(level_t);
     int total_rows = 0;
     while (1){
         commapos = -1;
@@ -269,6 +280,7 @@ esp_err_t read_level_luts(level_t lut[]){
         linebuffer[40] = 0;
         // ESP_LOGI(TAG, "CSV Line %s", linebuffer);
 
+        if (linebuffer[0] == 'l') continue;
         if (linebuffer[0] == '#') continue;
 
         for (int i = 1; i <= 64; i++){

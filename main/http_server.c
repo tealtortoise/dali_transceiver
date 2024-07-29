@@ -250,6 +250,12 @@ static esp_err_t rest_put_handler(httpd_req_t *req){
     {
         ESP_LOGI(TAG, "URI '%s' unchanged (%i)", req->uri, existing);
     }
+    
+    if (strcmp(substrings[0], "lutfile") == 0){
+        ESP_LOGI(TAG, "Detected change of lutfile, reloading luts...");
+        read_level_luts(levellut);
+    }
+    
     sprintf(httpd_temp_buffer, "OK");
     httpd_resp_send(req, httpd_temp_buffer, HTTPD_RESP_USE_STRLEN);
     return ESP_OK;
@@ -277,7 +283,30 @@ static esp_err_t setpoint_get_handler(httpd_req_t *req)
 }
 
 static esp_err_t current_setpoint_handler(httpd_req_t *req){
-    sprintf(httpd_temp_buffer, "%i", setpoint);
+    if (req->method == HTTP_GET) {
+        sprintf(httpd_temp_buffer, "%i", setpoint);
+    }
+    else if (req->method == HTTP_PUT){
+        int bytes = httpd_req_recv(req, httpd_temp_buffer, 255);
+        httpd_temp_buffer[bytes] = 0;
+        int data;
+        int datarecv = sscanf(httpd_temp_buffer, "%i", &data);
+        ESP_LOGI(TAG, "===== Received PUT at %s (%s)", req->uri, httpd_temp_buffer);
+        ESP_LOGD(TAG, "Received %s (%i) %i", httpd_temp_buffer, data, datarecv);
+        if (data >= 0 && data <= 254){
+            setpoint = data;
+            networking_ctx_t *ctx = httpd_get_global_user_ctx(req->handle);
+            xTaskNotifyIndexed(ctx->mainloop_task, SETPOINT_SLEW_NOTIFY_INDEX, USE_DEFAULT_FADETIME, eSetValueWithOverwrite);
+            ESP_LOGI(TAG, "Set new setpoint %i", setpoint);
+            sprintf(httpd_temp_buffer, "OK");
+        }
+        else
+        {
+            ESP_LOGI(TAG, "Bad setpoint %i", data);
+            httpd_resp_set_status(req, HTTPD_400_BAD_REQUEST);
+            sprintf(httpd_temp_buffer, "Setpoint must be 0 <= sp <= 254");
+        }
+    }
     httpd_resp_send(req, httpd_temp_buffer, HTTPD_RESP_USE_STRLEN);
     return ESP_OK;
 }
@@ -480,11 +509,11 @@ static esp_err_t file_handler(httpd_req_t *req){
     if (strcmp(uri, "/") == 0) {
         strcpy(filename, index_filename);
     }
-    else if (strcmp(uri, "/setup/") == 0)
+    else if (strcmp(uri, "/setup") == 0)
     {
         strcpy(filename, alarm_filename);
     }
-    else if (strcmp(uri, "/ch/") == 0)
+    else if (strcmp(uri, "/ch") == 0)
     {
         strcpy(filename, channels_filename);
     }
@@ -562,9 +591,37 @@ static esp_err_t file_uploader(httpd_req_t *req){
     // sprintf(templogbuffer,"%s: POST URI: '%s'", TAG, req->uri);
     
     // log_string(templogbuffer);
-    ESP_LOGI(TAG, "POST at URI %s",uri);
+    
     strcpy(filename, spiffsfolder);
-    strcat(filename, uri);
+    strcat(filename, uri + 7);
+    if (req->method == HTTP_POST)
+    {
+        ESP_LOGI(TAG, "POST at URI %s",uri);
+    }
+    else if (req->method == HTTP_DELETE)
+    {
+        ESP_LOGI(TAG, "DELETE at URI %s",uri);
+        ESP_LOGI(TAG, "Filename '%s'",filename);
+        
+        FILE *f = fopen(filename, "r");
+        if (f == NULL)
+        {
+            sprintf(httpd_temp_buffer, "Error deleting '%s'", filename);
+            httpd_resp_set_status(req, HTTPD_404);
+        }
+        else
+        {
+            fclose(f);
+            remove(filename);
+            sprintf(httpd_temp_buffer, "Deleted '%s'", filename);
+        }
+        httpd_resp_send(req, httpd_temp_buffer, HTTPD_RESP_USE_STRLEN);
+        return ESP_OK;
+    }
+    else
+    {
+        httpd_resp_send_500(req);
+    }
     // sprintf(templogbuffer,"%s: POST at filename '%s' - access == %i", TAG, filename, access(filename, F_OK));
     // log_string(templogbuffer);
     
@@ -757,12 +814,12 @@ static esp_err_t power_on_level(httpd_req_t* req){
     return ESP_FAIL;
 }
 
-static const httpd_uri_t hello = {
-    .uri       = "/level/?*",
-    .method    = HTTP_GET,
-    .handler   = setpoint_get_handler,
-    .user_ctx  = "Hello World!"
-};
+// static const httpd_uri_t hello = {
+//     .uri       = "/level/?*",
+//     .method    = HTTP_GET,
+//     .handler   = setpoint_get_handler,
+//     .user_ctx  = "Hello World!"
+// };
 
 static const httpd_uri_t files = {
     .uri       = "/?*",
@@ -771,14 +828,26 @@ static const httpd_uri_t files = {
     .user_ctx  = NULL
 };
 static const httpd_uri_t file_upload = {
-    .uri       = "/?*",
+    .uri       = "/spiffs/?*",
     .method    = HTTP_POST,
     .handler   = file_uploader,
     .user_ctx  = NULL
 };
+static const httpd_uri_t file_del = {
+    .uri       = "/spiffs/?*",
+    .method    = HTTP_DELETE,
+    .handler   = file_uploader,
+    .user_ctx  = NULL
+};
 static const httpd_uri_t get_setpoint = {
-    .uri       = "/setpoint/current/",
+    .uri       = "/setpoint",
     .method    = HTTP_GET,
+    .handler   = current_setpoint_handler,
+    .user_ctx  = NULL
+};
+static const httpd_uri_t put_setpoint = {
+    .uri       = "/setpoint",
+    .method    = HTTP_PUT,
     .handler   = current_setpoint_handler,
     .user_ctx  = NULL
 };
@@ -789,13 +858,13 @@ static const httpd_uri_t rest_get = {
     .user_ctx  = NULL
 };
 static const httpd_uri_t log_get = {
-    .uri       = "/logterm/",
+    .uri       = "/logterm",
     .method    = HTTP_GET,
     .handler   = logbuffer_handler,
     .user_ctx  = NULL
 };
 static const httpd_uri_t log_get_plaintext = {
-    .uri       = "/log/",
+    .uri       = "/log",
     .method    = HTTP_GET,
     .handler   = logbuffer_plaintext_handler,
     .user_ctx  = NULL
@@ -819,19 +888,19 @@ static const httpd_uri_t rest_get_channel_level = {
     .user_ctx  = NULL
 };
 static const httpd_uri_t view_luts_endpoint = {
-    .uri       = "/luts/",
+    .uri       = "/luts",
     .method    = HTTP_GET,
     .handler   = view_luts,
     .user_ctx  = NULL
 };
 static const httpd_uri_t restart_endpoint = {
-    .uri       = "/restart/",
+    .uri       = "/restart",
     .method    = HTTP_POST,
     .handler   = restart,
     .user_ctx  = NULL
 };
 static const httpd_uri_t commission_endpoint = {
-    .uri       = "/dali/commission/",
+    .uri       = "/dali/commission",
     .method    = HTTP_POST,
     .handler   = commission,
     .user_ctx  = NULL
@@ -849,7 +918,7 @@ static const httpd_uri_t failsafe_level_endpoint = {
     .user_ctx  = NULL
 };
 static const httpd_uri_t post_ota = {
-    .uri       = "/otaupdate/",
+    .uri       = "/otaupdate",
     .method    = HTTP_POST,
     .handler   = otaupdate,
     .user_ctx  = NULL
@@ -886,7 +955,9 @@ static httpd_handle_t start_webserver(networking_ctx_t *ctx)
     if (httpd_start(&server, &config) == ESP_OK) {
         // Set URI handlers
         ESP_LOGI(TAG, "Registering URI handlers");
-        httpd_register_uri_handler(server, &hello);
+        // httpd_register_uri_handler(server, &hello);
+        httpd_register_uri_handler(server, &get_setpoint);
+        httpd_register_uri_handler(server, &put_setpoint);
         httpd_register_uri_handler(server, &post_ota);
         httpd_register_uri_handler(server, &view_luts_endpoint);
         httpd_register_uri_handler(server, &commission_endpoint);
@@ -895,13 +966,13 @@ static httpd_handle_t start_webserver(networking_ctx_t *ctx)
         httpd_register_uri_handler(server, &restart_endpoint);
         httpd_register_uri_handler(server, &rest_put_channel_level);
         httpd_register_uri_handler(server, &rest_get_channel_level);
-        httpd_register_uri_handler(server, &get_setpoint);
         httpd_register_uri_handler(server, &rest_get);
         httpd_register_uri_handler(server, &rest_put);
         httpd_register_uri_handler(server, &log_get);
         httpd_register_uri_handler(server, &log_get_plaintext);
         httpd_register_uri_handler(server, &files);
         httpd_register_uri_handler(server, &file_upload);
+        httpd_register_uri_handler(server, &file_del);
         // httpd_register_uri_handler(server, &echo);
         // httpd_register_uri_handler(server, &ctrl);
         return server;

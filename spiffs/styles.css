@@ -12,7 +12,10 @@ body {
 main {
     padding: 0 1em 0 1em;
 }
-.slidecontainer {
+h1 {
+    display: block;
+    text-align: center;
+    font-family:'Franklin Gothic Medium', 'Arial Narrow', Arial, sans-serif
 }
 .slidecontainer span {
     font-size: 240%;
@@ -36,7 +39,7 @@ div.slider {
 .lvlslider {
     grid-column: 1/5;
 }
-header {
+nav {
     display: grid;
     grid-template-columns: 1fr 1fr 1fr;
     column-gap: 0.7em;
@@ -48,16 +51,20 @@ button.nav {
     /* margin: 0.7em auto 0.7em auto; */
     width: 100%;
     padding: 0.2em 0.4em 0.2em 0.4em;
-    border-radius: 0.2em;
+    border-radius: 0.4em;
     /* border-color: white; */
     /* border-width: 0.1em; */
     /* box-shadow: 0px 0px 5px 5px rgba(0, 0, 0, 0.171); */
-    border: solid rgb(159, 159, 159) 1px;
+    border: solid rgb(99, 99, 99) 1px;
     color: white;
     font-size: 120%;
     font-family: inherit;
     
     background-image: linear-gradient(to right, #281b2a, #432f5f);
+}
+button.selected {
+    
+    border: solid rgb(255, 255, 255) 1px;
 }
 header a{
     display: block;
@@ -111,12 +118,13 @@ button.update  {
 }
 .magenta {
     /* background-color: rgb(212, 8, 124); */
-    background-image: linear-gradient(to right, #8b1659, #ba3988);
+    background-image: linear-gradient(to right, #8b1672, #ba3995);
 }
 .orange {
-    /* background-color: rgb(243, 102, 15); */
-    
     background-image: linear-gradient(to right, #cb3604, #ad8a21);
+}
+.yellow {
+    background-image: linear-gradient(to right, #838915, #d2dc1f);
 }
 
 .alarmunit {
