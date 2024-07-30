@@ -241,6 +241,16 @@ esp_err_t setup_nvs_spiffs_settings(){
 
 static char lutfilename[128];
 
+void fill_luts_fallback(level_t lut[]){
+    size_t levet_t_size = sizeof(level_t);
+    for (int row = 0; row <= 254; row++){
+        for (int column = 0; column < levet_t_size; column++){
+            uint8_t * byt = (size_t) lut + levet_t_size * row + column;
+            *byt = (uint8_t) row;
+        }
+    }
+}
+
 esp_err_t read_level_luts(level_t lut[]){
     int lutnumber = get_setting("lutfile");
     sprintf(lutfilename, "/spiffs/levelluts%i.csv", lutnumber);
@@ -250,14 +260,8 @@ esp_err_t read_level_luts(level_t lut[]){
     if (lutfile == NULL)
     {
         ESP_LOGE(TAG, "couldn't find %s, setting to default", lutfilename);
-        for (int row = 0; row <= 254; row++){
-            for (int column = 0; column < levet_t_size; column++){
-                uint8_t * byt = (size_t) lut + levet_t_size * row + column;
-                *byt = (uint8_t) row;
-            }
-        }
+        fill_luts_fallback(lut);
         return ESP_OK;
-
     }
     int commapos = -1;
     int celllen = -1;
@@ -268,7 +272,6 @@ esp_err_t read_level_luts(level_t lut[]){
     int cell_int;
     int column_idx;
     int row_idx;
-    char* lutlinebuffer = malloc(128);
     int total_rows = 0;
     while (1){
         commapos = -1;
@@ -277,11 +280,12 @@ esp_err_t read_level_luts(level_t lut[]){
         row_idx = 0;
         cell_int = -1;
         out = fgets(linebuffer, 128, lutfile);
-        linebuffer[40] = 0;
-        // ESP_LOGI(TAG, "CSV Line %s", linebuffer);
+        if (out == NULL) break;
 
-        if (linebuffer[0] == 'l') continue;
-        if (linebuffer[0] == '#') continue;
+        if (linebuffer[0] < '0') continue;
+        if (linebuffer[0] > '9') continue;
+        
+        linebuffer[64] = 0;
 
         for (int i = 1; i <= 64; i++){
             if (linebuffer[i] == ',' || linebuffer[i] == 13 || linebuffer[i] == 10 || linebuffer[i] == 0) {
@@ -298,6 +302,10 @@ esp_err_t read_level_luts(level_t lut[]){
                     {
                         ESP_LOGE(TAG, "Invalid row is CSV LUT (%i)", row_idx);
                         break;
+                    }
+                    else
+                    {
+                        total_rows += 1;
                     }
                 }
                 else
@@ -318,16 +326,24 @@ esp_err_t read_level_luts(level_t lut[]){
         }
 
         // ESP_LOGI(TAG, "Level %i: 0-10v %d", row_idx, levellut[row_idx].dali1_lvl);
-        total_rows += 1;
         
         // vTaskDelay(500);
         if (commapos == -1) {
-            ESP_LOGE(TAG, "Could't find comma in line"); 
+            ESP_LOGE(TAG, "Could't find comma in line, filled LUTs with fallback"); 
             fclose(lutfile);
+            
+            fill_luts_fallback(lut);
             return ESP_ERR_NOT_FOUND;
         }
+        if (column_idx != 10){
+            ESP_LOGE(TAG, "Didn't find all columns in CSV file! Filled luts with fallback");
+            fclose(lutfile);
+            
+            fill_luts_fallback(lut);
+            return ESP_ERR_INVALID_SIZE;
+
+        }
         // ESP_LOGI(TAG, "Found comma at pos %i in %s", commapos, linebuffer);
-        if (out == NULL) break;
     }
     ESP_LOGI(TAG, "Finished loading LUTS (found %i)", total_rows);
     fclose(lutfile);

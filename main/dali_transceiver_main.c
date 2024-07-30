@@ -274,6 +274,7 @@ void primary()
     bool at_setpoint;
     int actual_level = setpoint;
     level_t level_el;
+    level_t future_el;
     uint64_t current_time;
     uint64_t actual_looptime;
     int random_looptime = 1;
@@ -290,6 +291,9 @@ void primary()
     int dali3_lvl_to_send = setpoint;
     int dali4_lvl_to_send = setpoint;
     int espnow_lvl_to_send = setpoint;
+    int lookahead;
+    int max_lookahead;
+    int future_level;
     bool dali_broadcast = false;
     // level_t lev_el;
     
@@ -376,6 +380,33 @@ void primary()
 
         fade_remaining = local_setpoint - actual_level;
         level_el = levellut[actual_level];
+        if (fade_remaining != 0)
+        {
+            max_lookahead = clamp(40000 / fadetime, 1, 9);
+            ESP_LOGI(TAG, "maxlook %i %i", max_lookahead, tick_inc);
+            for (lookahead = 1; lookahead <= max_lookahead; lookahead++)
+            {
+                if (fade_remaining > 0)
+                {
+                    future_level = _MIN(actual_level + tick_inc * lookahead, setpoint);
+                }
+                else
+                {
+                    future_level = _MAX(actual_level - tick_inc * lookahead, setpoint);
+                } 
+                future_el = levellut[future_level];
+                // ESP_LOGI(TAG, "Looking at %i", future_level);
+                
+                // if channel is off but will be needed later in fade set to minimum on
+                for (int ch=0; ch < sizeof(level_t); ch ++)
+                {
+                    if (*(((uint8_t*) &level_el) + ch) == 0 && *(((uint8_t*) &future_el) + ch) > 0)
+                    {
+                        *(((uint8_t*) &level_el) + ch) = 1;
+                    }
+                }
+            }
+        }
         // level_el = subslevel;
         manage_relay_timeouts(configbits, level_el.relay1, level_el.relay2);
 

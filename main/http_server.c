@@ -641,7 +641,7 @@ static esp_err_t file_uploader(httpd_req_t *req){
     fclose(f);
     sprintf(httpd_temp_buffer, "Uploaded %i bytes to '%s'", bytes_tot, filename);
     httpd_resp_send(req, httpd_temp_buffer, HTTPD_RESP_USE_STRLEN);
-    if (strcmp(filename, "/spiffs/levelluts.csv") == 0){
+    if (strncmp(filename, "/spiffs/levellut", 16) == 0){
         read_level_luts(levellut);
     }
     return ESP_OK;

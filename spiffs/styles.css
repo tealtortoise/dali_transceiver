@@ -84,6 +84,7 @@ button.levelbutton {
     color: white;
     font-size: 160%;
     font-family: inherit;
+    text-shadow: 2px 2px 10px black;
 }
 
 button.update  {
