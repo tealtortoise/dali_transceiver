@@ -258,6 +258,10 @@ static esp_err_t rest_put_handler(httpd_req_t *req){
     
     sprintf(httpd_temp_buffer, "OK");
     httpd_resp_send(req, httpd_temp_buffer, HTTPD_RESP_USE_STRLEN);
+
+    // Wake up main task
+    networking_ctx_t *ctx = httpd_get_global_user_ctx(req->handle);
+    xTaskNotifyIndexed(ctx->mainloop_task, SETPOINT_SLEW_NOTIFY_INDEX, USE_DEFAULT_FADETIME, eSetValueWithOverwrite);
     return ESP_OK;
 }
 

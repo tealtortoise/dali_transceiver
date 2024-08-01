@@ -27,7 +27,7 @@ lutfile,1
 full_power,256
 default_fade,1800
 configbits,0
-dali1_channel,200
-dali2_channel,-1
-dali3_channel,-1
-dali4_channel,-1
+dali1_address,200
+dali2_address,-1
+dali3_address,-1
+dali4_address,-1

@@ -175,6 +175,9 @@
                 if (res == -1) {
                     document.getElementById(`en_${id}`).checked = false;
                     checked_ob[id] = false;
+                    el.value = 0;
+                    let level_ind = document.getElementById(id + "_level");
+                    level_ind.innerHTML = "0";
                 } else {
                     document.getElementById(`en_${id}`).checked = true;
                     checked_ob[id] = true;
@@ -184,7 +187,7 @@
                 }
             });
             if (id.substring(0, 4) == "dali") {
-                get(`/api/${id.substring(0,5)}_channel/`).then((resp) => {
+                get(`/api/${id.substring(0,5)}_address/`).then((resp) => {
                     let ch_ind_id = `${id}_ch`;
                     let ch_el = document.getElementById(ch_ind_id);
                     if (resp == -1){
