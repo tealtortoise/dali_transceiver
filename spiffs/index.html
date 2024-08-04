@@ -3,6 +3,7 @@
 <head>
     <title>MulberryLight</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
     <link rel="shortcut icon" href="favicon.ico">
     <link rel="apple-touch-icon image_src" href="apple-touch-icon.png">
     <link rel="manifest" href="site.webmanifest">
@@ -20,19 +21,31 @@
         </nav>
     </header>
     <div>
-        <button class="levelbutton magenta" level="254">Full</button>
-        <button class="levelbutton purple" level="240" id="preset5">Daytime High</button>
-        <button class="levelbutton teal" level="220" id="preset4">Daytime Low</button>
-        <button class="levelbutton green" level="180" id="preset3">Early evening</button>
-        <button class="levelbutton yellow" level="30" id="preset2">Night time</button>
-        <button class="levelbutton orange" level="10" id="preset1">Moonlight</button>
-        <button class="levelbutton red" level="0" id="preset0">Switch Off</button>
+        <button class="levelbutton magenta" level="254">Full Power!! 🕶 <span>100%</span></button>
+        <button class="levelbutton purple" level="240" id="preset5">Daytime High ☀ <span></span></button>
+        <button class="levelbutton teal" level="220" id="preset4">Daytime Low ☁ <span></span></button>
+        <button class="levelbutton green" level="180" id="preset3">Early evening 🌛︎︎ <span></span></button>
+        <button class="levelbutton yellow" level="30" id="preset2">Night time ✯ <span></span></button>
+        <button class="levelbutton orange" level="10" id="preset1">Moonlight ♫♪♪ <span></span></button>
+        <button class="levelbutton red" level="0" id="preset0">Switch Off 💤 <span>0%</span></button>
     </div>
     <div class="slidecontainer">
         <span id="ajaxlevel">--</span><input type="range" min="0" max="254" value="50" class="slider" id="levelslider">
+        
+        <div class="info">
+            Levelbyte <span id="levelbyte">--</span>
+        </div>
+        <div class="info">
+            LED Current <span id="ledcurrent">--</span>
+        </div>
+        
     </div>
     <script>
         "use strict";
+
+        function levelbyte_to_linear(byte){
+            return Math.floor(Math.pow(10, (byte-1) * 3.0 / 253.0) * 10 + 0.5) / 100;
+        }
 
         function get(uri, el) {
             const options = {
@@ -41,7 +54,7 @@
             return fetch(uri, options)
                 .then(response => {
                     if (!response.ok) {
-                    throw new Error('Network response was not ok');
+                        return "";
                     }
                     // let text = response.text()
                     return response.text();
@@ -54,12 +67,19 @@
         var waiting = 0;
         let slider = document.getElementById("levelslider");
         let levelind = document.getElementById('ajaxlevel');
+        let currentind = document.getElementById('ledcurrent');
+        let levelbyteind = document.getElementById('levelbyte');
         
         
-        for (let i = 1; i <= 4; i++) {
+        for (let i = 1; i <= 5; i++) {
             let uri = `/api/preset/${i}/`;
             get(uri).then((st) => {
-                document.getElementById("preset" + i).setAttribute("level", st);
+                let button_el = document.getElementById("preset" + i);
+                if (st >= 0){
+                    button_el.setAttribute("level", st);
+                    button_el.childNodes[1].innerHTML = levelToPercent(st);
+                }
+
             });
         }
 
@@ -94,6 +114,8 @@
         function sliderChangeFn() {
             let sliderval = slider.value;
             levelind.innerHTML = levelToPercent(sliderval);
+            levelbyteind.innerHTML = sliderval;
+            currentind.innerHTML = levelbyte_to_linear(sliderval) + "%";
             levelind.classList.add("updating");
             if (!ontimeout){
                 send(sliderval);
@@ -117,17 +139,26 @@
             let level = element.getAttribute("level");
             slider.value = level;
             levelind.innerHTML = levelToPercent(level);
+            currentind.innerHTML = levelbyte_to_linear(level) + "%";
+            levelbyteind.innerHTML = level;
             levelind.classList.add("updating");
             send(level);
             console.log(level)
         }
+
         Array.from(document.getElementsByClassName("levelbutton")).forEach(element => {
             element.onclick = buttonPressFn;
         });
+
         document.getElementById("levelslider").oninput = sliderChangeFn;
 
         get("/setpoint").then((sp) => {
+            if (!(sp >= 0)) {
+                sp = "0"
+            }
             levelind.innerHTML = levelToPercent(sp);
+            currentind.innerHTML = levelbyte_to_linear(sp) + "%";
+            levelbyteind.innerHTML = sp;
             slider.value = sp;
         });
         

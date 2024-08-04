@@ -23,6 +23,8 @@
 #define DALI_TRANSMIT_ERROR 3
 #define DALI_RECIEVE_ERROR 4
 
+#define DALI_COMMAND_RETURN_INDEX 2
+
 typedef struct {
     uint8_t firstbyte;
     uint8_t secondbyte;

@@ -59,6 +59,12 @@ typedef struct {
 } level_t;
 
 typedef struct {
+    uint16_t fadetime_256ms;
+    uint8_t setpoint_source;
+    uint8_t setpoint;
+} setpoint_notify_t;
+
+typedef struct {
     int dali1;
     int dali2;
     int dali3;
@@ -132,6 +138,7 @@ typedef struct {
     uint32_t frameidpass;
     edgeframe_isr_ctx_t* edgeframe_isr_ctx;
     TaskHandle_t mainloop_task;
+    SemaphoreHandle_t bus_mutex;
 } dali_transceiver_t;
 
 typedef struct dali_transceiver_t *dali_transceiver_handle_t;

@@ -136,6 +136,14 @@ esp_err_t setup_nvs_spiffs_settings(){
         .partition_label = NULL,
     };
     ESP_ERROR_CHECK(esp_vfs_spiffs_register(&spiffsconf));
+    ESP_ERROR_CHECK(esp_spiffs_check(NULL));
+
+    size_t total_bytes;
+    size_t used_bytes;
+    ESP_ERROR_CHECK(esp_spiffs_info(NULL, &total_bytes, &used_bytes));
+    ESP_LOGI(TAG, "SPIFFS Partition info: Total size %i KB, Used Size %i kB", total_bytes >> 10, used_bytes >> 10);
+    
+
     esp_err_t err = nvs_flash_init();
     if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
         // NVS partition was truncated and needs to be erased

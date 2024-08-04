@@ -28,6 +28,14 @@ esp_err_t dali_setup_transceiver(dali_transceiver_config_t config, dali_transcei
 
 bool start_receiver(dali_transceiver_handle_t handle, bool wait);
 
+bool suspend_main_task(dali_transceiver_handle_t handle);
+
+void resume_main_task(dali_transceiver_handle_t handle);
+
+bool dali_take_mutex(dali_transceiver_handle_t handle, TickType_t wait_ticks);
+
+void dali_give_mutex(dali_transceiver_handle_t handle);
+
 bool stop_receiver_and_clear_queues(dali_transceiver_handle_t handle);
 
 uint32_t dali_transmit_frame(dali_transceiver_handle_t handle, uint8_t firstbyte, uint8_t secondbyte, int queuefull_timeout);

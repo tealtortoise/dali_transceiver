@@ -44,13 +44,13 @@ minimum_dim = 0.001
 
 curves = {
     "zeroten1": Channel(
-        points=[(0, 0.0), (0.22, 0.0), (0.38, 1.0), (1.0, 1.0)],
+        points=[(0, 0.0), (0.22, 0.0), (0.38, 0.975), (1.0, 0.975)],
         type=ChannelType.DIRECTED,
         native_lumens=8500,
     ),
     "dali1": Channel(type=ChannelType.RESIDUAL, points=None, native_lumens=2300),
-    "espnow": Channel(type=ChannelType.INDEPENDENT, points=[(0.0, 0.0), (1.0, 1.3)], native_lumens=0),
-    "dali2": Channel(type=ChannelType.INDEPENDENT, points=[(0.0, 0.0), (1.0, 1.3)], native_lumens=0)
+    "espnow": Channel(type=ChannelType.INDEPENDENT, points=[(0.0, 0.0),(0.6, 1.0) ,(1.0, 1.0)], native_lumens=0),
+    "dali2": Channel(type=ChannelType.INDEPENDENT, points=[(0.0, 0.0),(0.3, 1.0) ,(1.0, 1.0)], native_lumens=0)
 }
 
 total_proportioned_flux_available = sum(curve.native_lumens for curve in curves.values() if curve.is_proportioned);

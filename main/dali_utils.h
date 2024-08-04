@@ -12,6 +12,7 @@ typedef struct {
     uint8_t address;
     uint8_t value;
     uint8_t extra;
+    uint32_t notify_task;
 } dali_command_t;
 
 esp_err_t dali_assign_short_addresses(dali_transceiver_handle_t handle, int start_address);

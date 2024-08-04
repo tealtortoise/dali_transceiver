@@ -1,4 +1,5 @@
 #include "dali_transceiver.h"
+#include "freertos/semphr.h"
 
 static const char *TAG = "DALI transceiver";
 
@@ -6,7 +7,7 @@ dali_transceiver_config_t dali_transceiver_sensible_default_config = {
     .invert_input = DALI_DONT_INVERT,
     .invert_output = DALI_DONT_INVERT,
     .transmit_queue_size_frames = 1,
-    .receive_queue_size_frames = 20,
+    .receive_queue_size_frames = 0,
     .parser_config = {
         .backward_frame_action = DALI_PARSER_ACTION_LOG_AND_RECORD,
         .forward_frame_action = DALI_PARSER_ACTION_LOG,
@@ -26,6 +27,9 @@ esp_err_t dali_setup_transceiver(dali_transceiver_config_t config, dali_transcei
 
     dali_transceiver_t *transceiver = malloc(sizeof(dali_transceiver_t));
     transceiver->transmitter = transmitter;
+    
+    transceiver->bus_mutex = xSemaphoreCreateMutex();
+
     if (config.receive_queue_size_frames <= 0) ESP_LOGW(TAG, "WARNING! Receive queue size 0 -> DALI Receiver disabled!!");
     transceiver->edgeframe_isr_ctx = setup_edgelogger(config.receive_gpio_pin, config.invert_input, config.receive_queue_size_frames > 0);
     QueueHandle_t edgeframe_queue = transceiver->edgeframe_isr_ctx->queue;
@@ -48,6 +52,17 @@ bool start_receiver(dali_transceiver_handle_t handle, bool wait){
         if (wait) vTaskDelay(2);
     }
     return oldstate;
+}
+
+bool dali_take_mutex(dali_transceiver_handle_t handle, TickType_t wait_ticks){
+    dali_transceiver_t *transceiver = (dali_transceiver_t *) handle;
+    ESP_LOGD(TAG, "Taking DALI Mutex");
+    return xSemaphoreTake(transceiver->bus_mutex, wait_ticks) == pdTRUE;
+}
+void dali_give_mutex(dali_transceiver_handle_t handle){
+    dali_transceiver_t *transceiver = (dali_transceiver_t *) handle;
+    ESP_LOGD(TAG, "Giving DALI Mutex");
+    xSemaphoreGive(transceiver->bus_mutex);
 }
 
 bool stop_receiver_and_clear_queues(dali_transceiver_handle_t handle){
@@ -108,12 +123,18 @@ BaseType_t dali_transmit_frame_and_wait(dali_transceiver_handle_t handle, uint8_
 
 dali_frame_t dali_transmit_frame_and_wait_for_backward_frame(dali_transceiver_handle_t handle, uint8_t firstbyte, uint8_t secondbyte, TickType_t ticks_to_wait){
     
+    // bool havemutex = dali_take_mutex(handle, ticks_to_wait);
+    // if (!havemutex) {
+        // ESP_LOGE(TAG, "DALI Mutex timeout");
+        // return DALI_NO_FRAME;
+    // }
     bool oldstate = start_receiver(handle, true);
     dali_transceiver_t *transceiver = (dali_transceiver_t *) handle;
     BaseType_t success = dali_transmit_frame_and_wait(handle, firstbyte, secondbyte, ticks_to_wait);
     if (!success)
     {
         if (!oldstate) stop_receiver_and_clear_queues(handle);
+        // dali_give_mutex(handle);
         return (dali_frame_t) {
             .firstbyte = 0,
             .secondbyte = 0,
@@ -126,15 +147,17 @@ dali_frame_t dali_transmit_frame_and_wait_for_backward_frame(dali_transceiver_ha
     for (int wait=0; wait < ticks_to_wait; wait++){
         received = xQueueReceive(transceiver->dali_received_frame_queue, &_frame, 1);
         if (received && _frame.type != DALI_FORWARD_FRAME_TYPE) {
-                // dali_log_frame_prefix(_frame, "Received back:");
+                log_dali_frame_prefix(_frame, "Received back:");
                 
                 if (!oldstate) stop_receiver_and_clear_queues(handle);
+                // dali_give_mutex(handle);
                 return _frame;
         }
     }
     ESP_LOGW(TAG, "No return!");
     
     if (!oldstate) stop_receiver_and_clear_queues(handle);
+    // dali_give_mutex(handle);
     return DALI_NO_FRAME;
 };
 
@@ -149,12 +172,17 @@ BaseType_t dali_flush_receive_queue(dali_transceiver_handle_t handle){
 };
 
 esp_err_t dali_send_twice(dali_transceiver_handle_t handle, uint8_t firstbyte, uint8_t secondbyte){
+
+    // dali_take_mutex(handle, pdMS_TO_TICKS(5000));
     BaseType_t received = dali_transmit_frame_and_wait(handle, firstbyte, secondbyte, pdMS_TO_TICKS(100));
     received = received & dali_transmit_frame_and_wait(handle, firstbyte, secondbyte, pdMS_TO_TICKS(100));
     if (received != pdTRUE){
         ESP_LOGE(TAG, "Send error! ( %d, %d )", firstbyte, secondbyte);
+        // dali_give_mutex(handle);
         return ESP_ERR_NOT_FINISHED;
     }
+    
+    // dali_give_mutex(handle);
     return ESP_OK;
 }
 
@@ -267,7 +295,7 @@ esp_err_t dali_set_fade_time(dali_transceiver_handle_t handle, uint8_t short_add
 }
 
 esp_err_t dali_set_power_on_level(dali_transceiver_handle_t handle, uint8_t short_address, uint8_t power_on_level){
-    ESP_LOGI(TAG, "Setting pwer on level on %d to %d", short_address, power_on_level);
+    ESP_LOGI(TAG, "Setting power on level on %d to %d", short_address, power_on_level);
     if (dali_set_and_verify_dtr(handle, power_on_level, short_address)) {
         return ESP_ERR_NOT_FINISHED;
     };

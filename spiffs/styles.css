@@ -17,7 +17,7 @@ h1 {
     text-align: center;
     font-family:'Franklin Gothic Medium', 'Arial Narrow', Arial, sans-serif
 }
-.slidecontainer span {
+span#ajaxlevel  {
     font-size: 240%;
     width: 32%;
     display:inline-block;
@@ -29,12 +29,18 @@ span.updating {
     width: 66%;
 }
 
-
+div.slidecontainer {
+    margin: 0em 1.5em;
+}
 div.slider {
     display: grid;
     grid-template-columns: 3fr 6fr 2fr 2fr;
     margin-bottom: 1em;
     align-items: center;
+}
+div.info {
+    margin: 1em;
+    color:grey;
 }
 .lvlslider {
     grid-column: 1/5;
@@ -72,19 +78,26 @@ header a{
 }
 button.levelbutton {
     margin: 0.7em auto 0.7em auto;
-    width: 80%;
-    padding-top: 0.5em;
-    padding-bottom: 0.5em;
+    min-width: 75%;
+    padding: 0.5em 1em;
     display: block;
     border-radius: 10em;
-    /* border-color: white; */
-    /* border-width: 0.1em; */
-    /* box-shadow: 0px 0px 5px 5px rgba(0, 0, 0, 0.171); */
-    border-style: none;
+    border: solid black 2px;
     color: white;
-    font-size: 160%;
+    font-size: 150%;
     font-family: inherit;
     text-shadow: 2px 2px 10px black;
+    text-align: left;
+}
+
+button.levelbutton:active {
+    border: solid white 2px;
+}
+
+button.levelbutton span {
+    padding-left: 0.5em;
+    font-size: 80%;
+    float:right;
 }
 
 button.update  {
@@ -170,10 +183,10 @@ input.error {
     border: rgb(156 14 102) solid 2px;
 }
 
-span {
+/* span {
     display: block;
     text-align: center;
-}
+} */
 
 .checkbox-wrapper-20 {
     --slider-height: 8px;

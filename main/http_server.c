@@ -62,33 +62,33 @@ static char templogbuffer[1024];
 
 extern int setpoint;
 
-int get_int_from_uri(char* uri){
-    char numberlevel[5];
-    int digits = 0;
-    int ns = 0;
-    int urilen = strnlen(uri, 20);
-    uint8_t byte;
-    if (urilen > 7) {
-        for (int i = 0; i <5; i++){
-            byte = uri[7 + i];
-            if ( byte >= '0' && byte <= '9'){
-                digits += 1;
-                numberlevel[i] = byte;
-            }
-            else
-            {
-                numberlevel[i] = 0;
-                break;
-            }
-        }
-        if (digits > 0){
-            ns = atoi(numberlevel);
-            // ESP_LOGI(TAG, "Found digits in URI %s", numberlevel);
-        }
-    }
-    if (digits > 0) return ns;
-    return NO_DIGITS_FOUND;
-}
+// int get_int_from_uri(char* uri){
+//     char numberlevel[5];
+//     int digits = 0;
+//     int ns = 0;
+//     int urilen = strnlen(uri, 20);
+//     uint8_t byte;
+//     if (urilen > 7) {
+//         for (int i = 0; i <5; i++){
+//             byte = uri[7 + i];
+//             if ( byte >= '0' && byte <= '9'){
+//                 digits += 1;
+//                 numberlevel[i] = byte;
+//             }
+//             else
+//             {
+//                 numberlevel[i] = 0;
+//                 break;
+//             }
+//         }
+//         if (digits > 0){
+//             ns = atoi(numberlevel);
+//             // ESP_LOGI(TAG, "Found digits in URI %s", numberlevel);
+//         }
+//     }
+//     if (digits > 0) return ns;
+//     return NO_DIGITS_FOUND;
+// }
 
 
 static char uri[64];
@@ -96,7 +96,7 @@ static int slashes[10];
 static int idx_start;
 static int idx_end;
 static char substrings[5][32];
-static int slashcount;
+static int uri_segment_count;
 static int substring_count;
 static int substring_ints[5];
 
@@ -105,31 +105,42 @@ void parse_uri(char* uri){
     {
         substring_ints[i] = GET_SETTING_NOT_FOUND;
     }
-    // printf("URI: %s\n", uri);
-    slashcount = 0;
+    ESP_LOGI(TAG, "Parsing URI '%s'", uri);
+    uri_segment_count = -1;
     int scanint;
     int valid;
-    for (int i = 0; i<strlen(uri); i++){
-        if (uri[i] == '/'){
-            slashes[slashcount] = i;
-            slashcount += 1;
+    for (int i = 0; i <= strlen(uri); i++){
+        if (uri[i] == '/' || uri[i] == 0){
+            if (slashes[uri_segment_count] == i-1)
+            {
+                // we have a double slash or EOL
+                slashes[uri_segment_count] = i;
+                continue;
+            }
+            uri_segment_count += 1;
+            slashes[uri_segment_count] = i;
             // printf("found slash at %i\n", i);
-            if (slashcount >4) break;
-            if (slashcount > 2){
-                idx_start = slashes[slashcount - 2] + 1;
+            if (uri_segment_count > 4) break;
+            if (uri_segment_count > 0)
+            {
+                idx_start = slashes[uri_segment_count - 1] + 1;
                 idx_end = i;
                 // printf("i %i, start %i, end %i\n", i, idx_start, idx_end);
-                strncpy(substrings[slashcount - 3], uri + idx_start, idx_end - idx_start);
-                substrings[slashcount - 3][idx_end - idx_start] = 0;
-                valid = sscanf(substrings[slashcount - 3], "%i", &scanint);
+                strncpy(substrings[uri_segment_count - 1], uri + idx_start, idx_end - idx_start);
+                substrings[uri_segment_count - 1][idx_end - idx_start] = 0;
+                valid = sscanf(substrings[uri_segment_count - 1], "%i", &scanint);
                 if (valid) {
-                    substring_ints[slashcount - 3] = scanint;
+                    substring_ints[uri_segment_count - 1] = scanint;
                 }
             }
         }
     }
     // printf("Found %i slashes\n", slashcount);
-    substring_count = slashcount - 2;
+    substring_count = uri_segment_count;
+    for (int i=0; i< substring_count; i++)
+    {
+        ESP_LOGI(TAG, "Substring %i is '%s' (int %i)", i, substrings[i], substring_ints[i]);
+    }
     // printf("substr1 %s\n", substrings[0]);
     // printf("substr2 %s\n", substrings[1]);
     // printf("substr3 %s\n", substrings[2]);
@@ -159,14 +170,14 @@ static esp_err_t rest_get_handler(httpd_req_t *req){
     parse_uri(req->uri);
     int value = GET_SETTING_NOT_FOUND;
     // int* reg = get_endpoint_ptr();
-    int index = substring_ints[1];
+    int index = substring_ints[2];
         
-    if (substring_count == 1) {
-        value = get_setting(substrings[0]);
+    if (substring_count == 2) {
+        value = get_setting(substrings[1]);
     }
-    else if (substring_count == 2 && substring_ints[1] != GET_SETTING_NOT_FOUND)
+    else if (substring_count == 3 && substring_ints[2] != GET_SETTING_NOT_FOUND)
     {
-        value = get_setting_indexed(substrings[0], index);
+        value = get_setting_indexed(substrings[1], index);
     }
     else
     {
@@ -195,63 +206,56 @@ static esp_err_t rest_put_handler(httpd_req_t *req){
 
     int bytes = httpd_req_recv(req, httpd_temp_buffer, 255);
     httpd_temp_buffer[bytes] = 0;
-    int data;
-    int datarecv = sscanf(httpd_temp_buffer, "%i", &data);
+    int put_data_int;
+    int datarecv = sscanf(httpd_temp_buffer, "%i", &put_data_int);
     ESP_LOGI(TAG, "===== Received PUT at %s (%s)", req->uri, httpd_temp_buffer);
-    ESP_LOGD(TAG, "Received %s (%i) %i", httpd_temp_buffer, data, datarecv);
+    ESP_LOGD(TAG, "Received %s (%i) %i", httpd_temp_buffer, put_data_int, datarecv);
     int value = GET_SETTING_NOT_FOUND;
-    int exists = 0;
-    int existing = GET_SETTING_NOT_FOUND;
+    // int exists = 0;
+    // int existing = GET_SETTING_NOT_FOUND;
     // int* reg = get_endpoint_ptr();
     // int wait = rand() & 0xFF;
     // ESP_LOGI(TAG, "waiting %i", wait);
     // vTaskDelay(wait);
-    int index = substring_ints[1];
+    int index = substring_ints[2];
 
-    if (substring_count == 1) {
-        // existing = get_setting(substrings[0]);
-    }
-    else if (substring_count == 2 && index != GET_SETTING_NOT_FOUND)
-    {
-        // existing = get_setting_indexed(substrings[0], index);
-    }
-    existing = -3;
-    exists = existing != GET_SETTING_NOT_FOUND;
-    ESP_LOGD(TAG, "Existing = %i", existing);
+    // if (substring_count == 2) {
+    //     // existing = get_setting(substrings[0]);
+    // }
+    // else if (substring_count == 2 && index != GET_SETTING_NOT_FOUND)
+    // {
+    //     // existing = get_setting_indexed(substrings[0], index);
+    // }
+    // existing = -3;
+    // exists = existing != GET_SETTING_NOT_FOUND;
+    // ESP_LOGD(TAG, "Existing = %i", existing);
     
-    if (exists == 0) {
-        ESP_LOGI(TAG, "Returning 404");
-        sprintf(httpd_temp_buffer, "Not found");
-        httpd_resp_set_status(req, HTTPD_404);
-        httpd_resp_send(req, httpd_temp_buffer, HTTPD_RESP_USE_STRLEN);
-        return ESP_OK;
-    }
-    else if (datarecv != 1)
+    // if (exists == 0) {
+    //     ESP_LOGI(TAG, "Returning 404");
+    //     sprintf(httpd_temp_buffer, "Not found");
+    //     httpd_resp_set_status(req, HTTPD_404);
+    //     httpd_resp_send(req, httpd_temp_buffer, HTTPD_RESP_USE_STRLEN);
+    //     return ESP_OK;
+    // }
+    if (datarecv != 1)
     {
         httpd_resp_set_status(req, HTTPD_400);
         sprintf(httpd_temp_buffer, "No int found");
         httpd_resp_send(req, httpd_temp_buffer, HTTPD_RESP_USE_STRLEN);
-        return ESP_OK;
+        return ESP_FAIL;
     }
 
-    if (existing != data){
-        if (substring_count == 1) {
-            ESP_LOGD(TAG, "Setting key %s to %i", substrings[0], data);
-            set_setting(substrings[0], data);
-        }
-        else if (substring_count == 2 && substring_ints[1] != GET_SETTING_NOT_FOUND)
-        {
-            ESP_LOGD(TAG, "Setting key %s/%i to %i", substrings[0], substring_ints[1], data);
-            set_setting_indexed(substrings[0], index, data);
-            // ESP_LOGI(TAG, "Setting %s index %i from %s", substrings[0], index, substrings[1]);
-        }
+    if (substring_count == 2) {
+        ESP_LOGD(TAG, "Setting key %s to %i", substrings[1], put_data_int);
+        set_setting(substrings[1], put_data_int);
     }
-    else
+    else if (substring_count == 3 && substring_ints[2] != GET_SETTING_NOT_FOUND)
     {
-        ESP_LOGI(TAG, "URI '%s' unchanged (%i)", req->uri, existing);
+        ESP_LOGD(TAG, "Setting key %s/%i to %i", substrings[1], index, put_data_int);
+        set_setting_indexed(substrings[1], index, put_data_int);
+        // ESP_LOGI(TAG, "Setting %s index %i from %s", substrings[0], index, substrings[1]);
     }
-    
-    if (strcmp(substrings[0], "lutfile") == 0){
+    if (strcmp(substrings[1], "lutfile") == 0){
         ESP_LOGI(TAG, "Detected change of lutfile, reloading luts...");
         read_level_luts(levellut);
     }
@@ -265,26 +269,26 @@ static esp_err_t rest_put_handler(httpd_req_t *req){
     return ESP_OK;
 }
 
-/* An HTTP GET handler */
-static esp_err_t setpoint_get_handler(httpd_req_t *req)
-{
-    int ns = get_int_from_uri(req->uri);
-    if ((ns >= 0) && (ns <=254)) {
-        sprintf(httpd_temp_buffer, response, ns);
-    }
-    else 
-    {
-        sprintf(httpd_temp_buffer, response, 0);
-    };
-    // req->sess_ctx;
-    networking_ctx_t *ctx = httpd_get_global_user_ctx(req->handle);
-    setpoint = ns;
-    ESP_LOGI(TAG, "Wifi Notify %i", ns);
-    xTaskNotifyIndexed(ctx->mainloop_task, SETPOINT_SLEW_NOTIFY_INDEX, USE_DEFAULT_FADETIME, eSetValueWithOverwrite);
+// /* An HTTP GET handler */
+// static esp_err_t setpoint_get_handler(httpd_req_t *req)
+// {
+//     int ns = get_int_from_uri(req->uri);
+//     if ((ns >= 0) && (ns <=254)) {
+//         sprintf(httpd_temp_buffer, response, ns);
+//     }
+//     else 
+//     {
+//         sprintf(httpd_temp_buffer, response, 0);
+//     };
+//     // req->sess_ctx;
+//     networking_ctx_t *ctx = httpd_get_global_user_ctx(req->handle);
+//     setpoint = ns;
+//     ESP_LOGI(TAG, "Wifi Notify %i", ns);
+//     xTaskNotifyIndexed(ctx->mainloop_task, SETPOINT_SLEW_NOTIFY_INDEX, USE_DEFAULT_FADETIME, eSetValueWithOverwrite);
 
-    httpd_resp_send(req, httpd_temp_buffer, HTTPD_RESP_USE_STRLEN);
-    return ESP_OK;
-}
+//     httpd_resp_send(req, httpd_temp_buffer, HTTPD_RESP_USE_STRLEN);
+//     return ESP_OK;
+// }
 
 static esp_err_t current_setpoint_handler(httpd_req_t *req){
     if (req->method == HTTP_GET) {
@@ -306,8 +310,9 @@ static esp_err_t current_setpoint_handler(httpd_req_t *req){
         }
         else
         {
-            ESP_LOGI(TAG, "Bad setpoint %i", data);
-            httpd_resp_set_status(req, HTTPD_400_BAD_REQUEST);
+            ESP_LOGW(TAG, "=== Bad setpoint %i", data);
+            httpd_resp_set_status(req, HTTPD_400);
+            ESP_LOGI(TAG, "Received %s (%i) %i", httpd_temp_buffer, data, datarecv);
             sprintf(httpd_temp_buffer, "Setpoint must be 0 <= sp <= 254");
         }
     }
@@ -428,21 +433,21 @@ static esp_err_t otaupdate(httpd_req_t *req){
     return ESP_OK;
 }
 
-static esp_err_t rest_put_channel_handler(httpd_req_t *req){
+static esp_err_t rest_channel_override_handler(httpd_req_t *req){
     parse_uri(req->uri);
     bool put = req->method == HTTP_PUT;
-    int data = -1;
+    int put_data_int = -1;
     
-    char* channelname = substrings[1];
+    char* channelname = substrings[2];
     int* override_ptr;
     if (put) {
             
         int bytes = httpd_req_recv(req, httpd_temp_buffer, 255);
         httpd_temp_buffer[bytes] = 0;
-        int datarecv = sscanf(httpd_temp_buffer, "%i", &data);
+        int datarecv = sscanf(httpd_temp_buffer, "%i", &put_data_int);
         ESP_LOGI(TAG, "===== Received PUT at %s (%s)", req->uri, httpd_temp_buffer);
-        ESP_LOGD(TAG, "Received %s (%i) %i", httpd_temp_buffer, data, datarecv);
-        ESP_LOGI(TAG, "Trying to set override for channel %s: %i", channelname, data);
+        ESP_LOGD(TAG, "Received %s (%i) %i", httpd_temp_buffer, put_data_int, datarecv);
+        ESP_LOGI(TAG, "Trying to set override for channel %s: %i", channelname, put_data_int);
     }
     char* chname;
     networking_ctx_t *ctx = httpd_get_global_user_ctx(req->handle);
@@ -487,9 +492,9 @@ static esp_err_t rest_put_channel_handler(httpd_req_t *req){
     }
     if (put)
     {
-        *override_ptr = data;
+        *override_ptr = put_data_int;
         sprintf(httpd_temp_buffer, "OK");
-        ESP_LOGI(TAG, "PUT: Set %s to %i", chname, data);
+        ESP_LOGI(TAG, "PUT: Set %s to %i", chname, put_data_int);
         xTaskNotifyIndexed(ctx->mainloop_task, SETPOINT_SLEW_NOTIFY_INDEX, USE_DEFAULT_FADETIME, eSetValueWithOverwrite);
     }
     else
@@ -743,62 +748,76 @@ static esp_err_t logbuffer_plaintext_handler(httpd_req_t *req){
             break;
         }
     }
-
-
-    // httpd_resp_send_chunk(req, logbuffer + logbufferpos, LOGBUFFER_SIZE - logbufferpos);
-    // httpd_resp_send_chunk(req, logbuffer, logbufferpos);
     httpd_resp_send_chunk(req, logbuffer, 0);
+    return ESP_OK;
+}
+
+static esp_err_t deal_with_command_response(httpd_req_t* req){
+    uint32_t response;
+    BaseType_t received = xTaskNotifyWaitIndexed(DALI_COMMAND_RETURN_INDEX, 0, 0, &response, pdMS_TO_TICKS(10000));
+
+    if (received != pdTRUE)
+    {
+        httpd_resp_set_status(req, HTTPD_408);
+        httpd_resp_send(req, "Timed out", HTTPD_RESP_USE_STRLEN);
+        return ESP_ERR_NOT_FINISHED;
+    }
+    if (response)
+    {
+        sprintf(httpd_temp_buffer, "Error during command (%lu)", response);
+        httpd_resp_send(req, httpd_temp_buffer, HTTPD_RESP_USE_STRLEN);
+        return ESP_FAIL;
+    }
+    httpd_resp_send(req, "OK", HTTPD_RESP_USE_STRLEN);
     return ESP_OK;
 }
 
 static esp_err_t commission(httpd_req_t* req){
     networking_ctx_t *ctx = httpd_get_global_user_ctx(req->handle);
-    
-    ESP_LOGI(TAG, "HTTPD Command queue %i", (int) ctx->dali_command_queue);
-    ESP_LOGI(TAG, "HTTPD Command queue %i", (int) ctx->dali_command_queue);
-    ESP_LOGI(TAG, "HTTPD Command queue %i", (int) ctx->dali_command_queue);
     dali_command_t command = {
         .command = DALI_COMMAND_COMMISSION,
         .address = 0,
+        .notify_task = xTaskGetCurrentTaskHandle()
     };
     if (ctx->dali_command_queue != NULL) 
     {
-        xQueueSend(ctx->dali_command_queue, &command, pdMS_TO_TICKS(1000));
-        httpd_resp_send(req, "OK", HTTPD_RESP_USE_STRLEN);
-        return ESP_OK;
+        xQueueSend(ctx->dali_command_queue, &command, pdMS_TO_TICKS(5000));
+        return deal_with_command_response(req);
+        
     }
     httpd_resp_send_500(req);
     return ESP_FAIL;
 }
 
-static esp_err_t power_on_level(httpd_req_t* req){
+static esp_err_t dali_commands_handler(httpd_req_t* req){
     networking_ctx_t *ctx = httpd_get_global_user_ctx(req->handle);
     parse_uri(req->uri);
-    bool put = req->method == HTTP_PUT;
+    bool post = req->method == HTTP_POST;
     int data = -1;
     
-    char* channelname = substring_ints[1];
+    char* address = substring_ints[2];
     int* override_ptr;
-    if (put) {
+    if (post) {
             
         int bytes = httpd_req_recv(req, httpd_temp_buffer, 255);
         httpd_temp_buffer[bytes] = 0;
         int datarecv = sscanf(httpd_temp_buffer, "%i", &data);
-        ESP_LOGI(TAG, "===== Received PUT at %s (%s)", req->uri, httpd_temp_buffer);
+        ESP_LOGI(TAG, "===== Received POST at %s (%s)", req->uri, httpd_temp_buffer);
         ESP_LOGD(TAG, "Received %s (%i) %i", httpd_temp_buffer, data, datarecv);
     }
     uint8_t cmd = 255;
     dali_command_t command = {
         .command = cmd,
-        .address = channelname,
-        .value = data
+        .address = address,
+        .value = data,
+        .notify_task = xTaskGetCurrentTaskHandle()
     };
-    if (strcmp(substrings[0], "set-power-on-level") == 0)
+    if (strcmp(substrings[1], "set-power-on-level") == 0)
     {
         command.command = DALI_COMMAND_SET_POWER_ON_LEVEL;
         ESP_LOGI(TAG, "Setting power on level for address %d to %d", command.address, command.value);
     }
-    else if (strcmp(substrings[0], "set-failsafe-level") == 0)
+    else if (strcmp(substrings[1], "set-failsafe-level") == 0)
     {
         command.command = DALI_COMMAND_SET_FAILSAFE_LEVEL;
         ESP_LOGI(TAG, "Setting failsafe level for address %d to %d", command.address, command.value);
@@ -811,8 +830,7 @@ static esp_err_t power_on_level(httpd_req_t* req){
     if (ctx->dali_command_queue != NULL) 
     {
         xQueueSend(ctx->dali_command_queue, &command, pdMS_TO_TICKS(1000));
-        httpd_resp_send(req, "OK", HTTPD_RESP_USE_STRLEN);
-        return ESP_OK;
+        return deal_with_command_response(req);
     }
     httpd_resp_send_500(req);
     return ESP_FAIL;
@@ -882,13 +900,13 @@ static const httpd_uri_t rest_put = {
 static const httpd_uri_t rest_put_channel_level = {
     .uri       = "/api/channel/?*",
     .method    = HTTP_PUT,
-    .handler   = rest_put_channel_handler,
+    .handler   = rest_channel_override_handler,
     .user_ctx  = NULL
 };
 static const httpd_uri_t rest_get_channel_level = {
     .uri       = "/api/channel/?*",
     .method    = HTTP_GET,
-    .handler   = rest_put_channel_handler,
+    .handler   = rest_channel_override_handler,
     .user_ctx  = NULL
 };
 static const httpd_uri_t view_luts_endpoint = {
@@ -911,14 +929,14 @@ static const httpd_uri_t commission_endpoint = {
 };
 static const httpd_uri_t power_on_level_endpoint = {
     .uri       = "/dali/set-power-on-level/*?",
-    .method    = HTTP_PUT,
-    .handler   = power_on_level,
+    .method    = HTTP_POST,
+    .handler   = dali_commands_handler,
     .user_ctx  = NULL
 };
 static const httpd_uri_t failsafe_level_endpoint = {
     .uri       = "/dali/set-failsafe-level/*?",
-    .method    = HTTP_PUT,
-    .handler   = power_on_level,
+    .method    = HTTP_POST,
+    .handler   = dali_commands_handler,
     .user_ctx  = NULL
 };
 static const httpd_uri_t post_ota = {

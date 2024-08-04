@@ -157,6 +157,7 @@ esp_err_t _dali_assign_short_addresses(dali_transceiver_handle_t handle, int sta
 
 esp_err_t dali_assign_short_addresses(dali_transceiver_handle_t handle, int start_address){
     bool oldstate = start_receiver(handle, true);
+    // dali_take_mutex(handle, pdMS_TO_TICKS(5000));
     dali_transceiver_t *transceiver = (dali_transceiver_t *) handle;
     // bool oldstate = transceiver->
     esp_err_t response = _dali_assign_short_addresses(handle, start_address);
@@ -169,6 +170,7 @@ esp_err_t dali_assign_short_addresses(dali_transceiver_handle_t handle, int star
     if (!oldstate) {
         stop_receiver_and_clear_queues(handle);
     }
+    // dali_give_mutex(handle);
     return response;
 }
 
@@ -177,38 +179,49 @@ void dali_command_monitor_task(void* params){
     dali_transceiver_t *transceiver = (dali_transceiver_t *) params;
     BaseType_t received;
     dali_command_t command;
+    esp_err_t err;
     while (1)
     {
         if (xQueueReceive(transceiver->dali_command_queue, &command, portMAX_DELAY))
-        {
+        {   
+            ESP_LOGI(TAG, "Notify task %i", (int) command.notify_task);
+            dali_take_mutex((dali_transceiver_handle_t) transceiver, pdMS_TO_TICKS(5000));
             switch (command.command)
             {
             case DALI_COMMAND_COMMISSION:
                 ESP_LOGI(TAG, "Received COMMISSION command...");
                 vTaskSuspend(transceiver->mainloop_task);
-                esp_err_t err = dali_assign_short_addresses(transceiver, command.address);
+                err = dali_assign_short_addresses(transceiver, command.address);
                 vTaskResume(transceiver->mainloop_task);
                 if (err) ESP_LOGE(TAG, "Commissioning returned error %i", err);
+                xTaskNotifyIndexed(command.notify_task, DALI_COMMAND_RETURN_INDEX, err, eSetValueWithOverwrite);
                 break;
             case DALI_COMMAND_SET_POWER_ON_LEVEL:
                 ESP_LOGI(TAG, "Received SET_POWER_ON_LEVEL command...");
-                dali_set_power_on_level(transceiver, command.address, command.value);
+                err = dali_set_power_on_level(transceiver, command.address, command.value);
+                xTaskNotifyIndexed(command.notify_task, DALI_COMMAND_RETURN_INDEX, err, eSetValueWithOverwrite);
+                
                 break;
             case DALI_COMMAND_SET_FAILSAFE_LEVEL:
                 ESP_LOGI(TAG, "Received SET_FAILSAFE_LEVEL command...");
-                dali_set_system_failure_level(transceiver, command.address, command.value);
+                err = dali_set_system_failure_level(transceiver, command.address, command.value);
+                xTaskNotifyIndexed(command.notify_task, DALI_COMMAND_RETURN_INDEX, err, eSetValueWithOverwrite);
+                
                 break;
             default:
                 ESP_LOGE(TAG, "Unknown command %i", command.command);
+                xTaskNotifyIndexed(command.notify_task, DALI_COMMAND_RETURN_INDEX, ESP_ERR_INVALID_ARG, eSetValueWithOverwrite);
                 break;
             }
+            
+            dali_give_mutex((dali_transceiver_handle_t) transceiver);
         }
     }
 }
 
 QueueHandle_t dali_setup_command_queue(dali_transceiver_handle_t handle){
     dali_transceiver_t *transceiver = (dali_transceiver_t *) handle;
-    QueueHandle_t commandqueue = xQueueCreate(32, sizeof(dali_command_t));
+    QueueHandle_t commandqueue = xQueueCreate(1, sizeof(dali_command_t));
     TaskHandle_t cmdtask;
     xTaskCreate(dali_command_monitor_task, "dali-cmd-monitor", 8192, (void*) transceiver, 1, &cmdtask);
     transceiver->dali_command_queue = commandqueue;

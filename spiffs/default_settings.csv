@@ -24,7 +24,7 @@ preset3,120
 preset4,195
 preset5,248
 lutfile,1
-full_power,256
+full_power,254
 default_fade,1800
 configbits,0
 dali1_address,200
