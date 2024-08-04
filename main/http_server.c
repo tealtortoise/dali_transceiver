@@ -208,7 +208,7 @@ static esp_err_t rest_put_handler(httpd_req_t *req){
     httpd_temp_buffer[bytes] = 0;
     int put_data_int;
     int datarecv = sscanf(httpd_temp_buffer, "%i", &put_data_int);
-    ESP_LOGI(TAG, "===== Received PUT at %s (%s)", req->uri, httpd_temp_buffer);
+    ESP_LOGI(TAG, "===== REST API Handler: received PUT at %s (%s)", req->uri, httpd_temp_buffer);
     ESP_LOGD(TAG, "Received %s (%i) %i", httpd_temp_buffer, put_data_int, datarecv);
     int value = GET_SETTING_NOT_FOUND;
     // int exists = 0;
@@ -264,8 +264,14 @@ static esp_err_t rest_put_handler(httpd_req_t *req){
     httpd_resp_send(req, httpd_temp_buffer, HTTPD_RESP_USE_STRLEN);
 
     // Wake up main task
+    // setpoint_notify_t setp = {
+    //     .fadetime_256ms = USE_DEFAULT_FADETIME,
+    //     .setpoint = potential_new_setpoint,
+    //     .setpoint_source = SETPOINT_SOURCE_ADC,
+    // };
+    // uint32_t setpoint_struct_as_int = *((uint32_t*) &setp);
     networking_ctx_t *ctx = httpd_get_global_user_ctx(req->handle);
-    xTaskNotifyIndexed(ctx->mainloop_task, SETPOINT_SLEW_NOTIFY_INDEX, USE_DEFAULT_FADETIME, eSetValueWithOverwrite);
+    xTaskNotifyIndexed(ctx->mainloop_task, SETPOINT_SLEW_NOTIFY_INDEX, 0, eNoAction);
     return ESP_OK;
 }
 
@@ -291,6 +297,7 @@ static esp_err_t rest_put_handler(httpd_req_t *req){
 // }
 
 static esp_err_t current_setpoint_handler(httpd_req_t *req){
+    parse_uri(req->uri);
     if (req->method == HTTP_GET) {
         sprintf(httpd_temp_buffer, "%i", setpoint);
     }
@@ -299,12 +306,27 @@ static esp_err_t current_setpoint_handler(httpd_req_t *req){
         httpd_temp_buffer[bytes] = 0;
         int data;
         int datarecv = sscanf(httpd_temp_buffer, "%i", &data);
-        ESP_LOGI(TAG, "===== Received PUT at %s (%s)", req->uri, httpd_temp_buffer);
+        ESP_LOGI(TAG, "===== Setpoint handler: received PUT at %s (%s)", req->uri, httpd_temp_buffer);
         ESP_LOGD(TAG, "Received %s (%i) %i", httpd_temp_buffer, data, datarecv);
         if (data >= 0 && data <= 254){
+            int fade;
+            if (substring_count == 2 && (strcmp(substrings[1], "slow") == 0))
+            {
+                fade = USE_SLOW_FADETIME;
+            }
+            else
+            {
+                fade = USE_DEFAULT_FADETIME;
+            }
             setpoint = data;
             networking_ctx_t *ctx = httpd_get_global_user_ctx(req->handle);
-            xTaskNotifyIndexed(ctx->mainloop_task, SETPOINT_SLEW_NOTIFY_INDEX, USE_DEFAULT_FADETIME, eSetValueWithOverwrite);
+            setpoint_notify_t setp = {
+                .fadetime_256ms = fade,
+                .setpoint = data,
+                .setpoint_source = SETPOINT_SOURCE_REST,
+            };
+            uint32_t setpoint_struct_as_int = *((uint32_t*) &setp);
+            xTaskNotifyIndexed(ctx->mainloop_task, SETPOINT_SLEW_NOTIFY_INDEX, setpoint_struct_as_int, eSetValueWithOverwrite);
             ESP_LOGI(TAG, "Set new setpoint %i", setpoint);
             sprintf(httpd_temp_buffer, "OK");
         }
@@ -495,7 +517,7 @@ static esp_err_t rest_channel_override_handler(httpd_req_t *req){
         *override_ptr = put_data_int;
         sprintf(httpd_temp_buffer, "OK");
         ESP_LOGI(TAG, "PUT: Set %s to %i", chname, put_data_int);
-        xTaskNotifyIndexed(ctx->mainloop_task, SETPOINT_SLEW_NOTIFY_INDEX, USE_DEFAULT_FADETIME, eSetValueWithOverwrite);
+        xTaskNotifyIndexed(ctx->mainloop_task, SETPOINT_SLEW_NOTIFY_INDEX, 0, eNoAction);
     }
     else
     {
@@ -862,13 +884,13 @@ static const httpd_uri_t file_del = {
     .user_ctx  = NULL
 };
 static const httpd_uri_t get_setpoint = {
-    .uri       = "/setpoint",
+    .uri       = "/setpoint?*",
     .method    = HTTP_GET,
     .handler   = current_setpoint_handler,
     .user_ctx  = NULL
 };
 static const httpd_uri_t put_setpoint = {
-    .uri       = "/setpoint",
+    .uri       = "/setpoint?*",
     .method    = HTTP_PUT,
     .handler   = current_setpoint_handler,
     .user_ctx  = NULL

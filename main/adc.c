@@ -140,7 +140,14 @@ void adc_task(void *params) {
                 if (update && potential_new_setpoint != setpoint && average_voltage < VOLTAGE_CAP) {
                     setpoint = potential_new_setpoint;
                     // ESP_LOGI(TAG,"UPDATED ! voltage %i , samples_different %i, difference %i, acc %i, setpoint %i", cal_voltage, samples_different, difference, accumulator, setpoint);
-                    xTaskNotifyIndexed(config->notify_task, SETPOINT_SLEW_NOTIFY_INDEX, USE_DEFAULT_FADETIME, eSetValueWithOverwrite);
+                    
+                    setpoint_notify_t setp = {
+                        .fadetime_256ms = USE_DEFAULT_FADETIME,
+                        .setpoint = potential_new_setpoint,
+                        .setpoint_source = SETPOINT_SOURCE_ADC,
+                    };
+                    uint32_t setpoint_struct_as_int = *((uint32_t*) &setp);
+                    xTaskNotifyIndexed(config->notify_task, SETPOINT_SLEW_NOTIFY_INDEX, setpoint_struct_as_int, eSetValueWithOverwrite);
                     last_sent_setpoint = potential_new_setpoint;
                     last_sign = SIGN_UNDEFINED;
                 }

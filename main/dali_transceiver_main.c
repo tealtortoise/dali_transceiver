@@ -48,11 +48,13 @@
 #define LOOPTIME_TOLERANCE 2000
 
 #define IDLE_UPDATE_INTERVAL_US (1 * 1000000)
-#define IDLE_UPDATE_INTERVAL_US_RECV_ESPNOW (IDLE_UPDATE_INTERVAL_US + 200000)
+#define IDLE_UPDATE_INTERVAL_US_RECV_ESPNOW (IDLE_UPDATE_INTERVAL_US + 500000)
 
 #define HASH_LEN 32 /* SHA-256 digest length */
 
-static const char *TAG = "main loop";
+static const char *TAG = "main";
+
+static const char* source_str[] = {"REST", " ADC", "ESPN", "BUTN", "ALRM", "RAND"};
 
 nvs_handle_t mainloop_nvs_handle;
 
@@ -126,7 +128,7 @@ void calc_tickinc_and_looptime(uint64_t looptime)
         target_looptime = ideal_time_between_levels_us * tick_inc;
         // ESP_LOGI(TAG, "Trying %i tick inc, %i target looptime", tick_inc, target_looptime);
     }
-    ESP_LOGI(TAG, "calc: looptime %llu, tick_inc %i", looptime, tick_inc);
+    ESP_LOGD(TAG, "calc: looptime %llu, tick_inc %i", looptime, tick_inc);
 }
 
 void transmit_setlevel_dali_channel(dali_transceiver_handle_t transceiver, int channel, int level)
@@ -237,7 +239,7 @@ void mainloop()
     // actual_level = setpoint;
     // vTaskDelay(50);
     ESP_LOGI(TAG, "Starting main loop");
-    int local_fadetime = fadetime;
+    int local_setpoint_struct_as_int;
     int64_t reftime = esp_timer_get_time() - MIN_EST_LOOPTIME_US;
     uint64_t reawake_time = esp_timer_get_time() + 5000000;
     int configbits = get_setting("configbits");
@@ -274,9 +276,11 @@ void mainloop()
     int idlecount = 0;
     int levellog_count = 0;
     int max_lookahead;
+    bool new_setpoint;
     int minlevelbits = 0;
     int future_level;
     level_t min_level;
+    setpoint_notify_t received_setpoint;
     bool dali_broadcast = false;
     // level_t lev_el;
     
@@ -304,24 +308,36 @@ void mainloop()
         };
         while (1)
         {
-            received = xTaskNotifyWaitIndexed(SETPOINT_SLEW_NOTIFY_INDEX, 0, 0, &local_fadetime, 1);
-            
-            full_power = clamp(get_setting("full_power"), 0, 256);
-            local_setpoint = clamp(setpoint, 0, 254);
+            received = xTaskNotifyWaitIndexed(SETPOINT_SLEW_NOTIFY_INDEX, 0, 0, &local_setpoint_struct_as_int, 1);
             current_time = esp_timer_get_time();
             if (received == pdTRUE)
-            {
-                ESP_LOGI(TAG, "Received new setpoint %i local fade %i", local_setpoint, local_fadetime);
+            { 
+                received_setpoint = *((setpoint_notify_t*) &local_setpoint_struct_as_int);
+                received_setpoint.setpoint = clamp(received_setpoint.setpoint, 0, 254);
+                full_power = clamp(get_setting("full_power"), 0, 512);
+                new_setpoint = true;
+                // ESP_LOGI(TAG, "Received new setpoint: %d, fade: %i source %s", received_setpoint.setpoint, received_setpoint.fadetime_256ms, source_str[received_setpoint.setpoint_source]);
                 random_looptime = (rand() & 127);
                 tick_inc = 1;
                 configbits = get_setting("configbits");
-                fadetime = (local_fadetime == USE_DEFAULT_FADETIME) ? get_setting("default_fade") : local_fadetime;
+                if (received_setpoint.fadetime_256ms == USE_DEFAULT_FADETIME)
+                {
+                    fadetime = get_setting("default_fade");
+                }
+                else if (received_setpoint.fadetime_256ms == USE_SLOW_FADETIME)
+                {
+                    fadetime = get_setting("slow_fade");
+                }
+                else
+                {
+                    fadetime = received_setpoint.fadetime_256ms << 8;
+                }
                 if (fadetime < 8)
                     fadetime = 8;
                 min_level = levellut[0];
 
                 // make sure output needed later in fade are woken up
-                for (future_level = actual_level; future_level != local_setpoint; future_level += (local_setpoint > actual_level) ? 1 : -1)
+                for (future_level = actual_level; future_level != received_setpoint.setpoint; future_level += (received_setpoint.setpoint > actual_level) ? 1 : -1)
                 {
                     future_el = levellut[future_level];
                     for (int ch=0; ch < sizeof(level_t); ch ++)
@@ -344,32 +360,33 @@ void mainloop()
                 break;
         };
         reftime = esp_timer_get_time();
-        fade_remaining = local_setpoint - actual_level;
+        fade_remaining = received_setpoint.setpoint - actual_level;
         if (fade_remaining < 0)
         {
-            actual_level = _MAX(actual_level - tick_inc, local_setpoint);
+            actual_level = _MAX(actual_level - tick_inc, received_setpoint.setpoint);
             reawake_time = reftime + target_looptime;
         }
         else if (fade_remaining > 0)
         {
-            actual_level = _MIN(actual_level + tick_inc, local_setpoint);
+            actual_level = _MIN(actual_level + tick_inc, received_setpoint.setpoint);
             reawake_time = reftime + target_looptime;
         }
         else
         {
             // we're at setpoint
-            reawake_time = reftime + IDLE_UPDATE_INTERVAL_US;
+            // reawake_time = reftime + IDLE_UPDATE_INTERVAL_US;
+            configbits = get_setting("configbits");
             if (configbits & CONFIGBIT_RECEIVE_ESPNOW)
             {
                 // we don't want double awakening if we're receiving regular updates
                 reawake_time = reftime + IDLE_UPDATE_INTERVAL_US_RECV_ESPNOW;
             }
+            else
             {
                 reawake_time = reftime + IDLE_UPDATE_INTERVAL_US;
             }
             idlecount += 1;
             min_level = levellut[0];
-            configbits = get_setting("configbits");
             dali1_address = get_setting("dali1_address");
             dali2_address = get_setting("dali2_address");
             dali3_address = get_setting("dali3_address");
@@ -379,15 +396,6 @@ void mainloop()
             
             if (!(idlecount & 0xF))
             {
-                ESP_LOGI(TAG, "IDLE. SP: %i, Config: Rly1: %s, Rly2: %s, DALI: %s, 0-10v1: %s, 0-10v2:%s, ESPNOW Snd %s, Recv %s",
-                        local_setpoint, 
-                        (configbits & CONFIGBIT_USE_RELAY1) ? "ON" : "OFF",
-                        (configbits & CONFIGBIT_USE_RELAY2) ? "ON" : "OFF",
-                        (configbits & CONFIGBIT_USE_DALI) ? "ON" : "OFF",
-                        (configbits & CONFIGBIT_USE_0_10v1) ? "ON" : "OFF",
-                        (configbits & CONFIGBIT_USE_0_10v2) ? "ON" : "OFF",
-                        (configbits & CONFIGBIT_TRANSMIT_ESPNOW) ? "ON" : "OFF",
-                        (configbits & CONFIGBIT_RECEIVE_ESPNOW) ? "ON" : "OFF");
                 ESP_LOGI(TAG, "Min free heap %i", heap_caps_get_minimum_free_size(MALLOC_CAP_8BIT));
                 ESP_LOGI(TAG, "Free heap %i", heap_caps_get_free_size(MALLOC_CAP_8BIT));
             }
@@ -395,7 +403,7 @@ void mainloop()
             // list_tasks();
         }
 
-        fade_remaining = local_setpoint - actual_level;
+        fade_remaining = received_setpoint.setpoint - actual_level;
         level_el = levellut[actual_level + full_power - 254];
         
         for (int ch=0; ch < sizeof(level_t); ch ++)
@@ -510,19 +518,31 @@ void mainloop()
             }
             dali_give_mutex(dali_transceiver);
         }
-        // sprintf(templogbuffer, "%s: Snt %i->%i Fade %i Intvl %llu", TAG, actual_level, local_setpoint, fadetime, target_looptime);
+        // sprintf(templogbuffer, "%s: Snt %i->%i Fade %i Intvl %llu", TAG, actual_level, received_setpoint.setpoint, fadetime, target_looptime);
         // log_string(templogbuffer);
 
         // ESP_LOGI(TAG, "Lvl %i->%i { 0-10v1 %d, 0-10v2 %d, DALI1 %d, `DALI2 %d, DALI3 %d, DALI4 %d, ESPNOW %d, Rly1 %d, Rly2 %d LpTm %i",
                     //   "Lvl -> SP | 0-10v1 0-10v2 DALI1 DALI2 DALI3 DALI4 ESPNOW, Rly1 Rly2 Looptime"
         if (!(levellog_count & 7))
         {
-            ESP_LOGI(TAG, "Lvl-> SP | 0-10v1 0-10v2 DALI1 DALI2 DALI3 DALI4 ESPNOW, Rly1 Rly2 Looptime");
+            ESP_LOGI(TAG, "Lvl-> SP |  SRC N | 0-10v1 0-10v2 DALI1 DALI2 DALI3 DALI4 ESPN Rly1 Rly2     Fade  Looptime");
+            ESP_LOGI(TAG, "                        %s     %s    %s    %s    %s    %s   %s   %s   %s",
+                    (configbits & CONFIGBIT_USE_0_10v1) ? "ON" : " .",
+                    (configbits & CONFIGBIT_USE_0_10v2) ? "ON" : " .",
+                    ((configbits & CONFIGBIT_USE_DALI) && dali1_address != -1) ? "ON" : " .",
+                    ((configbits & CONFIGBIT_USE_DALI) && dali2_address != -1) ? "ON" : " .",
+                    ((configbits & CONFIGBIT_USE_DALI) && dali3_address != -1) ? "ON" : " .",
+                    ((configbits & CONFIGBIT_USE_DALI) && dali4_address != -1) ? "ON" : " .",
+                    (configbits & CONFIGBIT_TRANSMIT_ESPNOW) ? "ON" : " .",
+                    (configbits & CONFIGBIT_USE_RELAY1) ? "ON" : " .",
+                    (configbits & CONFIGBIT_USE_RELAY2) ? "ON" : " .");
         }
         levellog_count += 1;
-        ESP_LOGI(TAG,   "%3.1u->%3.1d |    %3.1i    %3.1i   %3.1i   %3.1i   %3.1i   %3.1i    %3.1i   %3.1d  %3.1d  %i",
+        ESP_LOGI(TAG,   "%3.1u->%3.1d | %s %1.i |    %3.1i    %3.1i   %3.1i   %3.1i   %3.1i   %3.1i  %3.1i  %3.1d  %3.1d %8.1i  %8.i",
                 actual_level,
-                local_setpoint,
+                received_setpoint.setpoint,
+                source_str[received_setpoint.setpoint_source],
+                (int) new_setpoint,
                 zeroten1_lvl_to_send,
                 zeroten2_lvl_to_send,
                 dali1_lvl_to_send,
@@ -532,7 +552,10 @@ void mainloop()
                 espnow_lvl_to_send,
                 level_el.relay1,
                 level_el.relay2,
+                fadetime,
                 (int)actual_looptime);
+                
+        new_setpoint = false;
     }
 }
 
@@ -544,7 +567,14 @@ void random_setpointer_task(void *params)
     {
         mult = (rand() & 0xF);
         setpoint = (rand() & 0xFF);
-        xTaskNotifyIndexed(mainloop_task, SETPOINT_SLEW_NOTIFY_INDEX, (rand() & 0xFF) * mult * mult, eSetValueWithOverwrite);
+
+        setpoint_notify_t setp = {
+            .fadetime_256ms = ((rand() & 0xFF) * mult * mult) >> 8,
+            .setpoint = setpoint,
+            .setpoint_source = SETPOINT_SOURCE_RANDOM,
+        };
+        uint32_t setpoint_struct_as_int = *((uint32_t*) &setp);
+        xTaskNotifyIndexed(mainloop_task, SETPOINT_SLEW_NOTIFY_INDEX, setpoint_struct_as_int, eSetValueWithOverwrite);
         vTaskDelay(((rand() & 0x7) * mult * mult) + 1);
     }
 }

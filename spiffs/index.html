@@ -20,14 +20,21 @@
             <a href="/ch"><button class="nav " level="254">Channels</button></a>
         </nav>
     </header>
-    <div>
-        <button class="levelbutton magenta" level="254">Full Power!! 🕶 <span>100%</span></button>
-        <button class="levelbutton purple" level="240" id="preset5">Daytime High ☀ <span></span></button>
-        <button class="levelbutton teal" level="220" id="preset4">Daytime Low ☁ <span></span></button>
-        <button class="levelbutton green" level="180" id="preset3">Early evening 🌛︎︎ <span></span></button>
-        <button class="levelbutton yellow" level="30" id="preset2">Night time ✯ <span></span></button>
-        <button class="levelbutton orange" level="10" id="preset1">Moonlight ♫♪♪ <span></span></button>
+    <div class="levelbutton-box">
+        <button class="levelbutton magenta" level="254">Full Power! 🕶<span>100%</span></button>
+        <button class="levelbutton magenta slow" level="254">Slow</button>
+        <button class="levelbutton purple" level="240" id="preset5">Day High ☀<span></span></button>
+        <button class="levelbutton purple slow" level="240" id="preset5">Slow</button>
+        <button class="levelbutton teal" level="220" id="preset4">Day Low ☁<span></span></button>
+        <button class="levelbutton teal slow" level="220" id="preset4">Slow</button>
+        <button class="levelbutton green" level="180" id="preset3">Teatime 🌛︎︎<span></span></button>
+        <button class="levelbutton green slow" level="180" id="preset3">Slow</button>
+        <button class="levelbutton yellow" level="30" id="preset2">Night ✯<span></span></button>
+        <button class="levelbutton yellow slow" level="30" id="preset2">Slow</button>
+        <button class="levelbutton orange" level="10" id="preset1">Moonlight ♫♪♪<span></span></button>
+        <button class="levelbutton orange slow " level="10" id="preset1">Slow</button>
         <button class="levelbutton red" level="0" id="preset0">Switch Off 💤 <span>0%</span></button>
+        <button class="levelbutton red slow" level="0" id="preset0">Slow</button>
     </div>
     <div class="slidecontainer">
         <span id="ajaxlevel">--</span><input type="range" min="0" max="254" value="50" class="slider" id="levelslider">
@@ -70,13 +77,14 @@
         let currentind = document.getElementById('ledcurrent');
         let levelbyteind = document.getElementById('levelbyte');
         
-        
         for (let i = 1; i <= 5; i++) {
             let uri = `/api/preset/${i}/`;
             get(uri).then((st) => {
                 let button_el = document.getElementById("preset" + i);
+                let slutton_el = button_el.nextElementSibling;
                 if (st >= 0){
                     button_el.setAttribute("level", st);
+                    slutton_el.setAttribute("level", st);
                     button_el.childNodes[1].innerHTML = levelToPercent(st);
                 }
 
@@ -88,7 +96,7 @@
 
         }
 
-        function send(setpoint) {
+        function send(setpoint, slow) {
             const options = {
                 method: 'PUT',
                 headers: {
@@ -98,7 +106,13 @@
             };
 
             // Make the PUT request using the fetch API
-            return fetch("/setpoint", options)
+            let uri;
+            if (slow) {
+                uri = "/setpoint/slow";
+            } else {
+                uri = "/setpoint"
+            }
+            return fetch(uri, options)
                 .then(response => {
                     if (!response.ok) {
                         throw new Error('Network response was not ok');
@@ -134,7 +148,16 @@
         };
         function buttonPressFn(event, v2) {
             console.log(event);
-            let element = event.srcElement;
+            let element;
+            let slow;
+            if (event.srcElement.type == "submit")
+            {
+                element = event.srcElement;
+                slow = event.srcElement.classList.contains("slow");
+            } else {
+                element = event.srcElement.parentNode;
+                slow = event.srcElement.parentNode.classList.contains("slow");
+            }
             console.log(element);
             let level = element.getAttribute("level");
             slider.value = level;
@@ -142,7 +165,7 @@
             currentind.innerHTML = levelbyte_to_linear(level) + "%";
             levelbyteind.innerHTML = level;
             levelind.classList.add("updating");
-            send(level);
+            send(level, slow);
             console.log(level)
         }
 

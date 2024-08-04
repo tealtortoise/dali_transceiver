@@ -72,7 +72,14 @@ void rtc_task(void* params){
             alarm_setpoint = get_setting_indexed("alarmsetpoint", i);
             setpoint = alarm_setpoint;
             alarm_fade = get_setting_indexed("alarmfade", i);
-            xTaskNotifyIndexed(mainloop_task, SETPOINT_SLEW_NOTIFY_INDEX, alarm_fade, eSetValueWithOverwrite);
+            
+            setpoint_notify_t setp = {
+                .fadetime_256ms = clamp(alarm_fade >> 8, 0, 0xFFFF - 5),
+                .setpoint = setpoint,
+                .setpoint_source = SETPOINT_SOURCE_ALARM,
+            };
+            uint32_t setpoint_struct_as_int = *((uint32_t*) &setp);
+            xTaskNotifyIndexed(mainloop_task, SETPOINT_SLEW_NOTIFY_INDEX, setpoint_struct_as_int, eSetValueWithOverwrite);
         }
         last_minute = minute;
         last_hour = hour;

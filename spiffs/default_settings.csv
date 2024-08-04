@@ -26,6 +26,7 @@ preset5,248
 lutfile,1
 full_power,254
 default_fade,1800
+slow_fade,180000
 configbits,0
 dali1_address,200
 dali2_address,-1

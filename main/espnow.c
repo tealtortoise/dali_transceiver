@@ -228,13 +228,20 @@ static void espnow_receive_queue_task(void *pvParameter)
                 ret = example_espnow_data_parse(recv_cb->data, recv_cb->data_len, &recv_state, &recv_seq, &recv_magic, &rxlevel);
                 if (configbit_recv)
                 {
-                    ESP_LOGI(TAG, "Level data received %d, type is %i", rxlevel, ret);
+                    ESP_LOGD(TAG, "Level data received %d, type is %i", rxlevel, ret);
                     setpoint = rxlevel;
-                    xTaskNotifyIndexed(espnow_ctx->mainloop_task, SETPOINT_SLEW_NOTIFY_INDEX, USE_DEFAULT_FADETIME, eSetValueWithOverwrite);
+                    
+                    setpoint_notify_t setp = {
+                        .fadetime_256ms = USE_DEFAULT_FADETIME,
+                        .setpoint = rxlevel,
+                        .setpoint_source = SETPOINT_SOURCE_ESPNOW,
+                    };
+                    uint32_t setpoint_struct_as_int = *((uint32_t*) &setp);
+                    xTaskNotifyIndexed(espnow_ctx->mainloop_task, SETPOINT_SLEW_NOTIFY_INDEX, setpoint_struct_as_int, eSetValueWithOverwrite);
                 }
                 free(recv_cb->data);
                 if (ret == EXAMPLE_ESPNOW_DATA_BROADCAST) {
-                    ESP_LOGI(TAG, "Receive %dth broadcast data from: "MACSTR", len: %d", recv_seq, MAC2STR(recv_cb->mac_addr), recv_cb->data_len);
+                    ESP_LOGD(TAG, "Receive %dth broadcast data from: "MACSTR", len: %d", recv_seq, MAC2STR(recv_cb->mac_addr), recv_cb->data_len);
 
                     /* If MAC address does not exist in peer list, add it to peer list. */
                     if (esp_now_is_peer_exist(recv_cb->mac_addr) == false) {

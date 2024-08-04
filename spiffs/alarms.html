@@ -73,7 +73,9 @@
         <div class="settingsunit">
             <div class="settingname">Default Fade Time (ms)</div>
             <input class="setting" id="default_fadetime">
-            <div class="settingname">Full Power Limit (254 is no change)</div>
+            <div class="settingname">Slow Fade Time (s)</div>
+            <input class="setting" id="slow_fadetime">
+            <div class="settingname">Full Power (default 254)</div>
             <input class="setting" id="full_power">
             <div class="settingname">Preset 1 Brightness</div>
             <input class="setting" id="preset1">
@@ -290,10 +292,18 @@
             }
             let default_fadetime_el = getEl("default_fadetime");
             let default_fadetime = default_fadetime_el.value;
-            if (default_fadetime >= 0 && default_fadetime < 36000001) {
+            if (default_fadetime >= 0 && default_fadetime < (3600 * 10 * 1000)) {
                 promises.push(send("/api/default_fade/", default_fadetime, default_fadetime_el));
             } else {
                 default_fadetime_el.className = "error";
+                return;
+            }
+            let slow_fadetime_el = getEl("slow_fadetime");
+            let slow_fadetime = slow_fadetime_el.value;
+            if (slow_fadetime >= 0 && slow_fadetime < (36000)) {
+                promises.push(send("/api/slow_fade/", slow_fadetime * 1000, slow_fadetime_el));
+            } else {
+                slow_fadetime_el.className = "error";
                 return;
             }
             let full_power_el = getEl("full_power");
@@ -371,6 +381,11 @@
             });
         }
         get("/api/default_fade/", getEl("default_fadetime"));
+        get("/api/slow_fade/").then((st) => {
+            if (st >= 0){
+                getEl("slow_fadetime").value = st * 0.001;
+            }
+        });
         get("/api/full_power/", getEl("full_power"));
         get("/api/lutfile/", getEl("lutfile"));
 

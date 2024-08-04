@@ -173,7 +173,14 @@ void button_monitor_task(void *params){
                 updated =true;
             }
             if (updated) {
-                xTaskNotifyIndexed(ctx->mainloop_task, SETPOINT_SLEW_NOTIFY_INDEX, USE_DEFAULT_FADETIME, eSetValueWithOverwrite);
+                
+                setpoint_notify_t setp = {
+                    .fadetime_256ms = USE_DEFAULT_FADETIME,
+                    .setpoint = setpoint,
+                    .setpoint_source = SETPOINT_SOURCE_BUTTONS,
+                };
+                uint32_t setpoint_struct_as_int = *((uint32_t*) &setp);
+                xTaskNotifyIndexed(ctx->mainloop_task, SETPOINT_SLEW_NOTIFY_INDEX, setpoint_struct_as_int, eSetValueWithOverwrite);
                 updated = false;
             }
             but1_counter = but1_value ? but1_counter + 1 : 0;
