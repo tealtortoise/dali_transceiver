@@ -58,11 +58,22 @@ void remove_fake(uint32_t address){
 
 
 
-esp_err_t _dali_assign_short_addresses(dali_transceiver_handle_t handle, int start_address){
-    ESP_LOGI(TAG, "Commissioning started - initialise");
-    dali_transmit_frame_and_wait(handle, DALI_FIRSTBYTE_INITALISE, DALI_SECONDBYTE_INITIALISE_ALL, pdMS_TO_TICKS(100));
-    dali_transmit_frame_and_wait(handle, DALI_FIRSTBYTE_INITALISE, DALI_SECONDBYTE_INITIALISE_ALL, pdMS_TO_TICKS(100));
-    ESP_LOGI(TAG, "Randomize");
+esp_err_t _dali_assign_short_addresses(dali_transceiver_handle_t handle, int start_address, bool assign_all){
+    
+    uint8_t secondbyte;
+    if (assign_all)
+    {
+        ESP_LOGI(TAG, "Commissioning started - initialise all devices");
+        secondbyte = DALI_SECONDBYTE_INITIALISE_ALL;
+    }
+    else
+    {
+        ESP_LOGI(TAG, "Commissioning started - initialise only without short address");
+        secondbyte = DALI_SECONDBYTE_INITIALISE_ALL_WITHOUT_SHORT_ADDRESS;
+    }
+    dali_transmit_frame_and_wait(handle, DALI_FIRSTBYTE_INITALISE, secondbyte, pdMS_TO_TICKS(100));
+    dali_transmit_frame_and_wait(handle, DALI_FIRSTBYTE_INITALISE, secondbyte, pdMS_TO_TICKS(100));
+    ESP_LOGI(TAG, "Randomize...");
     dali_transmit_frame_and_wait(handle, DALI_FIRSTBYTE_RANDOMIZE, DALI_SECONDBYTE_RANDOMIZE, pdMS_TO_TICKS(100));
     dali_transmit_frame_and_wait(handle, DALI_FIRSTBYTE_RANDOMIZE, DALI_SECONDBYTE_RANDOMIZE, pdMS_TO_TICKS(100));
 
@@ -79,7 +90,7 @@ esp_err_t _dali_assign_short_addresses(dali_transceiver_handle_t handle, int sta
         bool found = false;
         uint32_t lastend = end;
         while (cont){
-            vTaskDelay(pdMS_TO_TICKS(100));
+            vTaskDelay(pdMS_TO_TICKS(50));
             ESP_LOGI(TAG, "Searching %#08lx - %#08lx", start, end);
             present = search_below(handle, end);
             if (present) {
@@ -145,22 +156,22 @@ esp_err_t _dali_assign_short_addresses(dali_transceiver_handle_t handle, int sta
             dali_transmit_frame_and_wait(handle, DALI_FIRSTBYTE_WITHDRAW, DALI_SECONDBYTE_WITHDRAW, pdMS_TO_TICKS(100));
             short_address += 1;
             ESP_LOGI(TAG, "Next short address will be %i", short_address);
-            vTaskDelay(pdMS_TO_TICKS(500));
+            vTaskDelay(pdMS_TO_TICKS(50));
             // remove_fake(end);
 
         }
-        vTaskDelay(pdMS_TO_TICKS(8000));
+        vTaskDelay(pdMS_TO_TICKS(1000));
     }
     ESP_LOGI(TAG, "End provisioning! Found %i devices", short_address - start_address);
     return ESP_OK;
 }
 
-esp_err_t dali_assign_short_addresses(dali_transceiver_handle_t handle, int start_address){
+esp_err_t dali_assign_short_addresses(dali_transceiver_handle_t handle, int start_address, bool assign_all){
     bool oldstate = start_receiver(handle, true);
     // dali_take_mutex(handle, pdMS_TO_TICKS(5000));
     dali_transceiver_t *transceiver = (dali_transceiver_t *) handle;
     // bool oldstate = transceiver->
-    esp_err_t response = _dali_assign_short_addresses(handle, start_address);
+    esp_err_t response = _dali_assign_short_addresses(handle, start_address, assign_all);
     if (response != ESP_OK){
         ESP_LOGE(TAG, "Commissioning failed");
     }
@@ -188,10 +199,11 @@ void dali_command_monitor_task(void* params){
             dali_take_mutex((dali_transceiver_handle_t) transceiver, pdMS_TO_TICKS(5000));
             switch (command.command)
             {
+            case DALI_COMMAND_FIND_NEW_DEVICES:
             case DALI_COMMAND_COMMISSION:
                 ESP_LOGI(TAG, "Received COMMISSION command...");
                 vTaskSuspend(transceiver->mainloop_task);
-                err = dali_assign_short_addresses(transceiver, command.address);
+                err = dali_assign_short_addresses(transceiver, command.value, (command.command == DALI_COMMAND_COMMISSION));
                 vTaskResume(transceiver->mainloop_task);
                 if (err) ESP_LOGE(TAG, "Commissioning returned error %i", err);
                 xTaskNotifyIndexed(command.notify_task, DALI_COMMAND_RETURN_INDEX, err, eSetValueWithOverwrite);

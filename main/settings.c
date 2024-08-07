@@ -74,7 +74,6 @@ esp_err_t set_setting(char* name, int value) {
 
 int get_setting_indexed(char* name, int element) {
     char keybuffer[16];
-    // ESP_LOGI(TAG, "Getting Key: %s", keybuffer);
     int out;
     esp_err_t success = 1;
     // BaseType_t mutex_taken = xSemaphoreTake(nvs_mutex, pdMS_TO_TICKS(5000));
@@ -295,7 +294,7 @@ esp_err_t read_level_luts(level_t lut[]){
         
         linebuffer[64] = 0;
 
-        for (int i = 1; i <= 64; i++){
+        for (int i = 1; i <= 128; i++){
             if (linebuffer[i] == ',' || linebuffer[i] == 13 || linebuffer[i] == 10 || linebuffer[i] == 0) {
                 commapos = i;
                 celllen = i - lastcommapos - 1;
@@ -343,7 +342,7 @@ esp_err_t read_level_luts(level_t lut[]){
             fill_luts_fallback(lut);
             return ESP_ERR_NOT_FOUND;
         }
-        if (column_idx != 10){
+        if (column_idx != 12){
             ESP_LOGE(TAG, "Didn't find all columns in CSV file! Filled luts with fallback");
             fclose(lutfile);
             

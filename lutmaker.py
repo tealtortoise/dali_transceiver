@@ -11,12 +11,23 @@ class ChannelType(Enum):
     RESIDUAL = 1
     INDEPENDENT = 2
 
+@dataclass
+class LED(object):
+    imax: float
+    vf: float
+    eff: float
+
+    @property
+    def lumens(self):
+        return self.imax * 0.001 * self.vf * self.eff
+
 
 @dataclass
 class Channel(object):
+    name: str
     type: ChannelType
     points: list[tuple[float, float]] | None
-    native_lumens: float
+    led: LED
 
     @property
     def is_proportioned(self):
@@ -27,34 +38,57 @@ inrange = np.arange(0, 255, 1)
 
 columns = [
     "level",
-    "zeroten1",
+    "zeroten1", #F90s
     "zeroten2",
-    "dali1",
-    "dali2",
-    "dali3",
-    "dali4",
-    "espnow",
+    "dalia", #hexagons 3
+    "dalib", #tv5000 1
+    "dalic", # tv6500 0
+    "dalid", # back 6500 2
+    "dalie",
+    "dalif",
+    "espnow", # piano
     "relay1",
     "relay2",
 ]
 
-# native_lumens = {"zeroten1": 8500, "dali1": 2300}
-
 minimum_dim = 0.001
 
-curves = {
-    "zeroten1": Channel(
-        points=[(0, 0.0), (0.22, 0.0), (0.38, 0.975), (1.0, 0.975)],
-        type=ChannelType.DIRECTED,
-        native_lumens=8500,
+channels = {
+    "zeroten1": Channel(name="f90",
+        points=[(0, 0.0), (0.2, 0.0), (0.5, 1.5), (1.0, 1.5)],
+        type=ChannelType.INDEPENDENT,
+        led=LED(imax=1000, vf=51, eff=180),
     ),
-    "dali1": Channel(type=ChannelType.RESIDUAL, points=None, native_lumens=2300),
-    "espnow": Channel(type=ChannelType.INDEPENDENT, points=[(0.0, 0.0),(0.6, 1.0) ,(1.0, 1.0)], native_lumens=0),
-    "dali2": Channel(type=ChannelType.INDEPENDENT, points=[(0.0, 0.0),(0.3, 1.0) ,(1.0, 1.0)], native_lumens=0)
+    'dalia': Channel(name="hexagons",
+        type=ChannelType.INDEPENDENT,
+                     points=[(0.0, 0.0), (0.01, 0.0), (0.05, 1.0), (0.1, 1.0), (0.5, 0.02), (1.0, 0.17)],
+                     led=LED(vf=17, imax=800, eff=120)),
+    "espnow": Channel(name="piano",
+                      type=ChannelType.INDEPENDENT,
+                      points=[(0.0, 0.3),(0.05, 0.3), (0.15, 1.0) ,(1.0, 1)],
+                      led=LED(vf=34, imax=650, eff=120)),
+    "dalib": Channel(name="tv 5000k",
+                     type=ChannelType.INDEPENDENT,
+                     points=[(0.0, 0.0),(0.01, 0.0) ,(0.1, 0.3), (1.0, 0.3)],
+                     led=LED(imax=650, vf=33, eff=120)),
+    "dalic": Channel(name="tv 6500k",type=ChannelType.INDEPENDENT,
+                     points=[(0.0, 0.3), (0.01, 0.3), (0.1, 0.0), (1.0, 0.0)],
+                     led=LED(imax=650, vf=33, eff=120)),
+    "dalid": Channel(name="corner 6500k",
+                     type=ChannelType.INDEPENDENT,
+                     points=[(0.0, 1.0), (0.01, 1.0), (0.1, 0.0), (1.0, 0.0)],
+                     led=LED(imax=650, vf=33, eff=120)),
 }
 
-total_proportioned_flux_available = sum(curve.native_lumens for curve in curves.values() if curve.is_proportioned);
-desired_total_proportioned_flux = total_proportioned_flux_available;
+
+highest_flux = max((curve.led.lumens for curve in channels.values()))
+
+if 1 and "print proportions":
+    for key, channel in channels.items():
+        print(f"Channel {key}: '{channel.name}': {channel.led.lumens} ({(channel.led.lumens / highest_flux)})");
+
+
+# exit()
 
 def to_linear_custom(inp: np.ndarray, minimum_level: float = minimum_dim) -> np.ndarray:
     divider = -math.log10(minimum_level)
@@ -77,87 +111,72 @@ def to_log(inp: np.ndarray) -> np.ndarray:
     return np.maximum(np.log10(inp * 1000) * 253.0 / 3.0 + 1.0, 0)
 
 
-native_flux_proportions: dict[str, float] = {}
-for key, value in curves.items():
-    native_flux_proportions[key] = value.native_lumens / total_proportioned_flux_available
+# native_flux_proportions: dict[str, float] = {}
+# for key, value in curves.items():
+    # native_flux_proportions[key] = value.native_lumens / total_proportioned_flux_available
 
-print("native flux proportions", native_flux_proportions)
+# print("native flux proportions", native_flux_proportions)
 
-desired_flux_ary = to_linear_custom(inrange) * desired_total_proportioned_flux
+# desired_flux_ary = to_linear_custom(inrange) * desired_total_proportioned_flux
 
-print("desire flux array", desired_flux_ary)
+# print("desire flux array", desired_flux_ary)
 
+lin_flux = to_linear(inrange);
 
 def main():
-    linear_luts = {}
-    props = {}
-    fluxes = {}
-
-    sum = np.zeros(inrange.size)
-    for (key, value) in curves.items():
-        if value.type == ChannelType.RESIDUAL:
-            continue
-        x, y = zip(*value.points)
-        print(key, x, y)
-        flux_points = np.array(x, dtype=float)
-        prop_points = np.array(y, dtype=float)
-        props[key] = np.interp(to_linear(inrange), flux_points, prop_points)
-
-        sum += props[key]
-        print(props[key])
-
-
-    fluxsum = np.zeros(inrange.size)
-    directly_assigned_sum = 0
-    for key in props:
-        if curves[key].type == ChannelType.DIRECTED:
-            fluxes[key] = np.minimum(props[key] * desired_flux_ary, curves[key].native_lumens)
-            fluxsum += fluxes[key]
-            print(key, fluxes[key])
-            directly_assigned_sum += native_flux_proportions[key]
-
-    remaining_prop = 1.0 - sum
-    remaining_flux = desired_flux_ary - fluxsum
-    print("remaining prop", remaining_prop)
-    print("remaining flux", remaining_flux)
-    print("directly proportioned sum", directly_assigned_sum)
-    remaining_proportion = 1.0 - directly_assigned_sum
-
-    # apportion remaining flux that hasn't been directly assigned
-    for key in native_flux_proportions:
-        if curves[key].type == ChannelType.RESIDUAL:
-            fluxes[key] = (
-                remaining_flux * native_flux_proportions[key] / remaining_proportion
-            )
-            print(key, fluxes[key])
-
-    # convert fluxes to dali values
-
     warnings = []
     dalivals = {}
+
+
     for key in columns:
-        if key in fluxes:
-            flux = fluxes[key]
-            raw_dalivals = (to_log(flux / curves[key].native_lumens) + 0.0).astype(int)
-            for i, element in enumerate(raw_dalivals):
-                if element > 254:
-                    print(f"WARNING! Not enough lumens available at {i}")
-            dalivals[key] = np.clip(raw_dalivals, 0, 254)
-        elif key not in curves:
+        if key not in channels:
             dalivals[key] = inrange
-        elif curves[key].type == ChannelType.INDEPENDENT:
-            raw_dalivals = (to_log(props[key]) + 0.0).astype(int)
-            for i, element in enumerate(raw_dalivals):
-                if element > 254:
-                    print(f"WARNING! Not enough lumens available at {i}")
-            dalivals[key] = np.clip(raw_dalivals, 0, 254)
+            continue
+
+        # interpolate curves
+        channel = channels[key]
+        x, y = zip(*channel.points)
+        print("Processing curve ", key, x, y)
+        flux_points = np.array(x, dtype=float)
+        prop_points = np.array(y, dtype=float)
+        lamp_lumen_ratio = highest_flux / channel.led.lumens
+        print(f"Lamp lumen ratio {lamp_lumen_ratio}")
+        interpolated_curve = np.interp(lin_flux, flux_points, prop_points * lamp_lumen_ratio);
+        raw_dalivals = (to_log(interpolated_curve * lin_flux) + 0.0).astype(int)
+
+        for i, element in enumerate(raw_dalivals):
+            if element > 254:
+                print(f"WARNING! Not enough lumens available at {i}")
+        dalivals[key] = np.clip(raw_dalivals, 0, 254)
+
+        # if key in fluxes:
+        #     flux = fluxes[key]
+        #     raw_dalivals = (to_log(flux / curves[key].native_lumens) + 0.0).astype(int)
+        #     for i, element in enumerate(raw_dalivals):
+        #         if element > 254:
+        #             print(f"WARNING! Not enough lumens available at {i}")
+        #     dalivals[key] = np.clip(raw_dalivals, 0, 254)
+        # elif key not in curves:
+        #     dalivals[key] = inrange
+        # elif curves[key].type == ChannelType.INDEPENDENT:
+        #     raw_dalivals = (to_log(props[key] * to_linear(inrange)) + 0.0).astype(int)
+        #     for i, element in enumerate(raw_dalivals):
+        #         if element > 254:
+        #             print(f"WARNING! Not enough lumens available at {i}")
+        #     dalivals[key] = np.clip(raw_dalivals, 0, 254)
 
 
-    for key, channel in curves.items():
+    for key, channel in channels.items():
         print(key, dalivals[key], dalivals[key].size)
 
-
-    df = pd.DataFrame(dalivals, columns=columns)
+    name_columns = []
+    for name in columns:
+        if name in channels:
+            name_columns.append(channels[name].name)
+            dalivals[channels[name].name] = dalivals[name]
+        else:
+            name_columns.append(name)
+    df = pd.DataFrame(dalivals, columns=name_columns)
     print(df)
     df.to_csv("spiffs/levelluts2.csv", index=False)
     # print("hello")

@@ -28,7 +28,9 @@ full_power,254
 default_fade,1800
 slow_fade,180000
 configbits,0
-dali1_address,200
-dali2_address,-1
-dali3_address,-1
-dali4_address,-1
+dalia_address,200
+dalib_address,-1
+dalic_address,-1
+dalid_address,-1
+dalie_address,-1
+dalif_address,-1

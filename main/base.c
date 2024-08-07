@@ -75,7 +75,7 @@ static uint64_t last_log = 0;
 static uint64_t nowtime = 0;
 
 
-void log_string(char* logstring, int bytes_to_log, bool addtime){
+int log_string(char* logstring, int bytes_to_log, bool addtime){
     // for (int i = 0; i < 4096; i++){
     //     if (logstring[i] == 0) {
     //         if (i == 0) {
@@ -85,7 +85,7 @@ void log_string(char* logstring, int bytes_to_log, bool addtime){
     //     }
     //     if (logstring[i] != 10 && logstring[i] != 13 && logstring[i] < 32) logstring[i] = ' ';
     // }
-
+    int added = 0;
     if (addtime) {
         nowtime = esp_timer_get_time();
         if ((nowtime - last_log) > 1000000) {
@@ -99,7 +99,7 @@ void log_string(char* logstring, int bytes_to_log, bool addtime){
             tempbuffer[24] = '\n';
             // tempbuffer[24] = ' ';
             last_log = nowtime;
-            log_string(tempbuffer, 25, false);
+            added += log_string(tempbuffer, 25, false);
         }
     }
     int len = bytes_to_log;
@@ -132,4 +132,5 @@ void log_string(char* logstring, int bytes_to_log, bool addtime){
         logbufferpos = 0;
     }
     // logbufferpos = 0;
+    return added + bytes_to_log;
 }

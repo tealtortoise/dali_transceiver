@@ -57,10 +57,7 @@ extern int fadetime;
 typedef struct {
     uint8_t zeroten1_lvl;
     uint8_t zeroten2_lvl;
-    uint8_t dali1_lvl;
-    uint8_t dali2_lvl;
-    uint8_t dali3_lvl;
-    uint8_t dali4_lvl;
+    uint8_t dali_lvl[6];
     uint8_t espnow_lvl;
     uint8_t relay1;
     uint8_t relay2;
@@ -73,19 +70,17 @@ typedef struct {
 } setpoint_notify_t;
 
 typedef struct {
-    int dali1;
-    int dali2;
-    int dali3;
-    int dali4;
-    int zeroten1;
-    int zeroten2;
-    int espnow;
+    int16_t dali[6];
+    int16_t zeroten1;
+    int16_t zeroten2;
+    int16_t espnow;
 } level_overrides_t;
 
 extern volatile level_t levellut[255];
 
 
 #define DALI_COMMAND_COMMISSION 1
+#define DALI_COMMAND_FIND_NEW_DEVICES 4
 #define DALI_COMMAND_SET_FAILSAFE_LEVEL 2
 #define DALI_COMMAND_SET_POWER_ON_LEVEL 3
 
@@ -171,7 +166,7 @@ extern SemaphoreHandle_t log_mutex;
 
 void initialise_logbuffer();
 
-void log_string(char *logstring, int bytes_to_log, bool addtime);
+int log_string(char *logstring, int bytes_to_log, bool addtime);
 
 typedef struct {
     const char name[24];
@@ -180,24 +175,6 @@ typedef struct {
 
 // #define ENDPOINT_DEF(name) static const api_endpoint_t ##name_endpoint = {.name = "name",.array = &name}
 #define ENDPOINT_DEC(name) const api_endpoint_t name##_endpoint
-
-// #define ALARMDEF()
-
-// ENDPOINT_DEC(alarm1_hour);
-// ENDPOINT_DEC(alarm2_hour);
-// ENDPOINT_DEC(alarm3_hour);
-// ENDPOINT_DEC(alarm1_enable);
-// ENDPOINT_DEC(alarm2_enable);
-// ENDPOINT_DEC(alarm3_enable);
-// ENDPOINT_DEC(alarm1_min);
-// ENDPOINT_DEC(alarm2_min);
-// ENDPOINT_DEC(alarm3_min);
-// ENDPOINT_DEC(alarm1_fade);
-// ENDPOINT_DEC(alarm2_fade);
-// ENDPOINT_DEC(alarm3_fade);
-// ENDPOINT_DEC(full_power);
-// ENDPOINT_DEC(default_fadetime);
-
 
 #endif // base_H
 

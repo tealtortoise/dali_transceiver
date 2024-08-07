@@ -61,7 +61,7 @@ button.nav {
     /* border-color: white; */
     /* border-width: 0.1em; */
     /* box-shadow: 0px 0px 5px 5px rgba(0, 0, 0, 0.171); */
-    border: solid rgb(99, 99, 99) 1px;
+    border: none;
     color: white;
     font-size: 120%;
     font-family: inherit;
@@ -90,7 +90,7 @@ button.levelbutton {
     color: white;
     font-size: 140%;
     font-family: inherit;
-    text-shadow: 2px 2px 10px black;
+    text-shadow: 2px 2px 10px rgba(0, 0, 0, 0.301);
     text-align: left;
 }
 button.levelbutton.slow {
@@ -106,7 +106,10 @@ button.levelbutton:active {
 button.levelbutton span {
     padding-left: 0.5em;
     font-size: 80%;
+    color: rgb(255 255 255 / 31%);
+    text-shadow: none;
     float:right;
+
 }
 
 button.update  {

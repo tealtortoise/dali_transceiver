@@ -471,41 +471,37 @@ static esp_err_t rest_channel_override_handler(httpd_req_t *req){
         ESP_LOGD(TAG, "Received %s (%i) %i", httpd_temp_buffer, put_data_int, datarecv);
         ESP_LOGI(TAG, "Trying to set override for channel %s: %i", channelname, put_data_int);
     }
-    char* chname;
+    char chname[12];
     networking_ctx_t *ctx = httpd_get_global_user_ctx(req->handle);
-    if (strcmp(channelname, "dali1") == 0){
-        override_ptr = &ctx->level_overrides->dali1;
-        chname = "DALI1";
-    }
-    else if (strcmp(channelname, "dali2") == 0)
+    if (strncmp(channelname, "dali", 4) == 0)
     {
-        override_ptr = &ctx->level_overrides->dali2;
-        chname = "DALI2";
-    }
-    else if (strcmp(channelname, "dali3") == 0)
-    {
-        override_ptr = &ctx->level_overrides->dali3;
-        chname = "DALI3";
-    }
-    else if (strcmp(channelname, "dali4") == 0)
-    {
-        override_ptr = &ctx->level_overrides->dali4;
-        chname = "DALI4";
+        uint8_t channel_num = channelname[4] - 'a';
+        if (channel_num >= 0 && channel_num < 6)
+        {
+            override_ptr = &ctx->level_overrides->dali[channel_num];
+            chname[0] = "DALIX";
+            chname[4] = 'A' + (char) channel_num;
+        }
+        else
+        {
+            ESP_LOGI(TAG, "Didn't recognise DALI channel %s must be A-F", channelname);
+            return httpd_resp_send_404(req);
+        }
     }
     else if (strcmp(channelname, "espnow") == 0)
     {
         override_ptr = &ctx->level_overrides->espnow;
-        chname = "ESPNOW";
+        chname[0] = "ESPNOW";
     }
     else if (strcmp(channelname, "zeroten1") == 0)
     {
         override_ptr = &ctx->level_overrides->zeroten1;
-        chname = "0-10v 1";
+        chname[0] = "0-10v 1";
     }
     else if (strcmp(channelname, "zeroten2") == 0)
     {
         override_ptr = &ctx->level_overrides->zeroten2;
-        chname = "0-10v 2";
+        chname[0] = "0-10v 2";
     }
     else
     {
@@ -684,13 +680,15 @@ static esp_err_t view_luts(httpd_req_t* req){
     level_t lev;
     for (int i = 0; i<= 254; i++){
         lev = levellut[i];
-        sprintf(httpd_temp_buffer, "LUT Level %i: 0-10v1: %d, 0-10v2: %d, DALI1: %d, DALI2: %d, DALI3: %d, DALI4: %d, ESPNOW: %d, Rly1: %d, Rly2: %d\n", i,
+        sprintf(httpd_temp_buffer, "LUT Level %i: 0-10v1: %d, 0-10v2: %d, DALIA: %d, DALIB: %d, DALIC: %d, DALID: %d, DALIE: %d, DALIF: %d, ESPNOW: %d, Rly1: %d, Rly2: %d\n", i,
              lev.zeroten1_lvl,
              lev.zeroten2_lvl,
-             lev.dali1_lvl,
-             lev.dali2_lvl,
-             lev.dali3_lvl,
-             lev.dali4_lvl,
+             lev.dali_lvl[0],
+             lev.dali_lvl[1],
+             lev.dali_lvl[2],
+             lev.dali_lvl[3],
+             lev.dali_lvl[4],
+             lev.dali_lvl[5],
              lev.espnow_lvl,
              lev.relay1,
              lev.relay2
@@ -834,6 +832,7 @@ static esp_err_t dali_commands_handler(httpd_req_t* req){
         .value = data,
         .notify_task = xTaskGetCurrentTaskHandle()
     };
+    bool error=false;
     if (strcmp(substrings[1], "set-power-on-level") == 0)
     {
         command.command = DALI_COMMAND_SET_POWER_ON_LEVEL;
@@ -843,6 +842,16 @@ static esp_err_t dali_commands_handler(httpd_req_t* req){
     {
         command.command = DALI_COMMAND_SET_FAILSAFE_LEVEL;
         ESP_LOGI(TAG, "Setting failsafe level for address %d to %d", command.address, command.value);
+    }
+    else if (strcmp(substrings[1], "commission") == 0)
+    {
+        command.command = DALI_COMMAND_COMMISSION;
+        ESP_LOGI(TAG, "Commissioning all devices assigning short address from %d", command.value);
+    }
+    else if (strcmp(substrings[1], "find-new-devices") == 0)
+    {
+        command.command = DALI_COMMAND_FIND_NEW_DEVICES;
+        ESP_LOGI(TAG, "Finding new devices - assigning short addresses from %d", command.value);
     }
     else
     {
@@ -943,20 +952,8 @@ static const httpd_uri_t restart_endpoint = {
     .handler   = restart,
     .user_ctx  = NULL
 };
-static const httpd_uri_t commission_endpoint = {
-    .uri       = "/dali/commission",
-    .method    = HTTP_POST,
-    .handler   = commission,
-    .user_ctx  = NULL
-};
-static const httpd_uri_t power_on_level_endpoint = {
-    .uri       = "/dali/set-power-on-level/*?",
-    .method    = HTTP_POST,
-    .handler   = dali_commands_handler,
-    .user_ctx  = NULL
-};
-static const httpd_uri_t failsafe_level_endpoint = {
-    .uri       = "/dali/set-failsafe-level/*?",
+static const httpd_uri_t dali_command_endpoint = {
+    .uri       = "/dali/*?",
     .method    = HTTP_POST,
     .handler   = dali_commands_handler,
     .user_ctx  = NULL
@@ -1004,9 +1001,7 @@ static httpd_handle_t start_webserver(networking_ctx_t *ctx)
         httpd_register_uri_handler(server, &put_setpoint);
         httpd_register_uri_handler(server, &post_ota);
         httpd_register_uri_handler(server, &view_luts_endpoint);
-        httpd_register_uri_handler(server, &commission_endpoint);
-        httpd_register_uri_handler(server, &power_on_level_endpoint);
-        httpd_register_uri_handler(server, &failsafe_level_endpoint);
+        httpd_register_uri_handler(server, &dali_command_endpoint);
         httpd_register_uri_handler(server, &restart_endpoint);
         httpd_register_uri_handler(server, &rest_put_channel_level);
         httpd_register_uri_handler(server, &rest_get_channel_level);

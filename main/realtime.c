@@ -59,7 +59,7 @@ void rtc_task(void* params){
             if (last_minute != minute) break;
         }
         // ESP_LOGI(TAG, "Hour:min %i : %i : %i", hour, minute, second);
-        for (int i = 0; i < 4; i++){
+        for (int i = 1; i <= 4; i++){
             
             vTaskDelay(pdMS_TO_TICKS(100));
             alarm_enable = get_setting_indexed("alarmenable", i);
