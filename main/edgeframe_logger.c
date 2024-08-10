@@ -118,8 +118,8 @@ void enable_state_sync_task(void* params){
     }
 }
 
-edgeframe_isr_ctx_t* setup_edgelogger(uint8_t gpio, bool invert, bool enabled) {
-    QueueHandle_t edgeframe_queue = xQueueCreate(16, sizeof(edgeframe));
+edgeframe_isr_ctx_t* setup_edgelogger(uint8_t gpio, bool invert, int queuelength, bool enabled) {
+    QueueHandle_t edgeframe_queue = xQueueCreate(queuelength, sizeof(edgeframe));
     assert(edgeframe_queue);
 
     edgeframe_isr_ctx_t *ctx = heap_caps_malloc(sizeof(edgeframe_isr_ctx_t), MALLOC_CAP_INTERNAL);

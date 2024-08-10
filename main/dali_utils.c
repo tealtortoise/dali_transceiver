@@ -220,6 +220,11 @@ void dali_command_monitor_task(void* params){
                 xTaskNotifyIndexed(command.notify_task, DALI_COMMAND_RETURN_INDEX, err, eSetValueWithOverwrite);
                 
                 break;
+            case DALI_COMMAND_SET_FADE_TIME:
+                ESP_LOGI(TAG, "Received SET_FADE_TIME command...");
+                err = dali_set_fade_time(transceiver, command.address, command.value);
+                xTaskNotifyIndexed(command.notify_task, DALI_COMMAND_RETURN_INDEX, err, eSetValueWithOverwrite);
+                break;
             default:
                 ESP_LOGE(TAG, "Unknown command %i", command.command);
                 xTaskNotifyIndexed(command.notify_task, DALI_COMMAND_RETURN_INDEX, ESP_ERR_INVALID_ARG, eSetValueWithOverwrite);

@@ -42,8 +42,8 @@
             <div id="zeroten2_level">--</div>
             <div class="checkbox-wrapper-20">
                 <div class="switch">
-                <input id="en_zeroten2" class="input" type="checkbox" />
-                <label for="en_zeroten2" class="slider"></label>
+                    <input id="en_zeroten2" class="input" type="checkbox" />
+                    <label for="en_zeroten2" class="slider"></label>
                 </div>
             </div>
             <input type="range" min="0" max="254" value="0" class="lvlslider" id="zeroten2">
@@ -54,8 +54,8 @@
             <div id="dalia_level">--</div>
             <div class="checkbox-wrapper-20">
                 <div class="switch">
-                <input id="en_dalia" class="input" type="checkbox" />
-                <label for="en_dalia" class="slider"></label>
+                    <input id="en_dalia" class="input" type="checkbox" />
+                    <label for="en_dalia" class="slider"></label>
                 </div>
             </div>
             <input type="range" min="0" max="254" value="0" class="lvlslider" id="dalia">
@@ -206,12 +206,12 @@
                     document.getElementById(`en_${id}`).checked = true;
                     checked_ob[id] = true;
                     el.value = res;
-                    let event = new Event("input");
-                    el.dispatchEvent(event);
+                    let level_ind = document.getElementById(id + "_level");
+                    level_ind.innerHTML = res;
                 }
             });
             if (id.substring(0, 4) == "dali") {
-                get(`/api/${id.substring(0,5)}_address/`).then((resp) => {
+                get(`/nvs/${id.substring(0,5)}_address/`).then((resp) => {
                     let ch_ind_id = `${id}_ch`;
                     let ch_el = document.getElementById(ch_ind_id);
                     if (resp == -1){

@@ -78,7 +78,7 @@
         let levelbyteind = document.getElementById('levelbyte');
         
         for (let i = 1; i <= 5; i++) {
-            let uri = `/api/preset/${i}/`;
+            let uri = `/nvs/preset/${i}/`;
             get(uri).then((st) => {
                 let button_el = document.getElementById("preset" + i);
                 let slutton_el = button_el.nextElementSibling;

@@ -13,7 +13,7 @@
 // #endif
 
 #define RESISTOR_CHANGE_NOTIFY_INDEX 2
-#define SETPOINT_SLEW_NOTIFY_INDEX 1
+#define NEW_SETPOINT_NOTIFY_IDX 1
 #define LIGHT_LEVEL_NOTIFY_INDEX 0
 
 #define SUSPEND_MAIN_LOOP_LEVEL 0xFFFF
@@ -26,8 +26,9 @@
 #define SETPOINT_SOURCE_ADC 1
 #define SETPOINT_SOURCE_ESPNOW 2
 #define SETPOINT_SOURCE_ALARM 4
-#define SETPOINT_SOURCE_BUTTONS 3
+#define SETPOINT_SOURCE_BUTTONS 0x80 + 3
 #define SETPOINT_SOURCE_RANDOM 5
+#define SETPOINT_SOURCE_INIT 6
 
 #define GET_SETTING_NOT_FOUND 0x80000000
 
@@ -49,10 +50,6 @@ extern TaskHandle_t espnowtask;
 extern char logbuffer[LOGBUFFER_SIZE + 16];
 
 extern int logbufferpos;
-
-extern int actual_level;
-extern int setpoint;
-extern int fadetime;
 
 typedef struct {
     uint8_t zeroten1_lvl;
@@ -83,6 +80,7 @@ extern volatile level_t levellut[255];
 #define DALI_COMMAND_FIND_NEW_DEVICES 4
 #define DALI_COMMAND_SET_FAILSAFE_LEVEL 2
 #define DALI_COMMAND_SET_POWER_ON_LEVEL 3
+#define DALI_COMMAND_SET_FADE_TIME 5
 
 typedef struct {
     uint16_t time;
@@ -150,6 +148,7 @@ typedef struct {
     TaskHandle_t mainloop_task;
     level_overrides_t *level_overrides;
     QueueHandle_t dali_command_queue;
+    setpoint_notify_t *setpoint_struct;
 } networking_ctx_t;
 
 void build_nvs_key_for_gpio_gain(int gpio, char* keybuf);

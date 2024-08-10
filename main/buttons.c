@@ -68,7 +68,7 @@ bool button3_isr(void *params){
 };
 
 void run_calibration(button_task_ctx_t *ctx){
-    // xTaskNotifyIndexed(ctx->mainloop_task, SETPOINT_SLEW_NOTIFY_INDEX, SUSPEND_MAIN_LOOP_LEVEL, eSetValueWithOverwrite);
+    // xTaskNotifyIndexed(ctx->mainloop_task, NEW_SETPOINT_NOTIFY_IDX, SUSPEND_MAIN_LOOP_LEVEL, eSetValueWithOverwrite);
     vTaskSuspend(ctx->mainloop_task);
     usb_serial_jtag_driver_config_t serialconfig = {
         .rx_buffer_size = 1024,
@@ -87,7 +87,7 @@ void run_calibration(button_task_ctx_t *ctx){
     if (zhandle1->pwm_resolution == -1) {
         ESP_LOGE(TAG, "Doesn't look like LEDC set up!");
         vTaskResume(ctx->mainloop_task);
-        // xTaskNotifyIndexed(ctx->mainloop_task, SETPOINT_SLEW_NOTIFY_INDEX, RESUME_MAIN_LOOP_LEVEL, eSetValueWithOverwrite);
+        // xTaskNotifyIndexed(ctx->mainloop_task, NEW_SETPOINT_NOTIFY_IDX, RESUME_MAIN_LOOP_LEVEL, eSetValueWithOverwrite);
         return;
     }
 
@@ -118,7 +118,7 @@ void run_calibration(button_task_ctx_t *ctx){
             // nvs_close(nvs_handle);
             // usb_serial_jtag_driver_uninstall();
             vTaskResume(ctx->mainloop_task);
-            // xTaskNotifyIndexed(ctx->mainloop_task, SETPOINT_SLEW_NOTIFY_INDEX, RESUME_MAIN_LOOP_LEVEL, eSetValueWithOverwrite);            
+            // xTaskNotifyIndexed(ctx->mainloop_task, NEW_SETPOINT_NOTIFY_IDX, RESUME_MAIN_LOOP_LEVEL, eSetValueWithOverwrite);            
             return;
         }
         double testduty = 3000.0 / (1 << zhandle1->pwm_resolution);
@@ -147,9 +147,11 @@ void button_monitor_task(void *params){
     int but3_value;
     int but1_counter = 0;
     int but2_counter = 0;
+    int8_t setpoint_change = 0;
     int but3_counter = 0;
     int counter = 0;
     bool updated = false;
+    int loops = 0;
     int wait_ms = 30;
     while (1){
         received = xTaskNotifyWait(0, 0, &value, pdMS_TO_TICKS(wait_ms));
@@ -157,14 +159,20 @@ void button_monitor_task(void *params){
             but1_value = 1 - gpio_get_level(BUT1_GPIO);
             but2_value = 1 - gpio_get_level(BUT2_GPIO);
             but3_value = 1 - gpio_get_level(BUT3_GPIO);
+            // if ((loops & 0x7F) == 0)
+            // {
+            //     but1_value = 1;
+            //     ESP_LOGI(TAG, "Simulatedb utton");
+            // }
+            // loops += 1;
 
             if (but1_value  && (but1_counter == 0 || but1_counter > (REPEAT_DELAY_MS * 2 / wait_ms))) {
-                setpoint = clamp(setpoint - 4, 0, 254);
+                setpoint_change = -4;
                 updated = true;
             }
             else if (but2_value && (but2_counter == 0 || but2_counter > (REPEAT_DELAY_MS * 2 / wait_ms)))
             {
-                setpoint = clamp(setpoint + 4, 0, 254);
+                setpoint_change = 4;
                 updated = true;
             }
             else if (but3_counter > (5000 / 10)) {
@@ -176,11 +184,11 @@ void button_monitor_task(void *params){
                 
                 setpoint_notify_t setp = {
                     .fadetime_256ms = USE_DEFAULT_FADETIME,
-                    .setpoint = setpoint,
+                    .setpoint = (uint8_t) setpoint_change,
                     .setpoint_source = SETPOINT_SOURCE_BUTTONS,
                 };
                 uint32_t setpoint_struct_as_int = *((uint32_t*) &setp);
-                xTaskNotifyIndexed(ctx->mainloop_task, SETPOINT_SLEW_NOTIFY_INDEX, setpoint_struct_as_int, eSetValueWithOverwrite);
+                xTaskNotifyIndexed(ctx->mainloop_task, NEW_SETPOINT_NOTIFY_IDX, setpoint_struct_as_int, eSetValueWithOverwrite);
                 updated = false;
             }
             but1_counter = but1_value ? but1_counter + 1 : 0;
@@ -204,7 +212,7 @@ void setup_button_interrupts(TaskHandle_t mainlooptask, zeroten_handle_t pwm1, z
     task_ctx->pwm1 = pwm1;
     task_ctx->pwm2 = pwm2;
 
-    // xTaskCreate(button_monitor_task, "button-monitor-task", 3048, (void*) task_ctx, 7, &button_task_handle);
+    xTaskCreate(button_monitor_task, "button-monitor-task", 3048, (void*) task_ctx, 7, &button_task_handle);
 
     ESP_ERROR_CHECK(gpio_isr_handler_add(BUT1_GPIO, button1_isr, (void*) mainlooptask));
     ESP_ERROR_CHECK(gpio_isr_handler_add(BUT2_GPIO, button2_isr, (void*) mainlooptask));

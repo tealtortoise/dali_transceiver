@@ -15,7 +15,7 @@
 
 #include "esp_netif.h"
 
-#define STARTUP_SETPOINT 10
+#define STARTUP_SETPOINT 0
 
 
 static const char* TAG = "Base";
@@ -23,8 +23,6 @@ static const char* TAG = "Base";
 nvs_handle_t nvs_handle_ = 0;
 
 int actual_level = 0;
-int setpoint = STARTUP_SETPOINT;
-int fadetime = 50;
 int duty = -1;
 int maxduty = -1;
 
@@ -126,7 +124,7 @@ int log_string(char* logstring, int bytes_to_log, bool addtime){
         logbufferpos += len - bytes_copied;
     }
     // logbuffer[logbufferpos] = '\n';
-    logbufferpos += 1;
+    // logbufferpos += 1;
     if (logbufferpos > (LOGBUFFER_SIZE - 1))
     {
         logbufferpos = 0;

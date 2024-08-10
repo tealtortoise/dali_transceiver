@@ -33,11 +33,45 @@ static EventGroupHandle_t s_wifi_event_group;
 
 static const char *TAG = "wifi station";
 
+static int s_disconnect_count = 0;
 static int s_retry_num = 0;
+static TaskHandle_t wifi_reconnect_handle;
+
+static int received;
+static uint32_t value;
+
+void wifi_reconnect_task(void *params) {
+    while (1) {
+        received = xTaskNotifyWait(0, 0, &value, portMAX_DELAY);
+        if (received == pdTRUE) {
+            ESP_LOGI(TAG, "Received notification of WiFi disconnect.");
+            if (value <= 3)
+            {
+                // just reconnect
+            }
+            else if (value <= 5)
+            {
+                ESP_LOGI(TAG, "Waiting 10 seconds before reconnecting...");
+                vTaskDelay(pdMS_TO_TICKS(10000));
+            }
+            else if (value <= 10)
+            {
+                vTaskDelay(pdMS_TO_TICKS(30000));
+                ESP_LOGI(TAG, "Waiting 30 seconds before reconnecting...");
+            }
+            else
+            {
+                vTaskDelay(pdMS_TO_TICKS(60000));
+                ESP_LOGI(TAG, "Waiting 60 seconds before reconnecting...");
+            }
+            ESP_LOGI(TAG, "Reconnecting...");
+            esp_wifi_connect();
+        }
+    }
+}
 
 
-
-static void event_handler(void* arg, esp_event_base_t event_base,
+static void _event_handler(void* arg, esp_event_base_t event_base,
                                 int32_t event_id, void* event_data)
 {
     if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
@@ -59,6 +93,23 @@ static void event_handler(void* arg, esp_event_base_t event_base,
         ip_event_got_ip_t* event = (ip_event_got_ip_t*) event_data;
         ESP_LOGI(TAG, "got ip:" IPSTR, IP2STR(&event->ip_info.ip));
         s_retry_num = 0;
+        xEventGroupSetBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
+    }
+}
+
+
+static void event_handler(void* arg, esp_event_base_t event_base,
+                                int32_t event_id, void* event_data)
+{
+    if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
+        esp_wifi_connect();
+    } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
+        s_disconnect_count += 1;
+        xTaskNotify(wifi_reconnect_handle, s_disconnect_count, eSetValueWithOverwrite);
+    } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
+        ip_event_got_ip_t* event = (ip_event_got_ip_t*) event_data;
+        ESP_LOGI(TAG, "got ip:" IPSTR, IP2STR(&event->ip_info.ip));
+        s_disconnect_count = 0;
         xEventGroupSetBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
     }
 }
@@ -87,6 +138,8 @@ void wifi_init_sta(void)
                                                         &event_handler,
                                                         NULL,
                                                         &instance_got_ip));
+
+    xTaskCreate(wifi_reconnect_task, "Wifi Reconnect", 4096, NULL, 1, &wifi_reconnect_handle);
 
     wifi_config_t wifi_config = {
         .sta = {
@@ -136,7 +189,7 @@ void setup_wifi(networking_ctx_t *ctx)
 
     ESP_LOGI(TAG, "ESP_WIFI_MODE_STA");
     wifi_init_sta();
-    esp_wifi_set_ps(WIFI_PS_NONE);
+    // esp_wifi_set_ps(WIFI_PS_NONE);
     // TaskHandle_t espnow_send_task;
     ESP_ERROR_CHECK(setup_espnow_common(&espnowtask, ctx->mainloop_task));
     setup_espnow_receiver();

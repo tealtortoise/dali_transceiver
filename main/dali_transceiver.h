@@ -20,6 +20,7 @@ typedef struct {
     uint8_t transmit_queue_size_frames;
     uint8_t receive_queue_size_frames;
     dali_parser_config_t parser_config;
+    bool enable_receiving;
 } dali_transceiver_config_t;
 
 extern dali_transceiver_config_t dali_transceiver_sensible_default_config;

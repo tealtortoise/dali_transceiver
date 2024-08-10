@@ -135,10 +135,11 @@ esp_err_t setup_nvs_spiffs_settings(){
         .partition_label = NULL,
     };
     ESP_ERROR_CHECK(esp_vfs_spiffs_register(&spiffsconf));
-    ESP_ERROR_CHECK(esp_spiffs_check(NULL));
+    // ESP_ERROR_CHECK(esp_spiffs_check(NULL));
 
     size_t total_bytes;
     size_t used_bytes;
+    ESP_LOGI(TAG, "Getting SPIFFS Info...");
     ESP_ERROR_CHECK(esp_spiffs_info(NULL, &total_bytes, &used_bytes));
     ESP_LOGI(TAG, "SPIFFS Partition info: Total size %i KB, Used Size %i kB", total_bytes >> 10, used_bytes >> 10);
     

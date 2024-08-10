@@ -248,7 +248,7 @@
             for (let i = 1; i <= 5; i++) {
                 let preset_el = getEl("preset" + i);
                 let preset = preset_el.value;
-                send(`/api/preset/${i}/`, preset, preset_el);
+                send(`/nvs/preset/${i}/`, preset, preset_el);
                 if (i>4) break;
 
                 let alarmnum = i;
@@ -293,18 +293,18 @@
                     preset = 254;
                 }
 
-                send(`/api/alarmmin/${alarmnum}/`, min, alarmtime_el);
-                send(`/api/alarmhour/${alarmnum}/`, hour, alarmtime_el);
-                send(`/api/alarmfade/${alarmnum}/`, undefined, fadetime_el, (st) => {
+                send(`/nvs/alarmmin/${alarmnum}/`, min, alarmtime_el);
+                send(`/nvs/alarmhour/${alarmnum}/`, hour, alarmtime_el);
+                send(`/nvs/alarmfade/${alarmnum}/`, undefined, fadetime_el, (st) => {
                     return st * 1000;
                 });
-                send(`/api/alarmsetpoint/${alarmnum}/`, setpoint, setpoint_el);
-                send(`/api/alarmenable/${alarmnum}/`, enabled, enable_el);
+                send(`/nvs/alarmsetpoint/${alarmnum}/`, setpoint, setpoint_el);
+                send(`/nvs/alarmenable/${alarmnum}/`, enabled, enable_el);
             }
             let default_fadetime_el = getEl("default_fadetime");
             let default_fadetime = default_fadetime_el.value;
             if (default_fadetime >= 0 && default_fadetime < (3600 * 10)) {
-                promises.push(send("/api/default_fade/", undefined, default_fadetime_el,
+                promises.push(send("/nvs/default_fade/", undefined, default_fadetime_el,
                 (_) => {return _ * 1000;}));
             } else {
                 default_fadetime_el.className = "error";
@@ -313,7 +313,7 @@
             let slow_fadetime_el = getEl("slow_fadetime");
             let slow_fadetime = slow_fadetime_el.value;
             if (slow_fadetime >= 0 && slow_fadetime < (3600 * 10)) {
-                promises.push(send("/api/slow_fade/", undefined, slow_fadetime_el,
+                promises.push(send("/nvs/slow_fade/", undefined, slow_fadetime_el,
                 (_) => {return _ * 1000;}));
             } else {
                 slow_fadetime_el.className = "error";
@@ -323,16 +323,16 @@
             let full_power_el = getEl("full_power");
             let full_power = full_power_el.value;
             if (full_power >= 0 && full_power <= 256) {
-                promises.push(send("/api/full_power/", full_power, full_power_el));
+                promises.push(send("/nvs/full_power/", full_power, full_power_el));
             }
             let lutfile_el = getEl("lutfile");
             let lutfile = lutfile_el.value;
-            promises.push(send("/api/lutfile/", lutfile, lutfile_el));
+            promises.push(send("/nvs/lutfile/", lutfile, lutfile_el));
 
             for (let i = 0; i < 6; i++) {
                 let channel_el = getEl("dali" + String.fromCharCode(97 + i) + "_address");
                 let channel = channel_el.value;
-                send("/api/" + channel_el.id + "/", channel, channel_el);
+                send("/nvs/" + channel_el.id + "/", channel, channel_el);
             }
             let configbits = 0;
             for (let bit = 0; bit <= 6; bit++) {
@@ -340,7 +340,7 @@
                 configbits = configbits | (status << bit);
             }
             if (getEl("configbit1").getAttribute("serverval") != configbits) {
-                promises.push(send("/api/configbits/", configbits).then(() => {
+                promises.push(send("/nvs/configbits/", configbits).then(() => {
                     for (let bit = 0; bit <= 6; bit++) {
                         let el = getEl("configbit" + (bit + 1));
                         el.setAttribute("serverval", configbits);
@@ -359,31 +359,31 @@
         }
         let uri;
         for (let i = 1; i <= 5; i++) {
-            uri = `/api/preset/${i}/`;
+            uri = `/nvs/preset/${i}/`;
             get(uri, getEl("preset" + i));
             if (i>4) break;
 
-            uri = `/api/alarmsetpoint/${i}/`;
+            uri = `/nvs/alarmsetpoint/${i}/`;
             get(uri, getEl(`setpoint${i}`));
-            uri = `/api/alarmfade/${i}/`;
+            uri = `/nvs/alarmfade/${i}/`;
             let fadeel = getEl(`fadetime${i}`);
             get(uri, fadeel, (st) => {
                 if (st >= 0) return st * 0.001;
                 return ""
             });
 
-            uri = `/api/alarmenable/${i}/`;
+            uri = `/nvs/alarmenable/${i}/`;
             get(uri).then((st) => {
                 let enable_el = getEl(`enable${i}`);
                 enable_el.checked = st == "1";
                 enable_el.setAttribute("serverval", st);
             });
-            uri = `/api/alarmhour/${i}/`;
+            uri = `/nvs/alarmhour/${i}/`;
             let hour;
             let hour_prom = get(uri).then((st) => {
                 hour = st;
             });
-            uri = `/api/alarmmin/${i}/`;
+            uri = `/nvs/alarmmin/${i}/`;
             let min;
             let min_prom = get(uri).then((st) => {
                 min = st;
@@ -395,26 +395,26 @@
             });
         }
         let default_fadetime_el = getEl("default_fadetime");
-        get("/api/default_fade/", default_fadetime_el, (st) => {
+        get("/nvs/default_fade/", default_fadetime_el, (st) => {
             if (st >= 0) return st * 0.001;
             return "";
         });
         let slow_fadetime_el = getEl("slow_fadetime");
-        get("/api/slow_fade/", slow_fadetime_el, (st) => {
+        get("/nvs/slow_fade/", slow_fadetime_el, (st) => {
             if (st >= 0){
                 return st * 0.001;
             }
             return "";
         })
-        get("/api/full_power/", getEl("full_power"));
-        get("/api/lutfile/", getEl("lutfile"));
+        get("/nvs/full_power/", getEl("full_power"));
+        get("/nvs/lutfile/", getEl("lutfile"));
 
         for (let i = 0; i < 6; i++) {
             let channel_el = getEl("dali" + String.fromCharCode(97 + i) + "_address");
-            get("/api/" + channel_el.id + "/", channel_el);
+            get("/nvs/" + channel_el.id + "/", channel_el);
         }
 
-        get("/api/configbits/").then((bits) => {
+        get("/nvs/configbits/").then((bits) => {
             for (let bit = 0; bit <= 6; bit++) {
                 let status = (bits >> bit) & 1;
                 let configbit_el = getEl("configbit" + (bit + 1));

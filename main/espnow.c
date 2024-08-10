@@ -229,7 +229,6 @@ static void espnow_receive_queue_task(void *pvParameter)
                 if (configbit_recv)
                 {
                     ESP_LOGD(TAG, "Level data received %d, type is %i", rxlevel, ret);
-                    setpoint = rxlevel;
                     
                     setpoint_notify_t setp = {
                         .fadetime_256ms = USE_DEFAULT_FADETIME,
@@ -237,7 +236,7 @@ static void espnow_receive_queue_task(void *pvParameter)
                         .setpoint_source = SETPOINT_SOURCE_ESPNOW,
                     };
                     uint32_t setpoint_struct_as_int = *((uint32_t*) &setp);
-                    xTaskNotifyIndexed(espnow_ctx->mainloop_task, SETPOINT_SLEW_NOTIFY_INDEX, setpoint_struct_as_int, eSetValueWithOverwrite);
+                    xTaskNotifyIndexed(espnow_ctx->mainloop_task, NEW_SETPOINT_NOTIFY_IDX, setpoint_struct_as_int, eSetValueWithOverwrite);
                 }
                 free(recv_cb->data);
                 if (ret == EXAMPLE_ESPNOW_DATA_BROADCAST) {
@@ -323,7 +322,7 @@ void espnow_send_task(void *pvParameter){
     while (1){
     received = xTaskNotifyWaitIndexed(LIGHT_LEVEL_NOTIFY_INDEX, 0, 0, &value, 2001);
         if (received) {
-            ESP_LOGI(TAG, "Received data to send via ESPNOW %lu", value);
+            ESP_LOGD(TAG, "Received data to send via ESPNOW %lu", value);
             // data->payload[0] = (uint8_t) value;
             example_espnow_data_prepare(espnow_ctx, (uint8_t) value);
             // ESP_LOG_BUFFER_HEX(TAG, espnow_ctx->buffer, espnow_ctx->len);

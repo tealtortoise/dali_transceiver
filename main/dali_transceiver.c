@@ -13,6 +13,7 @@ dali_transceiver_config_t dali_transceiver_sensible_default_config = {
         .forward_frame_action = DALI_PARSER_ACTION_LOG,
         .mangled_frame_action = DALI_PARSER_ACTION_LOG_AND_RECORD,
     },
+    .enable_receiving = true,
 };
 
 esp_err_t dali_setup_transceiver(dali_transceiver_config_t config, dali_transceiver_handle_t *handle){
@@ -31,7 +32,12 @@ esp_err_t dali_setup_transceiver(dali_transceiver_config_t config, dali_transcei
     transceiver->bus_mutex = xSemaphoreCreateMutex();
 
     if (config.receive_queue_size_frames <= 0) ESP_LOGW(TAG, "WARNING! Receive queue size 0 -> DALI Receiver disabled!!");
-    transceiver->edgeframe_isr_ctx = setup_edgelogger(config.receive_gpio_pin, config.invert_input, config.receive_queue_size_frames > 0);
+    transceiver->edgeframe_isr_ctx = setup_edgelogger(
+        config.receive_gpio_pin,
+        config.invert_input,
+        config.receive_queue_size_frames,
+        (config.enable_receiving && config.receive_queue_size_frames > 0)
+    );
     QueueHandle_t edgeframe_queue = transceiver->edgeframe_isr_ctx->queue;
 
     QueueHandle_t dali_received_frame_queue = start_dali_parser(edgeframe_queue, config.parser_config);

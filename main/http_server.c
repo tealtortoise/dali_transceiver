@@ -26,6 +26,7 @@
 // #include "esp_tls_crypto.h"
 #include <esp_http_server.h>
 #include "esp_event.h"
+#include "driver/gpio.h"
 #include "base.h"
 #include "esp_netif.h"
 // #include "esp_tls.h"
@@ -39,6 +40,7 @@
 #include "html.c"
 #include "http_server.h"
 #include "settings.h"
+#include "gpio_utils.h"
 
 #define EXAMPLE_HTTP_QUERY_KEY_MAX_LEN  (64)
 
@@ -59,8 +61,6 @@ static char httpd_temp_buffer[BUF_SIZE];
 char filename[128];
 
 static char templogbuffer[1024];
-
-extern int setpoint;
 
 // int get_int_from_uri(char* uri){
 //     char numberlevel[5];
@@ -166,7 +166,7 @@ void parse_uri(char* uri){
 //     return 0;
 // }
 
-static esp_err_t rest_get_handler(httpd_req_t *req){
+static esp_err_t nvs_get_handler(httpd_req_t *req){
     parse_uri(req->uri);
     int value = GET_SETTING_NOT_FOUND;
     // int* reg = get_endpoint_ptr();
@@ -201,7 +201,7 @@ static esp_err_t rest_get_handler(httpd_req_t *req){
     return ESP_OK;
 }
 
-static esp_err_t rest_put_handler(httpd_req_t *req){
+static esp_err_t nvs_put_handler(httpd_req_t *req){
     parse_uri(req->uri);
 
     int bytes = httpd_req_recv(req, httpd_temp_buffer, 255);
@@ -263,15 +263,8 @@ static esp_err_t rest_put_handler(httpd_req_t *req){
     sprintf(httpd_temp_buffer, "OK");
     httpd_resp_send(req, httpd_temp_buffer, HTTPD_RESP_USE_STRLEN);
 
-    // Wake up main task
-    // setpoint_notify_t setp = {
-    //     .fadetime_256ms = USE_DEFAULT_FADETIME,
-    //     .setpoint = potential_new_setpoint,
-    //     .setpoint_source = SETPOINT_SOURCE_ADC,
-    // };
-    // uint32_t setpoint_struct_as_int = *((uint32_t*) &setp);
     networking_ctx_t *ctx = httpd_get_global_user_ctx(req->handle);
-    xTaskNotifyIndexed(ctx->mainloop_task, SETPOINT_SLEW_NOTIFY_INDEX, 0, eNoAction);
+    xTaskNotifyIndexed(ctx->mainloop_task, NEW_SETPOINT_NOTIFY_IDX, 0, eNoAction);
     return ESP_OK;
 }
 
@@ -290,7 +283,7 @@ static esp_err_t rest_put_handler(httpd_req_t *req){
 //     networking_ctx_t *ctx = httpd_get_global_user_ctx(req->handle);
 //     setpoint = ns;
 //     ESP_LOGI(TAG, "Wifi Notify %i", ns);
-//     xTaskNotifyIndexed(ctx->mainloop_task, SETPOINT_SLEW_NOTIFY_INDEX, USE_DEFAULT_FADETIME, eSetValueWithOverwrite);
+//     xTaskNotifyIndexed(ctx->mainloop_task, NEW_SETPOINT_NOTIFY_IDX, USE_DEFAULT_FADETIME, eSetValueWithOverwrite);
 
 //     httpd_resp_send(req, httpd_temp_buffer, HTTPD_RESP_USE_STRLEN);
 //     return ESP_OK;
@@ -299,7 +292,8 @@ static esp_err_t rest_put_handler(httpd_req_t *req){
 static esp_err_t current_setpoint_handler(httpd_req_t *req){
     parse_uri(req->uri);
     if (req->method == HTTP_GET) {
-        sprintf(httpd_temp_buffer, "%i", setpoint);
+        networking_ctx_t *ctx = httpd_get_global_user_ctx(req->handle);
+        sprintf(httpd_temp_buffer, "%i", ctx->setpoint_struct->setpoint);
     }
     else if (req->method == HTTP_PUT){
         int bytes = httpd_req_recv(req, httpd_temp_buffer, 255);
@@ -318,7 +312,6 @@ static esp_err_t current_setpoint_handler(httpd_req_t *req){
             {
                 fade = USE_DEFAULT_FADETIME;
             }
-            setpoint = data;
             networking_ctx_t *ctx = httpd_get_global_user_ctx(req->handle);
             setpoint_notify_t setp = {
                 .fadetime_256ms = fade,
@@ -326,8 +319,8 @@ static esp_err_t current_setpoint_handler(httpd_req_t *req){
                 .setpoint_source = SETPOINT_SOURCE_REST,
             };
             uint32_t setpoint_struct_as_int = *((uint32_t*) &setp);
-            xTaskNotifyIndexed(ctx->mainloop_task, SETPOINT_SLEW_NOTIFY_INDEX, setpoint_struct_as_int, eSetValueWithOverwrite);
-            ESP_LOGI(TAG, "Set new setpoint %i", setpoint);
+            xTaskNotifyIndexed(ctx->mainloop_task, NEW_SETPOINT_NOTIFY_IDX, setpoint_struct_as_int, eSetValueWithOverwrite);
+            ESP_LOGI(TAG, "Set new setpoint %i", data);
             sprintf(httpd_temp_buffer, "OK");
         }
         else
@@ -376,6 +369,8 @@ static esp_err_t otaupdate(httpd_req_t *req){
     esp_app_desc_t new_app_info;
     bool image_header_was_checked = false;
     int binary_file_length = 0;
+    int leds = 0;
+    
     while (1){
         bytes = httpd_req_recv(req, httpd_temp_buffer, _MIN(req->content_len, BUF_SIZE));
         if (bytes > 1) 
@@ -408,6 +403,9 @@ static esp_err_t otaupdate(httpd_req_t *req){
                         return httpd_resp_send_500(req);
                     }
                     ESP_LOGI(TAG, "esp_ota_begin succeeded");
+                    
+                    gpio_set_level(LED1_GPIO, (leds & 8) > 0);
+                    gpio_set_level(LED2_GPIO, (leds & 16) > 0);
                 } else {
                     ESP_LOGE(TAG, "received package is not fit len");
                     return httpd_resp_send_500(req);
@@ -419,6 +417,9 @@ static esp_err_t otaupdate(httpd_req_t *req){
             }
             binary_file_length += bytes;
             ESP_LOGD(TAG, "Written image length %d", binary_file_length);
+            leds += 1;
+            gpio_set_level(LED1_GPIO, (leds & 16) > 0);
+            gpio_set_level(LED2_GPIO, ((leds + 8) & 16) > 0);
         }
         else
         {
@@ -435,14 +436,11 @@ static esp_err_t otaupdate(httpd_req_t *req){
                 return httpd_resp_send_500(req);
             }
             
-
             err = esp_ota_set_boot_partition(update_partition);
             if (err != ESP_OK) {
                 ESP_LOGE(TAG, "esp_ota_set_boot_partition failed (%s)!", esp_err_to_name(err));
                 return httpd_resp_send_500(req);
             }
-            ESP_LOGI(TAG, "OTA Update complete -> restart system!");
-            vTaskDelay(pdMS_TO_TICKS(4000));
             esp_restart();
             return ESP_OK;
         }
@@ -461,7 +459,7 @@ static esp_err_t rest_channel_override_handler(httpd_req_t *req){
     int put_data_int = -1;
     
     char* channelname = substrings[2];
-    int* override_ptr;
+    int16_t* override_ptr;
     if (put) {
             
         int bytes = httpd_req_recv(req, httpd_temp_buffer, 255);
@@ -510,10 +508,10 @@ static esp_err_t rest_channel_override_handler(httpd_req_t *req){
     }
     if (put)
     {
-        *override_ptr = put_data_int;
+        *override_ptr = (int16_t) put_data_int;
         sprintf(httpd_temp_buffer, "OK");
         ESP_LOGI(TAG, "PUT: Set %s to %i", chname, put_data_int);
-        xTaskNotifyIndexed(ctx->mainloop_task, SETPOINT_SLEW_NOTIFY_INDEX, 0, eNoAction);
+        xTaskNotifyIndexed(ctx->mainloop_task, NEW_SETPOINT_NOTIFY_IDX, 0, eNoAction);
     }
     else
     {
@@ -832,7 +830,6 @@ static esp_err_t dali_commands_handler(httpd_req_t* req){
         .value = data,
         .notify_task = xTaskGetCurrentTaskHandle()
     };
-    bool error=false;
     if (strcmp(substrings[1], "set-power-on-level") == 0)
     {
         command.command = DALI_COMMAND_SET_POWER_ON_LEVEL;
@@ -842,6 +839,11 @@ static esp_err_t dali_commands_handler(httpd_req_t* req){
     {
         command.command = DALI_COMMAND_SET_FAILSAFE_LEVEL;
         ESP_LOGI(TAG, "Setting failsafe level for address %d to %d", command.address, command.value);
+    }
+    else if (strcmp(substrings[1], "set-fade-time") == 0)
+    {
+        command.command = DALI_COMMAND_SET_FADE_TIME;
+        ESP_LOGI(TAG, "Setting fade time for address %d to %d", command.address, command.value);
     }
     else if (strcmp(substrings[1], "commission") == 0)
     {
@@ -905,13 +907,13 @@ static const httpd_uri_t put_setpoint = {
     .user_ctx  = NULL
 };
 static const httpd_uri_t rest_get = {
-    .uri       = "/api/?*",
+    .uri       = "/nvs/?*",
     .method    = HTTP_GET,
-    .handler   = rest_get_handler,
+    .handler   = nvs_get_handler,
     .user_ctx  = NULL
 };
 static const httpd_uri_t log_get = {
-    .uri       = "/logterm",
+    .uri       = "/logterm?*",
     .method    = HTTP_GET,
     .handler   = logbuffer_handler,
     .user_ctx  = NULL
@@ -923,9 +925,9 @@ static const httpd_uri_t log_get_plaintext = {
     .user_ctx  = NULL
 };
 static const httpd_uri_t rest_put = {
-    .uri       = "/api/?*",
+    .uri       = "/nvs/?*",
     .method    = HTTP_PUT,
-    .handler   = rest_put_handler,
+    .handler   = nvs_put_handler,
     .user_ctx  = NULL
 };
 static const httpd_uri_t rest_put_channel_level = {

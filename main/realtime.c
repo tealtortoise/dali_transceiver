@@ -44,6 +44,7 @@ void rtc_task(void* params){
     int alarm_min;
     int alarm_hour;
     int alarm_fade;
+    uint8_t setpoint;
     int alarm_setpoint;
     int alarm_enable;
     TaskHandle_t mainloop_task = (TaskHandle_t) params;
@@ -79,7 +80,7 @@ void rtc_task(void* params){
                 .setpoint_source = SETPOINT_SOURCE_ALARM,
             };
             uint32_t setpoint_struct_as_int = *((uint32_t*) &setp);
-            xTaskNotifyIndexed(mainloop_task, SETPOINT_SLEW_NOTIFY_INDEX, setpoint_struct_as_int, eSetValueWithOverwrite);
+            xTaskNotifyIndexed(mainloop_task, NEW_SETPOINT_NOTIFY_IDX, setpoint_struct_as_int, eSetValueWithOverwrite);
         }
         last_minute = minute;
         last_hour = hour;
