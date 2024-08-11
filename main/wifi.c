@@ -3,6 +3,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/event_groups.h"
+#include "driver/gpio.h"
 #include "esp_system.h"
 #include "esp_wifi.h"
 #include "esp_event.h"
@@ -12,6 +13,7 @@
 #include "lwip/err.h"
 #include "lwip/sys.h"
 #include "base.h"
+#include "gpio_utils.h"
 
 #include "espnow.h"
 #include "wifi.h"
@@ -105,10 +107,12 @@ static void event_handler(void* arg, esp_event_base_t event_base,
         esp_wifi_connect();
     } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
         s_disconnect_count += 1;
+        gpio_set_level(LED2_GPIO, 0);
         xTaskNotify(wifi_reconnect_handle, s_disconnect_count, eSetValueWithOverwrite);
     } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
         ip_event_got_ip_t* event = (ip_event_got_ip_t*) event_data;
         ESP_LOGI(TAG, "got ip:" IPSTR, IP2STR(&event->ip_info.ip));
+        gpio_set_level(LED2_GPIO, 1);
         s_disconnect_count = 0;
         xEventGroupSetBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
     }

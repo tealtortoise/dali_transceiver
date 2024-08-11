@@ -270,6 +270,7 @@ esp_err_t dali_configure_and_verify(dali_transceiver_handle_t handle, uint8_t fi
     return ESP_OK;
 }
 
+
 esp_err_t dali_set_fade_time(dali_transceiver_handle_t handle, uint8_t short_address, uint8_t fade_time){
     
     ESP_LOGI(TAG, "Setting fade time on %d to %d", short_address, fade_time);
@@ -300,14 +301,9 @@ esp_err_t dali_set_fade_time(dali_transceiver_handle_t handle, uint8_t short_add
     return ESP_OK;
 }
 
-esp_err_t dali_set_power_on_level(dali_transceiver_handle_t handle, uint8_t short_address, uint8_t power_on_level){
-    ESP_LOGI(TAG, "Setting power on level on %d to %d", short_address, power_on_level);
-    if (dali_set_and_verify_dtr(handle, power_on_level, short_address)) {
-        return ESP_ERR_NOT_FINISHED;
-    };
-    if (dali_send_twice(handle, get_dali_command_address_byte(short_address), DALI_SECONDBYTE_STORE_DTR_AS_POWER_ON_LEVEL)) {
-        return ESP_ERR_NOT_FINISHED;
-    };
+esp_err_t dali_get_power_on_level(dali_transceiver_handle_t handle, uint8_t short_address, uint8_t *level)
+{
+    ESP_LOGI(TAG, "Getting power on level on %d", short_address);
     dali_frame_t frame = dali_transmit_frame_and_wait_for_backward_frame(handle, get_dali_command_address_byte(short_address), DALI_SECONDBYTE_QUERY_POWER_ON_LEVEL, pdMS_TO_TICKS(1000));
     if (frame.type == DALI_NO_FRAME_TYPE){
         ESP_LOGE(TAG, "No response to power on level query from control gear");
@@ -317,8 +313,23 @@ esp_err_t dali_set_power_on_level(dali_transceiver_handle_t handle, uint8_t shor
         ESP_LOGE(TAG, "Mangled response to power on level query from control gear");
         return ESP_ERR_INVALID_RESPONSE;
     }
-    if (frame.firstbyte  != power_on_level) {
-        ESP_LOGE(TAG, "Query did not give expected response %d != %d", frame.firstbyte, power_on_level);
+    *level = frame.firstbyte;
+    return ESP_OK;
+}
+
+esp_err_t dali_set_power_on_level(dali_transceiver_handle_t handle, uint8_t short_address, uint8_t power_on_level){
+    ESP_LOGI(TAG, "Setting power on level on %d to %d", short_address, power_on_level);
+    if (dali_set_and_verify_dtr(handle, power_on_level, short_address)) {
+        return ESP_ERR_NOT_FINISHED;
+    };
+    if (dali_send_twice(handle, get_dali_command_address_byte(short_address), DALI_SECONDBYTE_STORE_DTR_AS_POWER_ON_LEVEL)) {
+        return ESP_ERR_NOT_FINISHED;
+    };
+    uint8_t recvlvl;
+    esp_err_t resp = dali_get_power_on_level(handle, short_address, &recvlvl);
+    if (resp != ESP_OK) return resp;
+    if (recvlvl  != power_on_level) {
+        ESP_LOGE(TAG, "Query did not give expected response %d != %d", recvlvl, power_on_level);
         return ESP_ERR_INVALID_RESPONSE;
     }
     ESP_LOGI(TAG, "Success - power on level on %d now %d", short_address, power_on_level);

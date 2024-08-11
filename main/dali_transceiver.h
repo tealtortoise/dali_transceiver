@@ -64,6 +64,8 @@ esp_err_t dali_set_and_verify_dtr(dali_transceiver_handle_t handle, uint8_t broa
 
 esp_err_t dali_set_fade_time(dali_transceiver_handle_t handle, uint8_t short_address, uint8_t fade_time);
 
+esp_err_t dali_get_power_on_level(dali_transceiver_handle_t handle, uint8_t short_address, uint8_t *level);
+
 esp_err_t dali_set_power_on_level(dali_transceiver_handle_t handle, uint8_t short_address, uint8_t power_on_level);
 
 esp_err_t dali_set_system_failure_level(dali_transceiver_handle_t handle, uint8_t short_address, uint8_t system_failure_level);

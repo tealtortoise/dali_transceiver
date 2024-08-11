@@ -191,6 +191,8 @@ void dali_command_monitor_task(void* params){
     BaseType_t received;
     dali_command_t command;
     esp_err_t err;
+    uint8_t retr_8;
+    dali_command_return_t retr;
     while (1)
     {
         if (xQueueReceive(transceiver->dali_command_queue, &command, portMAX_DELAY))
@@ -206,28 +208,63 @@ void dali_command_monitor_task(void* params){
                 err = dali_assign_short_addresses(transceiver, command.value, (command.command == DALI_COMMAND_COMMISSION));
                 vTaskResume(transceiver->mainloop_task);
                 if (err) ESP_LOGE(TAG, "Commissioning returned error %i", err);
-                xTaskNotifyIndexed(command.notify_task, DALI_COMMAND_RETURN_INDEX, err, eSetValueWithOverwrite);
+                
+                retr.err = err;
+                retr.value = 0;
+                xTaskNotifyIndexed(command.notify_task,
+                    DALI_COMMAND_RETURN_INDEX,
+                    *((uint32_t *) &retr),
+                    eSetValueWithOverwrite);
                 break;
             case DALI_COMMAND_SET_POWER_ON_LEVEL:
                 ESP_LOGI(TAG, "Received SET_POWER_ON_LEVEL command...");
                 err = dali_set_power_on_level(transceiver, command.address, command.value);
-                xTaskNotifyIndexed(command.notify_task, DALI_COMMAND_RETURN_INDEX, err, eSetValueWithOverwrite);
-                
+                retr.err = err;
+                retr.value = 0;
+                xTaskNotifyIndexed(command.notify_task,
+                    DALI_COMMAND_RETURN_INDEX,
+                    *((uint32_t *) &retr),
+                    eSetValueWithOverwrite);
+                break;
+            case DALI_COMMAND_GET_POWER_ON_LEVEL:
+                ESP_LOGI(TAG, "Received GET_POWER_ON_LEVEL command...");
+                err = dali_get_power_on_level(transceiver, command.address, &retr_8);
+                retr.err = err;
+                retr.value = retr_8;
+                xTaskNotifyIndexed(command.notify_task,
+                    DALI_COMMAND_RETURN_INDEX,
+                    *((uint32_t *) &retr),
+                    eSetValueWithOverwrite);
                 break;
             case DALI_COMMAND_SET_FAILSAFE_LEVEL:
                 ESP_LOGI(TAG, "Received SET_FAILSAFE_LEVEL command...");
                 err = dali_set_system_failure_level(transceiver, command.address, command.value);
-                xTaskNotifyIndexed(command.notify_task, DALI_COMMAND_RETURN_INDEX, err, eSetValueWithOverwrite);
-                
+                retr.err = err;
+                retr.value = 0;
+                xTaskNotifyIndexed(command.notify_task,
+                    DALI_COMMAND_RETURN_INDEX,
+                    *((uint32_t *) &retr),
+                    eSetValueWithOverwrite);
                 break;
             case DALI_COMMAND_SET_FADE_TIME:
                 ESP_LOGI(TAG, "Received SET_FADE_TIME command...");
                 err = dali_set_fade_time(transceiver, command.address, command.value);
-                xTaskNotifyIndexed(command.notify_task, DALI_COMMAND_RETURN_INDEX, err, eSetValueWithOverwrite);
+                
+                retr.err = err;
+                retr.value = 0;
+                xTaskNotifyIndexed(command.notify_task,
+                    DALI_COMMAND_RETURN_INDEX,
+                    *((uint32_t *) &retr),
+                    eSetValueWithOverwrite);
                 break;
             default:
                 ESP_LOGE(TAG, "Unknown command %i", command.command);
-                xTaskNotifyIndexed(command.notify_task, DALI_COMMAND_RETURN_INDEX, ESP_ERR_INVALID_ARG, eSetValueWithOverwrite);
+                retr.err = 0xFF;
+                retr.value = 0;
+                xTaskNotifyIndexed(command.notify_task,
+                    DALI_COMMAND_RETURN_INDEX,
+                    *((uint32_t *) &retr),
+                    eSetValueWithOverwrite);
                 break;
             }
             

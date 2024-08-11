@@ -771,8 +771,8 @@ static esp_err_t logbuffer_plaintext_handler(httpd_req_t *req){
 }
 
 static esp_err_t deal_with_command_response(httpd_req_t* req){
-    uint32_t response;
-    BaseType_t received = xTaskNotifyWaitIndexed(DALI_COMMAND_RETURN_INDEX, 0, 0, &response, pdMS_TO_TICKS(10000));
+    dali_command_return_t retr;
+    BaseType_t received = xTaskNotifyWaitIndexed(DALI_COMMAND_RETURN_INDEX, 0, 0, (uint32_t*) &retr, pdMS_TO_TICKS(30000));
 
     if (received != pdTRUE)
     {
@@ -780,13 +780,14 @@ static esp_err_t deal_with_command_response(httpd_req_t* req){
         httpd_resp_send(req, "Timed out", HTTPD_RESP_USE_STRLEN);
         return ESP_ERR_NOT_FINISHED;
     }
-    if (response)
+    if (retr.err)
     {
-        sprintf(httpd_temp_buffer, "Error during command (%lu)", response);
+        sprintf(httpd_temp_buffer, "Error during command (%u)", retr.err);
         httpd_resp_send(req, httpd_temp_buffer, HTTPD_RESP_USE_STRLEN);
         return ESP_FAIL;
     }
-    httpd_resp_send(req, "OK", HTTPD_RESP_USE_STRLEN);
+    sprintf(httpd_temp_buffer, "%i", retr.value);
+    httpd_resp_send(req, httpd_temp_buffer, HTTPD_RESP_USE_STRLEN);
     return ESP_OK;
 }
 
@@ -811,36 +812,55 @@ static esp_err_t dali_commands_handler(httpd_req_t* req){
     networking_ctx_t *ctx = httpd_get_global_user_ctx(req->handle);
     parse_uri(req->uri);
     bool post = req->method == HTTP_POST;
+    bool get = req->method == HTTP_GET;
     int data = -1;
-    
-    char* address = substring_ints[2];
-    int* override_ptr;
+
+    int address = substring_ints[2];
     if (post) {
-            
         int bytes = httpd_req_recv(req, httpd_temp_buffer, 255);
         httpd_temp_buffer[bytes] = 0;
         int datarecv = sscanf(httpd_temp_buffer, "%i", &data);
         ESP_LOGI(TAG, "===== Received POST at %s (%s)", req->uri, httpd_temp_buffer);
         ESP_LOGD(TAG, "Received %s (%i) %i", httpd_temp_buffer, data, datarecv);
     }
+    if (get)
+    {
+        ESP_LOGI(TAG, "===== Received GET at %s, address %i", req->uri, address);
+    }
     uint8_t cmd = 255;
     dali_command_t command = {
         .command = cmd,
         .address = address,
-        .value = data,
+        .value = post ? data : 0,
         .notify_task = xTaskGetCurrentTaskHandle()
     };
-    if (strcmp(substrings[1], "set-power-on-level") == 0)
+    bool not_allowed = false;
+    if (strcmp(substrings[1], "power-on-level") == 0)
     {
-        command.command = DALI_COMMAND_SET_POWER_ON_LEVEL;
-        ESP_LOGI(TAG, "Setting power on level for address %d to %d", command.address, command.value);
+        if (post) 
+        {
+            command.command = DALI_COMMAND_SET_POWER_ON_LEVEL;
+            ESP_LOGI(TAG, "Setting power on level for address %d to %d", command.address, command.value);
+        }
+        else
+        { 
+            command.command = DALI_COMMAND_GET_POWER_ON_LEVEL;
+            ESP_LOGI(TAG, "Getting power on level for address %d", command.address);
+        }
     }
-    else if (strcmp(substrings[1], "set-failsafe-level") == 0)
+    else if (strcmp(substrings[1], "failsafe-level") == 0)
     {
-        command.command = DALI_COMMAND_SET_FAILSAFE_LEVEL;
-        ESP_LOGI(TAG, "Setting failsafe level for address %d to %d", command.address, command.value);
+        if (get)
+        {
+            not_allowed = true;
+        }
+        else
+        {
+            command.command = DALI_COMMAND_SET_FAILSAFE_LEVEL;
+            ESP_LOGI(TAG, "Setting failsafe level for address %d to %d", command.address, command.value);
+        }
     }
-    else if (strcmp(substrings[1], "set-fade-time") == 0)
+    else if (strcmp(substrings[1], "fade-time") == 0)
     {
         command.command = DALI_COMMAND_SET_FADE_TIME;
         ESP_LOGI(TAG, "Setting fade time for address %d to %d", command.address, command.value);
@@ -858,6 +878,12 @@ static esp_err_t dali_commands_handler(httpd_req_t* req){
     else
     {
         httpd_resp_send_404(req);
+        return ESP_FAIL;
+    }
+    if (not_allowed)
+    {
+        httpd_resp_set_status(req, "405 Method Not Allowed");
+        httpd_resp_send(req, "Does not support GET", HTTPD_RESP_USE_STRLEN);
         return ESP_FAIL;
     }
     if (ctx->dali_command_queue != NULL) 
@@ -954,9 +980,15 @@ static const httpd_uri_t restart_endpoint = {
     .handler   = restart,
     .user_ctx  = NULL
 };
-static const httpd_uri_t dali_command_endpoint = {
+static const httpd_uri_t dali_command_post_endpoint = {
     .uri       = "/dali/*?",
     .method    = HTTP_POST,
+    .handler   = dali_commands_handler,
+    .user_ctx  = NULL
+};
+static const httpd_uri_t dali_command_get_endpoint = {
+    .uri       = "/dali/*?",
+    .method    = HTTP_GET,
     .handler   = dali_commands_handler,
     .user_ctx  = NULL
 };
@@ -1003,7 +1035,8 @@ static httpd_handle_t start_webserver(networking_ctx_t *ctx)
         httpd_register_uri_handler(server, &put_setpoint);
         httpd_register_uri_handler(server, &post_ota);
         httpd_register_uri_handler(server, &view_luts_endpoint);
-        httpd_register_uri_handler(server, &dali_command_endpoint);
+        httpd_register_uri_handler(server, &dali_command_post_endpoint);
+        httpd_register_uri_handler(server, &dali_command_get_endpoint);
         httpd_register_uri_handler(server, &restart_endpoint);
         httpd_register_uri_handler(server, &rest_put_channel_level);
         httpd_register_uri_handler(server, &rest_get_channel_level);

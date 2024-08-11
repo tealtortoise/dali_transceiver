@@ -48,7 +48,7 @@
 #define LOOPTIME_TOLERANCE 10000
 #define LOOPTIMES_OUT_OF_TOLERANCE_NEEDED 2
 
-#define IDLE_UPDATE_INTERVAL_US (1 * 1000000)
+#define IDLE_UPDATE_INTERVAL_US (5 * 1000000)
 #define IDLE_UPDATE_INTERVAL_US_RECV_ESPNOW (IDLE_UPDATE_INTERVAL_US + 500000)
 
 #define HASH_LEN 32 /* SHA-256 digest length */
@@ -148,7 +148,7 @@ uint8_t transmit_setlevel_dali_channel(dali_transceiver_handle_t transceiver, in
         already_off[channel_num] = 1;
         return 0;
     }
-    if (level == existing_dali_levels[channel_num])
+    if (!force_send && level == existing_dali_levels[channel_num])
     {
         // value isn't new
         return level;
@@ -289,7 +289,6 @@ static RTC_NOINIT_ATTR setpoint_notify_t received_setpoint;
 void app_main(void)
 {
     configure_gpio();
-    gpio_set_level(LED1_GPIO, 1);
     initialise_logbuffer();
     printf_mutex = xSemaphoreCreateMutex();
     esp_log_set_vprintf(buffer_vprint);
@@ -318,9 +317,14 @@ void app_main(void)
     
     esp_reset_reason_t reason = esp_reset_reason();
     if ((reason != ESP_RST_DEEPSLEEP) && (reason != ESP_RST_SW)) {
+        ESP_LOGI(TAG, "Fresh start up detected, loading startup level %i from NVS", startup_setpoint_lvl);
         received_setpoint.setpoint = startup_setpoint_lvl;
         received_setpoint.fadetime_256ms = USE_DEFAULT_FADETIME;
         received_setpoint.setpoint_source = SETPOINT_SOURCE_INIT;
+    }
+    else
+    {
+        ESP_LOGI(TAG, "Software restart detected - keeping previous setpoint %d", received_setpoint.setpoint);
     }
 
     uint32_t setpoint_struct_as_int = *((uint32_t*) &received_setpoint);
@@ -334,7 +338,6 @@ void app_main(void)
     TaskHandle_t networktask;
     xTaskCreate(setup_networking, "setup_networking", 4096, (void *)&networking_ctx, 2, &networktask);
     
-    gpio_set_level(LED2_GPIO, 1);
     zeroten_handle_t pwm1;
     zeroten_handle_t pwm2;
     // ESP_ERROR_CHECK(setup_0_10v_channel(LED1_GPIO, CALIBRATION_PWM_LOG, &pwm1));
@@ -390,14 +393,14 @@ void app_main(void)
     int fade_remaining = 0;
 
     bool at_setpoint;
-    uint16_t actual_level = startup_setpoint_lvl;
+    uint16_t actual_level = received_setpoint.setpoint;
     level_t level_el;
     int dali_broadcast;
     level_t future_el;
     uint64_t current_time;
     uint64_t actual_looptime;
     int random_looptime = 1;
-    uint8_t local_setpoint = startup_setpoint_lvl;
+    uint8_t local_setpoint = received_setpoint.setpoint;
 
     ESP_LOGI(TAG, "Getting DALI addresses");
     get_dali_addresses();
@@ -415,7 +418,7 @@ void app_main(void)
     int levellog_count = 0;
     bool force_resend = false;
     setpoint_notify_t old_setpoint = {
-        .setpoint = startup_setpoint_lvl,
+        .setpoint = received_setpoint.setpoint,
         .fadetime_256ms = USE_DEFAULT_FADETIME,
         .setpoint_source = SETPOINT_SOURCE_INIT
     };
@@ -471,6 +474,8 @@ void app_main(void)
                 {
                     received_setpoint.setpoint = clamp(received_setpoint.setpoint, 0, 254);
                 }
+                
+                gpio_set_level(LED1_GPIO, 1);
                 start_of_fade_level = actual_level;
                 full_power = clamp(get_setting("full_power"), 0, 512);
                 new_setpoint = true;
@@ -536,6 +541,7 @@ void app_main(void)
         else
         {
             // we're at setpoint
+            gpio_set_level(LED1_GPIO, 0);
             // reawake_time = reftime + IDLE_UPDATE_INTERVAL_US;
             force_resend = true;
             configbits = get_setting("configbits");

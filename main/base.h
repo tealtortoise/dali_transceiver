@@ -80,6 +80,7 @@ extern volatile level_t levellut[255];
 #define DALI_COMMAND_FIND_NEW_DEVICES 4
 #define DALI_COMMAND_SET_FAILSAFE_LEVEL 2
 #define DALI_COMMAND_SET_POWER_ON_LEVEL 3
+#define DALI_COMMAND_GET_POWER_ON_LEVEL 0x43
 #define DALI_COMMAND_SET_FADE_TIME 5
 
 typedef struct {
