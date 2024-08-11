@@ -117,14 +117,14 @@ void adc_task(void *params) {
 
                 // get current light level
                 // ESP_LOGI(TAG, "Current setpoint seems to be %i, last sent %i", setpoint, last_sent_setpoint);
-                if (last_sent_setpoint == config->current_setpoint->setpoint || config->current_setpoint->setpoint  == -1){
+                if (last_sent_setpoint == config->status->setpoint || config->status->setpoint  == -1){
                     // last update was probably from ADC so can just update light level
                     update = true;
                 }
                 else
                 {
                     // updated elsewhere, wait for sweep past current value
-                    sign = potential_new_setpoint > config->current_setpoint->setpoint ;
+                    sign = potential_new_setpoint > config->status->setpoint ;
                     // ESP_LOGI(TAG, "ADC value not consistent with current light level (S %i %i)", sign, last_sign);
                     if ((last_sign + sign) == 1){
                         // we've switched signs so likely passed the current level so we can update safely
@@ -136,17 +136,14 @@ void adc_task(void *params) {
                         last_sign = sign;
                     }
                 }
-                if (update && potential_new_setpoint != config->current_setpoint->setpoint && average_voltage < VOLTAGE_CAP) {
+                if (update && potential_new_setpoint != config->status->setpoint && average_voltage < VOLTAGE_CAP) {
 
                     // ESP_LOGI(TAG,"UPDATED ! voltage %i , samples_different %i, difference %i, acc %i, setpoint %i", cal_voltage, samples_different, difference, accumulator, setpoint);
                     
-                    setpoint_notify_t setp = {
-                        .fadetime_256ms = USE_DEFAULT_FADETIME,
-                        .setpoint = potential_new_setpoint,
-                        .setpoint_source = SETPOINT_SOURCE_ADC,
-                    };
-                    uint32_t setpoint_struct_as_int = *((uint32_t*) &setp);
-                    xTaskNotifyIndexed(config->notify_task, NEW_SETPOINT_NOTIFY_IDX, setpoint_struct_as_int, eSetValueWithOverwrite);
+                    config->status->fadetime_ms = USE_DEFAULT_FADETIME;
+                    config->status->setpoint = potential_new_setpoint;
+                    config->status->setpoint_source = SETPOINT_SOURCE_ADC;
+                    xTaskNotifyIndexed(config->notify_task, NEW_SETPOINT_NOTIFY_IDX, SETPOINT_SOURCE_ADC, eSetValueWithOverwrite);
                     last_sent_setpoint = potential_new_setpoint;
                     last_sign = SIGN_UNDEFINED;
                 }

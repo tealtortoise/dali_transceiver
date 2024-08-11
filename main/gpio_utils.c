@@ -151,7 +151,6 @@ void configure_output_pin(uint8_t pin, uint8_t state){
     ESP_ERROR_CHECK(gpio_set_drive_capability(pin, GPIO_DRIVE_CAP_0));
     gpio_set_level(pin, state);
 }
-
 void configure_input_pin(uint8_t pin, uint8_t wpu, uint8_t intr){
     input_config.pin_bit_mask = 1 << pin;
     input_config.pull_up_en = wpu;

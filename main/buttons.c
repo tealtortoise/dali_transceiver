@@ -24,6 +24,7 @@ typedef struct {
     zeroten_handle_t pwm1;
     zeroten_handle_t pwm2;
     TaskHandle_t mainloop_task;
+    device_status_t* status;
 } button_task_ctx_t;
 
 #define REPEAT_DELAY_MS 200
@@ -182,13 +183,10 @@ void button_monitor_task(void *params){
             }
             if (updated) {
                 
-                setpoint_notify_t setp = {
-                    .fadetime_256ms = USE_DEFAULT_FADETIME,
-                    .setpoint = (uint8_t) setpoint_change,
-                    .setpoint_source = SETPOINT_SOURCE_BUTTONS,
-                };
-                uint32_t setpoint_struct_as_int = *((uint32_t*) &setp);
-                xTaskNotifyIndexed(ctx->mainloop_task, NEW_SETPOINT_NOTIFY_IDX, setpoint_struct_as_int, eSetValueWithOverwrite);
+                ctx->status->setpoint = clamp(ctx->status->setpoint + setpoint_change, 0, 254);
+                ctx->status->setpoint_source = SETPOINT_SOURCE_BUTTONS;
+                ctx->status->fadetime_ms = USE_DEFAULT_FADETIME;
+                xTaskNotifyIndexed(ctx->status->mainloop_task, NEW_SETPOINT_NOTIFY_IDX, SETPOINT_SOURCE_BUTTONS, eSetValueWithOverwrite);
                 updated = false;
             }
             but1_counter = but1_value ? but1_counter + 1 : 0;
@@ -201,21 +199,22 @@ void button_monitor_task(void *params){
     }
 }
 
-void setup_button_interrupts(TaskHandle_t mainlooptask, zeroten_handle_t pwm1, zeroten_handle_t pwm2){
+void setup_button_interrupts(device_status_t* status, zeroten_handle_t pwm1, zeroten_handle_t pwm2){
     uint8_t buttons[] = {BUT1_GPIO, BUT2_GPIO, BUT3_GPIO};
     for (int i =0; i <= 2; i++){
         gpio_set_intr_type(buttons[i], GPIO_INTR_NEGEDGE);
     }
 
     button_task_ctx_t *task_ctx = malloc(sizeof(button_task_ctx_t));
-    task_ctx->mainloop_task = mainlooptask;
+    task_ctx->mainloop_task = status->mainloop_task;
+    task_ctx->status = status;
     task_ctx->pwm1 = pwm1;
     task_ctx->pwm2 = pwm2;
 
     xTaskCreate(button_monitor_task, "button-monitor-task", 3048, (void*) task_ctx, 7, &button_task_handle);
 
-    ESP_ERROR_CHECK(gpio_isr_handler_add(BUT1_GPIO, button1_isr, (void*) mainlooptask));
-    ESP_ERROR_CHECK(gpio_isr_handler_add(BUT2_GPIO, button2_isr, (void*) mainlooptask));
-    ESP_ERROR_CHECK(gpio_isr_handler_add(BUT3_GPIO, button3_isr, (void*) mainlooptask));
+    ESP_ERROR_CHECK(gpio_isr_handler_add(BUT1_GPIO, button1_isr, (void*) status));
+    ESP_ERROR_CHECK(gpio_isr_handler_add(BUT2_GPIO, button2_isr, (void*) status));
+    ESP_ERROR_CHECK(gpio_isr_handler_add(BUT3_GPIO, button3_isr, (void*) status));
 
 };

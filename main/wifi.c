@@ -195,7 +195,7 @@ void setup_wifi(networking_ctx_t *ctx)
     wifi_init_sta();
     // esp_wifi_set_ps(WIFI_PS_NONE);
     // TaskHandle_t espnow_send_task;
-    ESP_ERROR_CHECK(setup_espnow_common(&espnowtask, ctx->mainloop_task));
+    ESP_ERROR_CHECK(setup_espnow_common(&espnowtask, ctx->status));
     setup_espnow_receiver();
 
 }

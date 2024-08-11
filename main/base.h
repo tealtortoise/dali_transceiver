@@ -19,8 +19,8 @@
 #define SUSPEND_MAIN_LOOP_LEVEL 0xFFFF
 #define RESUME_MAIN_LOOP_LEVEL 0xFFF0
 
-#define USE_DEFAULT_FADETIME 0xFFFF
-#define USE_SLOW_FADETIME 0xFFFD
+#define USE_DEFAULT_FADETIME 0xFFFFFFFF
+#define USE_SLOW_FADETIME 0xFFFFFFFE
 
 #define SETPOINT_SOURCE_REST 0
 #define SETPOINT_SOURCE_ADC 1
@@ -61,7 +61,7 @@ typedef struct {
 } level_t;
 
 typedef struct {
-    uint16_t fadetime_256ms;
+    uint8_t fadetime_float; // Fadetime == ((x & 0xF) * (1 << ((x >> 4) & 0xF)) ) ms
     uint8_t setpoint_source;
     uint8_t setpoint;
 } setpoint_notify_t;
@@ -72,6 +72,17 @@ typedef struct {
     int16_t zeroten2;
     int16_t espnow;
 } level_overrides_t;
+
+typedef struct {
+    uint8_t setpoint;
+    uint8_t setpoint_source;
+    uint8_t power;
+    uint8_t actual_level;
+    uint32_t fadetime_ms;
+    TaskHandle_t mainloop_task;
+    level_overrides_t level_overrides;
+    level_t channel_levels;
+} device_status_t;
 
 extern volatile level_t levellut[255];
 
@@ -149,7 +160,7 @@ typedef struct {
     TaskHandle_t mainloop_task;
     level_overrides_t *level_overrides;
     QueueHandle_t dali_command_queue;
-    setpoint_notify_t *setpoint_struct;
+    device_status_t *status;
 } networking_ctx_t;
 
 void build_nvs_key_for_gpio_gain(int gpio, char* keybuf);

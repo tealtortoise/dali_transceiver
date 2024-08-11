@@ -293,7 +293,7 @@ static esp_err_t current_setpoint_handler(httpd_req_t *req){
     parse_uri(req->uri);
     if (req->method == HTTP_GET) {
         networking_ctx_t *ctx = httpd_get_global_user_ctx(req->handle);
-        sprintf(httpd_temp_buffer, "%i", ctx->setpoint_struct->setpoint);
+        sprintf(httpd_temp_buffer, "%i", ctx->status->setpoint);
     }
     else if (req->method == HTTP_PUT){
         int bytes = httpd_req_recv(req, httpd_temp_buffer, 255);
@@ -302,7 +302,7 @@ static esp_err_t current_setpoint_handler(httpd_req_t *req){
         int datarecv = sscanf(httpd_temp_buffer, "%i", &data);
         ESP_LOGI(TAG, "===== Setpoint handler: received PUT at %s (%s)", req->uri, httpd_temp_buffer);
         ESP_LOGD(TAG, "Received %s (%i) %i", httpd_temp_buffer, data, datarecv);
-        if (data >= 0 && data <= 254){
+        if (data >= 0 && data <= 255){
             int fade;
             if (substring_count == 2 && (strcmp(substrings[1], "slow") == 0))
             {
@@ -313,13 +313,11 @@ static esp_err_t current_setpoint_handler(httpd_req_t *req){
                 fade = USE_DEFAULT_FADETIME;
             }
             networking_ctx_t *ctx = httpd_get_global_user_ctx(req->handle);
-            setpoint_notify_t setp = {
-                .fadetime_256ms = fade,
-                .setpoint = data,
-                .setpoint_source = SETPOINT_SOURCE_REST,
-            };
-            uint32_t setpoint_struct_as_int = *((uint32_t*) &setp);
-            xTaskNotifyIndexed(ctx->mainloop_task, NEW_SETPOINT_NOTIFY_IDX, setpoint_struct_as_int, eSetValueWithOverwrite);
+            ctx->status->fadetime_ms = fade;
+            ctx->status->setpoint = data;
+            ctx->status->setpoint_source = SETPOINT_SOURCE_REST;
+            // uint32_t setpoint_struct_as_int = *((uint32_t*) &setp);
+            xTaskNotifyIndexed(ctx->mainloop_task, NEW_SETPOINT_NOTIFY_IDX, SETPOINT_SOURCE_REST, eSetValueWithOverwrite);
             ESP_LOGI(TAG, "Set new setpoint %i", data);
             sprintf(httpd_temp_buffer, "OK");
         }
@@ -328,7 +326,7 @@ static esp_err_t current_setpoint_handler(httpd_req_t *req){
             ESP_LOGW(TAG, "=== Bad setpoint %i", data);
             httpd_resp_set_status(req, HTTPD_400);
             ESP_LOGI(TAG, "Received %s (%i) %i", httpd_temp_buffer, data, datarecv);
-            sprintf(httpd_temp_buffer, "Setpoint must be 0 <= sp <= 254");
+            sprintf(httpd_temp_buffer, "Setpoint must be 0 <= sp <= 254 (or 255 for power off)");
         }
     }
     httpd_resp_send(req, httpd_temp_buffer, HTTPD_RESP_USE_STRLEN);

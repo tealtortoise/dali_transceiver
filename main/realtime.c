@@ -12,6 +12,7 @@ static const char* TAG = "SNTP";
 static int alarm_minute = 41;
 
 void rtc_task(void* params){
+    device_status_t *status = (device_status_t*) params;
     esp_sntp_config_t config = ESP_NETIF_SNTP_DEFAULT_CONFIG("pool.ntp.org");
     ESP_ERROR_CHECK(esp_netif_sntp_init(&config));
     ESP_LOGI(TAG, "Started SNTP");
@@ -73,14 +74,11 @@ void rtc_task(void* params){
             alarm_setpoint = get_setting_indexed("alarmsetpoint", i);
             setpoint = alarm_setpoint;
             alarm_fade = get_setting_indexed("alarmfade", i);
-            
-            setpoint_notify_t setp = {
-                .fadetime_256ms = clamp(alarm_fade >> 8, 0, 0xFFFF - 5),
-                .setpoint = setpoint,
-                .setpoint_source = SETPOINT_SOURCE_ALARM,
-            };
-            uint32_t setpoint_struct_as_int = *((uint32_t*) &setp);
-            xTaskNotifyIndexed(mainloop_task, NEW_SETPOINT_NOTIFY_IDX, setpoint_struct_as_int, eSetValueWithOverwrite);
+
+            status->fadetime_ms = clamp(alarm_fade, 0, 0xFFFFFFFF - 5);
+            status->setpoint = setpoint;
+            status->setpoint_source = SETPOINT_SOURCE_ALARM;
+            xTaskNotifyIndexed(status->mainloop_task, NEW_SETPOINT_NOTIFY_IDX, SETPOINT_SOURCE_ALARM, eSetValueWithOverwrite);
         }
         last_minute = minute;
         last_hour = hour;
@@ -88,7 +86,7 @@ void rtc_task(void* params){
 }
 
 
-void setup_sntp(TaskHandle_t mainlooptask){
+void setup_sntp(device_status_t *status){
     // time_t rawtime;
     // struct tm * timeinfo;
 
@@ -96,6 +94,6 @@ void setup_sntp(TaskHandle_t mainlooptask){
     // timeinfo = localtime ( &rawtime );
     // printf ( "Current local time and date: %s", asctime (timeinfo) );
     TaskHandle_t rtc_handle;
-    xTaskCreate(rtc_task, "rtc_task", 4096, (void*) mainlooptask, 1, &rtc_handle);
+    xTaskCreate(rtc_task, "rtc_task", 4096, (void*) status, 1, &rtc_handle);
     // vTaskDelay(pdMS_TO_TICKS(10000));
 }

@@ -26,6 +26,7 @@
 #include "esp_mac.h"
 #include "esp_now.h"
 #include "esp_crc.h"
+#include "base.h"
 
 #define CONFIG_ESPNOW_WIFI_MODE_STATION true
 #define CONFIG_ESPNOW_WIFI_MODE_STATION_SOFTAP false
@@ -107,12 +108,13 @@ typedef struct {
     uint8_t *buffer;                      //Buffer pointing to ESPNOW data.
     uint8_t dest_mac[ESP_NOW_ETH_ALEN];   //MAC address of destination device.
     TaskHandle_t mainloop_task;
+    device_status_t *status;
 } espnow_ctx_t;
 
 void espnow_wifi_init(void);
 
 
-esp_err_t setup_espnow_common(TaskHandle_t *sending_minitask_handle, TaskHandle_t mainloop_task);
+esp_err_t setup_espnow_common(TaskHandle_t *sending_minitask_handle, device_status_t* status);
 
 void setup_espnow_receiver();
 

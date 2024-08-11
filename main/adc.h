@@ -12,7 +12,7 @@ typedef struct {
     int tolerance;
     int sampled_needed;
     int average_window;
-    setpoint_notify_t *current_setpoint;
+    device_status_t *status;
 } light_adc_config_t;
 
 void setup_adc(light_adc_config_t config);

@@ -21,8 +21,8 @@
 #define DIP2_GPIO 19
 #define DIP3_GPIO 5
 #define DIP4_GPIO 3
-#define LED1_GPIO 21
-#define LED2_GPIO 22
+#define LED1_GPIO 22
+#define LED2_GPIO 21
 #define AIN_GPIO 6
 #define BUT3_GPIO 15
 #define BUT2_GPIO 23
@@ -30,6 +30,7 @@
 #define EXT1_GPIO 7
 #define RELAY1_GPIO 0
 #define RELAY2_GPIO 1
+#define RGB_LED_GPIO 8
 #endif // config target
 
 #define PRESSED_MESSAGE "Pressed"

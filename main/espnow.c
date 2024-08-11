@@ -229,14 +229,10 @@ static void espnow_receive_queue_task(void *pvParameter)
                 if (configbit_recv)
                 {
                     ESP_LOGD(TAG, "Level data received %d, type is %i", rxlevel, ret);
-                    
-                    setpoint_notify_t setp = {
-                        .fadetime_256ms = USE_DEFAULT_FADETIME,
-                        .setpoint = rxlevel,
-                        .setpoint_source = SETPOINT_SOURCE_ESPNOW,
-                    };
-                    uint32_t setpoint_struct_as_int = *((uint32_t*) &setp);
-                    xTaskNotifyIndexed(espnow_ctx->mainloop_task, NEW_SETPOINT_NOTIFY_IDX, setpoint_struct_as_int, eSetValueWithOverwrite);
+                    espnow_ctx->status->setpoint = rxlevel;
+                    espnow_ctx->status->setpoint_source = SETPOINT_SOURCE_ESPNOW;
+                    espnow_ctx->status->fadetime_ms = USE_DEFAULT_FADETIME;
+                    xTaskNotifyIndexed(espnow_ctx->status->mainloop_task, NEW_SETPOINT_NOTIFY_IDX, SETPOINT_SOURCE_ESPNOW, eSetValueWithOverwrite);
                 }
                 free(recv_cb->data);
                 if (ret == EXAMPLE_ESPNOW_DATA_BROADCAST) {
@@ -337,7 +333,7 @@ void espnow_send_task(void *pvParameter){
     }
 }
 
-esp_err_t setup_espnow_common(TaskHandle_t *sending_minitask_handle, TaskHandle_t mainloop_task)
+esp_err_t setup_espnow_common(TaskHandle_t *sending_minitask_handle, device_status_t *status)
 {
     
     s_example_espnow_queue = xQueueCreate(ESPNOW_QUEUE_SIZE, sizeof(example_espnow_event_t));
@@ -388,7 +384,8 @@ esp_err_t setup_espnow_common(TaskHandle_t *sending_minitask_handle, TaskHandle_
     espnow_ctx->delay = CONFIG_ESPNOW_SEND_DELAY;
     espnow_ctx->len = sizeof(example_espnow_data_t);
     espnow_ctx->buffer = malloc(CONFIG_ESPNOW_SEND_LEN);
-    espnow_ctx->mainloop_task = mainloop_task;
+    espnow_ctx->mainloop_task = status->mainloop_task;
+    espnow_ctx->status = status;
     if (espnow_ctx->buffer == NULL) {
         ESP_LOGE(TAG, "Malloc send buffer fail");
         free(espnow_ctx);

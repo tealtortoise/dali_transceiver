@@ -4,7 +4,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
-void setup_sntp(TaskHandle_t mainlooptask);
+void setup_sntp(device_status_t* status);
 
 #endif // REALTIME_H
 #pragma once
