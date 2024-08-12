@@ -190,10 +190,8 @@ void setup_wifi(networking_ctx_t *ctx)
 {
     
     ESP_ERROR_CHECK(esp_netif_init());
-
-    ESP_LOGI(TAG, "ESP_WIFI_MODE_STA");
     wifi_init_sta();
-    // esp_wifi_set_ps(WIFI_PS_NONE);
+    esp_wifi_set_ps(WIFI_PS_MIN_MODEM);
     // TaskHandle_t espnow_send_task;
     ESP_ERROR_CHECK(setup_espnow_common(&espnowtask, ctx->status));
     setup_espnow_receiver();

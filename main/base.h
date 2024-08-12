@@ -26,7 +26,7 @@
 #define SETPOINT_SOURCE_ADC 1
 #define SETPOINT_SOURCE_ESPNOW 2
 #define SETPOINT_SOURCE_ALARM 4
-#define SETPOINT_SOURCE_BUTTONS 0x80 + 3
+#define SETPOINT_SOURCE_BUTTONS 3
 #define SETPOINT_SOURCE_RANDOM 5
 #define SETPOINT_SOURCE_INIT 6
 
@@ -58,6 +58,9 @@ typedef struct {
     uint8_t espnow_lvl;
     uint8_t relay1;
     uint8_t relay2;
+    uint8_t r;
+    uint8_t g;
+    uint8_t b;
 } level_t;
 
 typedef struct {
@@ -76,12 +79,13 @@ typedef struct {
 typedef struct {
     uint8_t setpoint;
     uint8_t setpoint_source;
-    uint8_t power;
+    uint8_t power_on;
     uint8_t actual_level;
     uint32_t fadetime_ms;
     TaskHandle_t mainloop_task;
     level_overrides_t level_overrides;
     level_t channel_levels;
+    level_t* lut;
 } device_status_t;
 
 extern volatile level_t levellut[255];
@@ -171,6 +175,8 @@ int32_t _MIN(int32_t a, int32_t b);
 
 int clamp(int in, int low, int high);
 
+uint32_t uclamp(uint32_t in, uint32_t low, uint32_t high);
+
 uint64_t get_system_time_us(uint64_t offset);
 
 extern SemaphoreHandle_t log_mutex;
@@ -183,9 +189,6 @@ typedef struct {
     const char name[24];
     const int* array;
 } api_endpoint_t;
-
-// #define ENDPOINT_DEF(name) static const api_endpoint_t ##name_endpoint = {.name = "name",.array = &name}
-#define ENDPOINT_DEC(name) const api_endpoint_t name##_endpoint
 
 #endif // base_H
 

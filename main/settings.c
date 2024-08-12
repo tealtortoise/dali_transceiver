@@ -101,7 +101,7 @@ int get_setting(char* name) {
     return get_setting_indexed(name, -1);
 };
 
-static char linebuffer[128];
+static char linebuffer[160];
 static char key[16];
 static int outputint;
 
@@ -287,7 +287,7 @@ esp_err_t read_level_luts(level_t lut[]){
         column_idx = 0;
         row_idx = 0;
         cell_int = -1;
-        out = fgets(linebuffer, 128, lutfile);
+        out = fgets(linebuffer, 160, lutfile);
         if (out == NULL) break;
 
         if (linebuffer[0] < '0') continue;
@@ -295,7 +295,7 @@ esp_err_t read_level_luts(level_t lut[]){
         
         linebuffer[64] = 0;
 
-        for (int i = 1; i <= 128; i++){
+        for (int i = 1; i <= 160; i++){
             if (linebuffer[i] == ',' || linebuffer[i] == 13 || linebuffer[i] == 10 || linebuffer[i] == 0) {
                 commapos = i;
                 celllen = i - lastcommapos - 1;
@@ -343,7 +343,7 @@ esp_err_t read_level_luts(level_t lut[]){
             fill_luts_fallback(lut);
             return ESP_ERR_NOT_FOUND;
         }
-        if (column_idx != 12){
+        if (column_idx != 15){
             ESP_LOGE(TAG, "Didn't find all columns in CSV file! Filled luts with fallback");
             fclose(lutfile);
             

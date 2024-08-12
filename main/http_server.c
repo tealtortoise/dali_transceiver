@@ -268,27 +268,6 @@ static esp_err_t nvs_put_handler(httpd_req_t *req){
     return ESP_OK;
 }
 
-// /* An HTTP GET handler */
-// static esp_err_t setpoint_get_handler(httpd_req_t *req)
-// {
-//     int ns = get_int_from_uri(req->uri);
-//     if ((ns >= 0) && (ns <=254)) {
-//         sprintf(httpd_temp_buffer, response, ns);
-//     }
-//     else 
-//     {
-//         sprintf(httpd_temp_buffer, response, 0);
-//     };
-//     // req->sess_ctx;
-//     networking_ctx_t *ctx = httpd_get_global_user_ctx(req->handle);
-//     setpoint = ns;
-//     ESP_LOGI(TAG, "Wifi Notify %i", ns);
-//     xTaskNotifyIndexed(ctx->mainloop_task, NEW_SETPOINT_NOTIFY_IDX, USE_DEFAULT_FADETIME, eSetValueWithOverwrite);
-
-//     httpd_resp_send(req, httpd_temp_buffer, HTTPD_RESP_USE_STRLEN);
-//     return ESP_OK;
-// }
-
 static esp_err_t current_setpoint_handler(httpd_req_t *req){
     parse_uri(req->uri);
     if (req->method == HTTP_GET) {
@@ -296,11 +275,11 @@ static esp_err_t current_setpoint_handler(httpd_req_t *req){
         sprintf(httpd_temp_buffer, "%i", ctx->status->setpoint);
     }
     else if (req->method == HTTP_PUT){
-        int bytes = httpd_req_recv(req, httpd_temp_buffer, 255);
+        int bytes = httpd_req_recv(req, httpd_temp_buffer, 254);
         httpd_temp_buffer[bytes] = 0;
         int data;
         int datarecv = sscanf(httpd_temp_buffer, "%i", &data);
-        ESP_LOGI(TAG, "===== Setpoint handler: received PUT at %s (%s)", req->uri, httpd_temp_buffer);
+        ESP_LOGI(TAG, "Setpoint handler: received PUT at %s (%s)", req->uri, httpd_temp_buffer);
         ESP_LOGD(TAG, "Received %s (%i) %i", httpd_temp_buffer, data, datarecv);
         if (data >= 0 && data <= 255){
             int fade;
@@ -451,6 +430,28 @@ static esp_err_t otaupdate(httpd_req_t *req){
     return ESP_OK;
 }
 
+static esp_err_t rest_power_handler(httpd_req_t *req){
+    bool put = req->method == HTTP_PUT;
+    networking_ctx_t *ctx = httpd_get_global_user_ctx(req->handle);
+    if (put)
+    {
+        int put_data_int = -1;
+        int bytes = httpd_req_recv(req, httpd_temp_buffer, 255);
+        httpd_temp_buffer[bytes] = 0;
+        int datarecv = sscanf(httpd_temp_buffer, "%i", &put_data_int);
+        ESP_LOGI(TAG, "=== Received PUT at %s (%s) -> %i", req->uri, httpd_temp_buffer, put_data_int ? 1 : 0);
+        ESP_LOGI(TAG, "Settng power_on to %i", put_data_int ? 1 : 0);
+        ctx->status->power_on = put_data_int ? 1 : 0;
+        sprintf(httpd_temp_buffer, "OK");
+        xTaskNotifyIndexed(ctx->status->mainloop_task, NEW_SETPOINT_NOTIFY_IDX, SETPOINT_SOURCE_REST, eSetValueWithOverwrite);
+    }
+    else
+    {
+        sprintf(httpd_temp_buffer, "%i", ctx->status->power_on);
+    }
+    httpd_resp_send(req, httpd_temp_buffer, HTTPD_RESP_USE_STRLEN);
+    return ESP_OK;
+}
 static esp_err_t rest_channel_override_handler(httpd_req_t *req){
     parse_uri(req->uri);
     bool put = req->method == HTTP_PUT;
@@ -474,7 +475,7 @@ static esp_err_t rest_channel_override_handler(httpd_req_t *req){
         uint8_t channel_num = channelname[4] - 'a';
         if (channel_num >= 0 && channel_num < 6)
         {
-            override_ptr = &ctx->level_overrides->dali[channel_num];
+            override_ptr = &ctx->status->level_overrides.dali[channel_num];
             chname[0] = "DALIX";
             chname[4] = 'A' + (char) channel_num;
         }
@@ -486,17 +487,17 @@ static esp_err_t rest_channel_override_handler(httpd_req_t *req){
     }
     else if (strcmp(channelname, "espnow") == 0)
     {
-        override_ptr = &ctx->level_overrides->espnow;
+        override_ptr = &ctx->status->level_overrides.espnow;
         chname[0] = "ESPNOW";
     }
     else if (strcmp(channelname, "zeroten1") == 0)
     {
-        override_ptr = &ctx->level_overrides->zeroten1;
+        override_ptr = &ctx->status->level_overrides.zeroten1;
         chname[0] = "0-10v 1";
     }
     else if (strcmp(channelname, "zeroten2") == 0)
     {
-        override_ptr = &ctx->level_overrides->zeroten2;
+        override_ptr = &ctx->status->level_overrides.zeroten2;
         chname[0] = "0-10v 2";
     }
     else
@@ -676,7 +677,7 @@ static esp_err_t view_luts(httpd_req_t* req){
     level_t lev;
     for (int i = 0; i<= 254; i++){
         lev = levellut[i];
-        sprintf(httpd_temp_buffer, "LUT Level %i: 0-10v1: %d, 0-10v2: %d, DALIA: %d, DALIB: %d, DALIC: %d, DALID: %d, DALIE: %d, DALIF: %d, ESPNOW: %d, Rly1: %d, Rly2: %d\n", i,
+        sprintf(httpd_temp_buffer, "LUT Level %i: 0-10v1: %d, 0-10v2: %d, DALIA: %d, DALIB: %d, DALIC: %d, DALID: %d, DALIE: %d, DALIF: %d, ESPNOW: %d, Rly1: %d, Rly2: %d R: %d, G: %d, B: %d\n", i,
              lev.zeroten1_lvl,
              lev.zeroten2_lvl,
              lev.dali_lvl[0],
@@ -687,7 +688,10 @@ static esp_err_t view_luts(httpd_req_t* req){
              lev.dali_lvl[5],
              lev.espnow_lvl,
              lev.relay1,
-             lev.relay2
+             lev.relay2,
+             lev.r,
+             lev.g,
+             lev.b
              );
         httpd_resp_sendstr_chunk(req, httpd_temp_buffer);
     }
@@ -966,6 +970,18 @@ static const httpd_uri_t rest_get_channel_level = {
     .handler   = rest_channel_override_handler,
     .user_ctx  = NULL
 };
+static const httpd_uri_t get_power_on_endpoint = {
+    .uri       = "/api/power",
+    .method    = HTTP_GET,
+    .handler   = rest_power_handler,
+    .user_ctx  = NULL
+};
+static const httpd_uri_t put_power_on_endpoint = {
+    .uri       = "/api/power",
+    .method    = HTTP_PUT,
+    .handler   = rest_power_handler,
+    .user_ctx  = NULL
+};
 static const httpd_uri_t view_luts_endpoint = {
     .uri       = "/luts",
     .method    = HTTP_GET,
@@ -1019,8 +1035,8 @@ static httpd_handle_t start_webserver(networking_ctx_t *ctx)
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.uri_match_fn = httpd_uri_match_wildcard;
     config.global_user_ctx = ctx;
-    config.max_open_sockets = 10;
-    config.max_uri_handlers = 18;
+    config.max_open_sockets = 13;
+    config.max_uri_handlers = 20;
     config.lru_purge_enable = true;
 
     // Start the httpd server
@@ -1031,6 +1047,8 @@ static httpd_handle_t start_webserver(networking_ctx_t *ctx)
         // httpd_register_uri_handler(server, &hello);
         httpd_register_uri_handler(server, &get_setpoint);
         httpd_register_uri_handler(server, &put_setpoint);
+        httpd_register_uri_handler(server, &get_power_on_endpoint);
+        httpd_register_uri_handler(server, &put_power_on_endpoint);
         httpd_register_uri_handler(server, &post_ota);
         httpd_register_uri_handler(server, &view_luts_endpoint);
         httpd_register_uri_handler(server, &dali_command_post_endpoint);

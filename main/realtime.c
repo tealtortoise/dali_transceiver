@@ -75,7 +75,7 @@ void rtc_task(void* params){
             setpoint = alarm_setpoint;
             alarm_fade = get_setting_indexed("alarmfade", i);
 
-            status->fadetime_ms = clamp(alarm_fade, 0, 0xFFFFFFFF - 5);
+            status->fadetime_ms = uclamp(alarm_fade, 0, 0xFFFFFFFF - 5);
             status->setpoint = setpoint;
             status->setpoint_source = SETPOINT_SOURCE_ALARM;
             xTaskNotifyIndexed(status->mainloop_task, NEW_SETPOINT_NOTIFY_IDX, SETPOINT_SOURCE_ALARM, eSetValueWithOverwrite);

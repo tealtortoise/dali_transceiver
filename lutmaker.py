@@ -57,6 +57,9 @@ columns = [
     "espnow", # piano
     "relay1",
     "relay2",
+    "r",
+    "g",
+    "b",
 ]
 
 minimum_dim = 0.001
@@ -89,6 +92,7 @@ channels = {
                      led=LED(imax=650, vf=33, eff=130), group=0, night_only=True),
 }
 
+channels = {}
 if "fadetest" and 0:
     channels = {
         "a":Channel(name="a", type=ChannelType.INDEPENDENT, points=[(0.0,1.0), (1.0, 0.0)], led=LED(1000, 34, 120)),
@@ -96,7 +100,8 @@ if "fadetest" and 0:
     }
     columns = ["a", "b"]
 
-highest_flux = max((curve.led.lumens for curve in channels.values()))
+# highest_flux = max((curve.led.lumens for curve in channels.values()))
+highest_flux =1
 
 total_prop = [0.0, 0.0, 0.0, 0.0, 0.0,]
 if 1 and "print proportions":
@@ -217,7 +222,7 @@ def main():
         else:
             name_columns.append(name)
 
-    for group in (2,):
+    for group in ():
         if len(lumens[group]) == 0: continue
         lumens[group]['sum'] = lumensum[group];
         lumens[group]['ideal'] = lin_flux * highest_flux * total_prop[group];
@@ -228,14 +233,58 @@ def main():
         plt.show()
     # exit()
 
-    df_plot_only = pd.DataFrame({key: value for key, value in dalivals.items() if value is not inrange}, columns=name_columns)
-    df_plot_only.plot(title="DALI Values");
-    plt.show();
+    # df_plot_only = pd.DataFrame({key: value for key, value in dalivals.items() if value is not inrange}, columns=name_columns)
+    # df_plot_only.plot(title="DALI Values");
+    # plt.show();
 
+    # Create colour LUTs
+    colourpoints = [(0, (194, 45, 23,)),
+                    (25,(203, 118, 33)),
+                    (48,(150, 160, 00)),
+                    (86,(41, 172, 61)),
+                    (207, (23, 143, 202)),
+                    (239, (149, 110, 201)),
+                    (254, (186, 57, 149))]
+    
+    # colourpoints = [(0, (255, 255, 255)),
+                    # (254, (255, 255, 255))]
+    
+    sRGB_to_prophoto = np.array([[ 0.6274413721,  0.3292974595,  0.0433514584],
+       [ 0.0690276171,  0.9195806669,  0.0113614226],
+       [ 0.0163642351,  0.0880171625,  0.8955649727]]).T
+
+    white = (0.3 * 1.0, 0.3 * 0.78, 0.3 * 0.36)
+    
+    colour_reflevels = [point[0] for point in colourpoints]
+    colour_r = [(point[1][0] / 255) ** 2.2 for point in colourpoints]
+    colour_g = [(point[1][1] / 255) ** 2.2 for point in colourpoints]
+    colour_b = [(point[1][2] / 255) ** 2.2 for point in colourpoints]
+
+    lin_r = np.interp(inrange, colour_reflevels, colour_r)
+    lin_g = np.interp(inrange, colour_reflevels, colour_g)
+    lin_b = np.interp(inrange, colour_reflevels, colour_b)
+
+    out_r = np.zeros(inrange.size)
+    out_g = np.zeros(inrange.size)
+    out_b = np.zeros(inrange.size)
+
+    for idx in inrange:
+        r = lin_r[idx]
+        g = lin_g[idx]
+        b = lin_b[idx]
+        out = np.matmul(np.array([r, g, b]), sRGB_to_prophoto)
+        out_r[idx] = out[0]
+        out_g[idx] = out[1]
+        out_b[idx] = out[2]
+
+    dalivals['r'] = np.maximum(np.floor(out_r * white[0] * 255- 0.5).astype(int), 0);
+    dalivals['g'] = np.maximum(np.floor(out_g * white[1] * 255 - 0.5).astype(int), 0);
+    dalivals['b'] = np.maximum(np.floor(out_b * white[2] * 255 - 0.5).astype(int), 0);
     df = pd.DataFrame(dalivals, columns=name_columns)
-    # df.plot(title="DALI Values");
+    # df.plot(title="DALI Values")
+    # plt.show()
     print(df)
-    df.to_csv("spiffs/levelluts2.csv", index=False)
+    df.to_csv("spiffs/levelluts1.csv", index=False)
     # print("hello")
     # print(to_log(to_linear(inrange)))
 

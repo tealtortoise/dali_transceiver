@@ -47,9 +47,14 @@ SemaphoreHandle_t log_mutex;
 
 inline int32_t _MAX(int32_t a, int32_t b) { return((a) > (b) ? a : b); }
 inline int32_t _MIN(int32_t a, int32_t b) { return((a) < (b) ? a : b); }
+inline uint32_t _uMIN(uint32_t a, uint32_t b) { return((a) < (b) ? a : b); }
 
 int clamp(int in, int low, int high){
     return (in > low) ? _MIN(in, high) : low;
+}
+
+uint32_t uclamp(uint32_t in, uint32_t low, uint32_t high){
+    return (in > low) ? _uMIN(in, high) : low;
 }
 
 uint64_t get_system_time_us(uint64_t offset){
