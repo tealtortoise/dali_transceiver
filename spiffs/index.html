@@ -20,21 +20,31 @@
             <a href="/ch"><button class="nav " level="254">Channels</button></a>
         </nav>
     </header>
-    <div class="levelbutton-box">
+    <div id="offbutton-box">
+        <button class="levelbutton grey" id="buttonoff">All Power Off<span></span></button>
+        <button class="levelbutton grey slow" id="sbuttonoff">2 Min Delay</button>
+    </div>
+    <div id="onbutton-box">
+        <button class="levelbutton lightgrey" id="buttonon">Power On<span id="poweron-level">--</span></button>
+        <button class="levelbutton lightgrey slow" id="sbuttonon"> </button>
+        <div id="offmessage">
+        </div>
+    </div>
+    <div class="levelbutton-box" id="levelbutton-box">
         <button class="levelbutton magenta" level="254">Full Power! ⚡︎⚡︎<span>100%</span></button>
         <button class="levelbutton magenta slow" level="254">Slow</button>
         <button class="levelbutton purple" level="240" id="preset5">Day High<span></span></button>
-        <button class="levelbutton purple slow" level="240" id="preset5">Slow</button>
+        <button class="levelbutton purple slow" level="240" id="spreset5">Slow</button>
         <button class="levelbutton teal" level="220" id="preset4">Day Low<span></span></button>
-        <button class="levelbutton teal slow" level="220" id="preset4">Slow</button>
+        <button class="levelbutton teal slow" level="220" id="spreset4">Slow</button>
         <button class="levelbutton green" level="180" id="preset3">Teatime<span></span></button>
-        <button class="levelbutton green slow" level="180" id="preset3">Slow</button>
+        <button class="levelbutton green slow" level="180" id="spreset3">Slow</button>
         <button class="levelbutton yellow" level="30" id="preset2">Night time<span></span></button>
-        <button class="levelbutton yellow slow" level="30" id="preset2">Slow</button>
+        <button class="levelbutton yellow slow" level="30" id="spreset2">Slow</button>
         <button class="levelbutton orange" level="10" id="preset1">Moonlight ♫♪♪<span></span></button>
-        <button class="levelbutton orange slow " level="10" id="preset1">Slow</button>
-        <button class="levelbutton red" level="0" id="preset0">Switch Off<span>0%</span></button>
-        <button class="levelbutton red slow" level="0" id="preset0">Slow</button>
+        <button class="levelbutton orange slow " level="10" id="spreset1">Slow</button>
+        <button class="levelbutton red" level="0" id="preset0">Off with Alarms<span>0%</span></button>
+        <button class="levelbutton red slow" level="0" id="spreset0">Slow</button>
     </div>
     <div class="slidecontainer">
         <span id="ajaxlevel">--</span><input type="range" min="0" max="254" value="50" class="slider" id="levelslider">
@@ -50,6 +60,7 @@
     <script>
         "use strict";
 
+        let powerStatus = true;
         function levelbyte_to_linear(byte){
             return Math.floor(Math.pow(10, (byte-1) * 3.0 / 253.0) * 10 + 0.5) / 100;
         }
@@ -76,6 +87,13 @@
         let levelind = document.getElementById('ajaxlevel');
         let currentind = document.getElementById('ledcurrent');
         let levelbyteind = document.getElementById('levelbyte');
+        let poweronind = document.getElementById("poweron-level");
+        let offmessage_el = document.getElementById("offmessage");
+        
+        let levelbox = document.getElementById("levelbutton-box");
+        let offbox = document.getElementById("offbutton-box");
+        let onbox = document.getElementById("onbutton-box");
+        let timermessage = "Turning Power Off in 2 minutes... Alarms will be OFF.";
         
         for (let i = 1; i <= 5; i++) {
             let uri = `/nvs/preset/${i}/`;
@@ -87,7 +105,6 @@
                     slutton_el.setAttribute("level", st);
                     button_el.childNodes[1].innerHTML = levelToPercent(st);
                 }
-
             });
         }
 
@@ -96,21 +113,22 @@
 
         }
 
-        function send(setpoint, slow) {
+        function send(data, slow, uri) {
             const options = {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/plain'
                 },
-                body: `${setpoint}`
+                body: `${data}`
             };
 
             // Make the PUT request using the fetch API
-            let uri;
-            if (slow) {
-                uri = "/setpoint/slow";
-            } else {
-                uri = "/setpoint"
+            if (uri == undefined){
+                if (slow) {
+                    uri = "/setpoint/slow";
+                } else {
+                    uri = "/setpoint"
+                }
             }
             return fetch(uri, options)
                 .then(response => {
@@ -127,9 +145,11 @@
 
         function sliderChangeFn() {
             let sliderval = slider.value;
-            levelind.innerHTML = levelToPercent(sliderval);
+            let percentstr = levelToPercent(sliderval);
+            levelind.innerHTML = percentstr;
             levelbyteind.innerHTML = sliderval;
             currentind.innerHTML = levelbyte_to_linear(sliderval) + "%";
+            poweronind.innerHTML = percentstr;
             levelind.classList.add("updating");
             if (!ontimeout){
                 send(sliderval);
@@ -146,6 +166,37 @@
                 waiting = 1;
             }
         };
+
+        function setUIPowerOff(timeout) {
+            powerStatus = false;
+            if (!timeout) offmessage_el.innerHTML = "Alarms are OFF";
+            let box = document.getElementById("levelbutton-box");
+            box.style.opacity = "0.6";
+            let offbox = document.getElementById("offbutton-box");
+            let onbox = document.getElementById("onbutton-box");
+            offbox.style.display = "none";
+            onbox.style.display = "grid";
+        }
+        function setUIPowerOn() {
+            powerStatus = true;
+            let box = document.getElementById("levelbutton-box");
+            box.style.opacity = "1.0";
+            let offbox = document.getElementById("offbutton-box");
+            let onbox = document.getElementById("onbutton-box");
+            onbox.style.display = "none";
+            offbox.style.display = "grid";
+        }
+        function sendPowerOn(level) {
+            let uri;
+            if (level != undefined){
+                uri = "api/power/setlevel";
+            } else {
+                uri = "api/power";
+                level = 1;
+            }
+            return send(level, false, uri);
+        }
+
         function buttonPressFn(event, v2) {
             console.log(event);
             let element;
@@ -158,14 +209,43 @@
                 element = event.srcElement.parentNode;
                 slow = event.srcElement.parentNode.classList.contains("slow");
             }
+            if (element.id == "buttonoff") {
+                send("0", undefined, "api/power").then(() => {
+                    setUIPowerOff();
+                });
+                return;
+            }
+            if (element.id == "sbuttonoff") {
+                send(60 * 2 * 1000, undefined, "api/power/delay").then(() => {
+                    setUIPowerOff(true);
+                    offmessage_el.innerHTML = timermessage;
+                    window.setTimeout(() => {
+                        offmessage_el.innerHTML = "Alarms are OFF";
+                    }, 60 * 1000 * 2);
+                });
+                return;
+            }
+            if (element.id == "buttonon") {
+                sendPowerOn().then(() => {
+                    setUIPowerOn();
+                });
+                return;
+            }
             console.log(element);
             let level = element.getAttribute("level");
             slider.value = level;
-            levelind.innerHTML = levelToPercent(level);
+            let percentstr = levelToPercent(level);
+            levelind.innerHTML = percentstr;
             currentind.innerHTML = levelbyte_to_linear(level) + "%";
+            poweronind.innerHTML = percentstr;
             levelbyteind.innerHTML = level;
             levelind.classList.add("updating");
-            send(level, slow);
+            if (powerStatus) {
+                send(level, slow);
+            } else {
+                sendPowerOn(level);
+                setUIPowerOn();
+            }
             console.log(level)
         }
 
@@ -179,10 +259,27 @@
             if (!(sp >= 0)) {
                 sp = "0"
             }
-            levelind.innerHTML = levelToPercent(sp);
+            let percentstr = levelToPercent(sp);
+            levelind.innerHTML = percentstr;
             currentind.innerHTML = levelbyte_to_linear(sp) + "%";
+            poweronind.innerHTML = percentstr;
             levelbyteind.innerHTML = sp;
             slider.value = sp;
+        });
+        get("/api/power").then((sp) => {
+            powerStatus = sp == "1";
+            if (powerStatus) {
+                setUIPowerOn();
+            } else {
+                setUIPowerOff();
+                if (sp == "Timer on"){
+
+                    offmessage_el.innerHTML = timermessage;
+                    window.setTimeout(() => {
+                        offmessage_el.innerHTML = "Alarms are OFF";
+                    }, 60 * 1000 * 2);
+                }
+            }
         });
         
     </script>

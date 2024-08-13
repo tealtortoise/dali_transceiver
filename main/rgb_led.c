@@ -19,9 +19,16 @@ void rgb_led_task(void *params)
     uint8_t r=0;
     uint8_t g=0;
     uint8_t b=0;
+    int count = 0;
     while (1)
     {
         led_strip_set_pixel(led_strip, 0, r, g, b);
+        if ((count & 0xFFF) == 0)
+        {
+            ESP_LOGI(TAG, "RGB %d %d %d: LUT pointer %i, 25: %d %d %d", r, g, b, (int) status->lut,
+                status->lut[25].r, status->lut[25].g, status->lut[25].b);
+        }
+        count += 1;
         led_strip_refresh(led_strip);
         vTaskDelay(pdMS_TO_TICKS(10));
         if (0 && !status->power_on)

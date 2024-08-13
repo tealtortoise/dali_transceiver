@@ -81,6 +81,16 @@ div.levelbutton-box {
     display: grid;
     grid-template-columns: 4fr 1fr;
 }
+div#offbutton-box {
+    margin: 1em 2em;
+    display: grid;
+    grid-template-columns: 5fr 3fr;
+}
+div#onbutton-box {
+    margin: 1em 2em;
+    grid-template-columns: 5fr 1fr;
+    display: none;
+}
 button.levelbutton {
     margin-bottom: 3px;
     padding: 0.5em 0.4em 0.5em 1em;
@@ -151,6 +161,16 @@ button.update  {
 }
 .yellow {
     background-image: linear-gradient(to right, #838915, #d2dc1f);
+}
+.grey {
+    background-image: linear-gradient(to right, #474747, #6c6c6c);
+}
+.lightgrey {
+    background-image: linear-gradient(to right, #a6a6a6, #cecece);
+    color: black !important;
+}
+.lightgrey span{
+    color: black !important;
 }
 
 .alarmunit {

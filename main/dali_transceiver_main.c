@@ -58,6 +58,8 @@ static const char *TAG = "main";
 
 static const char *source_str[] = {"REST", " ADC", "ESPN", "BUTN", "ALRM", "RAND", "INIT"};
 
+static const char *spaces = "   ";
+
 nvs_handle_t mainloop_nvs_handle;
 
 static RTC_NOINIT_ATTR device_status_t status;
@@ -363,7 +365,7 @@ void app_main(void)
     ESP_ERROR_CHECK(setup_0_10v_channel(PWM_010v_GPIO, CALIBRATION_LOOKUP_NVS, &pwm1));
     ESP_ERROR_CHECK(setup_0_10v_channel(PWM_010v2_GPIO, CALIBRATION_LOOKUP_NVS, &pwm2));
 
-    setup_button_interrupts(xTaskGetCurrentTaskHandle(), pwm1, pwm2);
+    setup_button_interrupts(&status, pwm1, pwm2);
 
     dali_transceiver_config_t transceiver_config = dali_transceiver_sensible_default_config;
     transceiver_config.invert_input = DALI_DONT_INVERT;
@@ -432,6 +434,19 @@ void app_main(void)
     int espnow_lvl_to_send = 0;
     int relay1_lvl_to_send = 0;
     int relay2_lvl_to_send = 0;
+    char espnow_str[] = "   ";
+    char zeroten1_str[] = "   ";
+    char zeroten2_str[] = "   ";
+    char relay1_str[] = "   ";
+    char relay2_str[] = "   ";
+    char dali_str[6][4] = {
+        "   ",
+        "   ",
+        "   ",
+        "   ",
+        "   ",
+        "   ",
+    };
     int lookahead;
     int idlecount = 0;
     int levellog_count = 0;
@@ -675,46 +690,85 @@ void app_main(void)
             dali_give_mutex(dali_transceiver);
         }
 
-        if (!(levellog_count & 7))
-        {
-
-            ESP_LOGI(TAG, "Lvl-> SP PWR | SRCE N | 0-10v1 0-10v2 DALIA DALIB DALIC DALID DALIE DALIF ESPN Rly1 Rly2    Fade    TLT  LT");
-            ESP_LOGI(TAG, "         %s                %s     %s    %s    %s    %s    %s    %s    %s   %s   %s   %s",
-                     (status.power_on) ? " ON" : "OFF",
-                     (configbits & CONFIGBIT_USE_0_10v1) ? "ON" : " .",
-                     (configbits & CONFIGBIT_USE_0_10v2) ? "ON" : " .",
-                     ((configbits & CONFIGBIT_USE_DALI) && dali_addresses[0] != -1) ? "ON" : " .",
-                     ((configbits & CONFIGBIT_USE_DALI) && dali_addresses[1] != -1) ? "ON" : " .",
-                     ((configbits & CONFIGBIT_USE_DALI) && dali_addresses[2] != -1) ? "ON" : " .",
-                     ((configbits & CONFIGBIT_USE_DALI) && dali_addresses[3] != -1) ? "ON" : " .",
-                     ((configbits & CONFIGBIT_USE_DALI) && dali_addresses[4] != -1) ? "ON" : " .",
-                     ((configbits & CONFIGBIT_USE_DALI) && dali_addresses[5] != -1) ? "ON" : " .",
-                     (configbits & CONFIGBIT_TRANSMIT_ESPNOW) ? "ON" : " .",
-                     (configbits & CONFIGBIT_USE_RELAY1) ? "ON" : " .",
-                     (configbits & CONFIGBIT_USE_RELAY2) ? "ON" : " .");
-        }
+        //     ESP_LOGI(TAG, "         %s                %s     %s    %s    %s    %s    %s    %s    %s   %s   %s   %s",
+        //              (status.power_on) ? " ON" : "OFF",
+        //              (configbits & CONFIGBIT_USE_0_10v1) ? "ON" : " .",
+        //              (configbits & CONFIGBIT_USE_0_10v2) ? "ON" : " .",
+        //              ((configbits & CONFIGBIT_USE_DALI) && dali_addresses[0] != -1) ? "ON" : " .",
+        //              ((configbits & CONFIGBIT_USE_DALI) && dali_addresses[1] != -1) ? "ON" : " .",
+        //              ((configbits & CONFIGBIT_USE_DALI) && dali_addresses[2] != -1) ? "ON" : " .",
+        //              ((configbits & CONFIGBIT_USE_DALI) && dali_addresses[3] != -1) ? "ON" : " .",
+        //              ((configbits & CONFIGBIT_USE_DALI) && dali_addresses[4] != -1) ? "ON" : " .",
+        //              ((configbits & CONFIGBIT_USE_DALI) && dali_addresses[5] != -1) ? "ON" : " .",
+        //              (configbits & CONFIGBIT_TRANSMIT_ESPNOW) ? "ON" : " .",
+        //              (configbits & CONFIGBIT_USE_RELAY1) ? "ON" : " .",
+        //              (configbits & CONFIGBIT_USE_RELAY2) ? "ON" : " .");
+        // }
 
         levellog_count += 1;
-        ESP_LOGI(TAG, "%3.1u->%3.1d %s | %s %1.i |    %3.1i    %3.1i   %3.1d   %3.1d   %3.1d   %3.1d   %3.1d   %3.1d  %3.1i  %3.1d  %3.1d %7.1i %6.1llu %3.1i",
+        if (configbits & CONFIGBIT_USE_0_10v1) snprintf(zeroten1_str, 4, "%3.1i", zeroten1_lvl_to_send);
+        if (configbits & CONFIGBIT_USE_0_10v2) snprintf(zeroten2_str, 4, "%3.1i", zeroten2_lvl_to_send);
+        for (int i = 0; i < 6; i++)
+        {
+            if ((configbits & CONFIGBIT_USE_DALI) && dali_addresses[i] != -1) snprintf(dali_str[i], 4, "%3.1i", dali_levels_to_send[i]);
+        }
+        if (configbits & CONFIGBIT_TRANSMIT_ESPNOW) snprintf(espnow_str, 4, "%3.1i", espnow_lvl_to_send);
+        if (configbits & CONFIGBIT_USE_RELAY1) snprintf(relay1_str, 4, "%3.1i", relay1_lvl_to_send);
+        if (configbits & CONFIGBIT_USE_RELAY2) snprintf(relay2_str, 4, "%3.1i", relay2_lvl_to_send);
+
+        if ((configbits & (CONFIGBIT_USE_RELAY1 | CONFIGBIT_USE_RELAY2)))
+        {
+            
+            if (!(levellog_count & 5))
+                ESP_LOGI(TAG, "Lvl-> SP PWR | SRCE N | 0-10v1 0-10v2 DALIA DALIB DALIC DALID DALIE DALIF ESPN Rly1 Rly2    Fade    TLT   LT Wake");
+            ESP_LOGI(TAG, "%3.1u->%3.1d %s | %s %1.i |    %s    %s   %s   %s   %s   %s   %s   %s  %s  %s  %s %7.1i %6.1llu %4.1i  %3.1lu",
                  status.actual_level,
                  status.setpoint,
                  (status.power_on) ? " ON" : "OFF",
                  source_str[status.setpoint_source & 0xF],
                  (int)new_setpoint,
-                 zeroten1_lvl_to_send,
-                 zeroten2_lvl_to_send,
-                 dali_levels_to_send[0],
-                 dali_levels_to_send[1],
-                 dali_levels_to_send[2],
-                 dali_levels_to_send[3],
-                 dali_levels_to_send[4],
-                 dali_levels_to_send[5],
-                 espnow_lvl_to_send,
-                 relay1_lvl_to_send,
-                 relay2_lvl_to_send,
+                 (configbits & CONFIGBIT_USE_0_10v1) ? zeroten1_str : spaces,
+                 (configbits & CONFIGBIT_USE_0_10v2) ? zeroten2_str : spaces,
+                 ((configbits & CONFIGBIT_USE_DALI) && dali_addresses[0] != -1) ? dali_str[0] : spaces,
+                 ((configbits & CONFIGBIT_USE_DALI) && dali_addresses[1] != -1) ? dali_str[1] : spaces,
+                 ((configbits & CONFIGBIT_USE_DALI) && dali_addresses[2] != -1) ? dali_str[2] : spaces,
+                 ((configbits & CONFIGBIT_USE_DALI) && dali_addresses[3] != -1) ? dali_str[3] : spaces,
+                 ((configbits & CONFIGBIT_USE_DALI) && dali_addresses[4] != -1) ? dali_str[4] : spaces,
+                 ((configbits & CONFIGBIT_USE_DALI) && dali_addresses[5] != -1) ? dali_str[5] : spaces,
+                 (configbits & CONFIGBIT_TRANSMIT_ESPNOW) ? espnow_str : spaces,
+                 (configbits & CONFIGBIT_USE_RELAY1) ? relay1_str : spaces,
+                 (configbits & CONFIGBIT_USE_RELAY2) ? relay2_str : spaces,
                  fadetime,
                  target_looptime >> 10,
-                 ((int)actual_looptime) >> 10);
+                 ((int)actual_looptime) >> 10,
+                 idle_reawake_interval >> 20);
+        }
+        else
+        {
+            
+            if (!(levellog_count & 7))
+                ESP_LOGI(TAG, "Lvl-> SP PWR | SRCE N | 0-10v1 0-10v2 DALIA DALIB DALIC DALID DALIE DALIF ESPN     Fade    TLT   LT Wake");
+            ESP_LOGI(TAG, "%3.1u->%3.1d %s | %s %1.i |    %s    %s   %s   %s   %s   %s   %s   %s  %s  %7.1i %6.1llu %4.1i  %3.1lu",
+                 status.actual_level,
+                 status.setpoint,
+                 (status.power_on) ? " ON" : "OFF",
+                 source_str[status.setpoint_source & 0xF],
+                 (int)new_setpoint,
+                 (configbits & CONFIGBIT_USE_0_10v1) ? zeroten1_str : spaces,
+                 (configbits & CONFIGBIT_USE_0_10v2) ? zeroten2_str : spaces,
+                 ((configbits & CONFIGBIT_USE_DALI) && dali_addresses[0] != -1) ? dali_str[0] : spaces,
+                 ((configbits & CONFIGBIT_USE_DALI) && dali_addresses[1] != -1) ? dali_str[1] : spaces,
+                 ((configbits & CONFIGBIT_USE_DALI) && dali_addresses[2] != -1) ? dali_str[2] : spaces,
+                 ((configbits & CONFIGBIT_USE_DALI) && dali_addresses[3] != -1) ? dali_str[3] : spaces,
+                 ((configbits & CONFIGBIT_USE_DALI) && dali_addresses[4] != -1) ? dali_str[4] : spaces,
+                 ((configbits & CONFIGBIT_USE_DALI) && dali_addresses[5] != -1) ? dali_str[5] : spaces,
+                 (configbits & CONFIGBIT_TRANSMIT_ESPNOW) ? espnow_str : spaces,
+                 fadetime,
+                 target_looptime >> 10,
+                 ((int)actual_looptime) >> 10,
+                 idle_reawake_interval >> 20);
+        }
+
 
         new_setpoint = false;
     }

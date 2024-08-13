@@ -8,6 +8,7 @@
 */
 
 #include "http_server.h"
+#include "freertos/timers.h"
 #include <time.h>
 #include <string.h>
 #include <stdlib.h>
@@ -59,6 +60,8 @@ static const char *TAG = "http server";
 static char httpd_temp_buffer[BUF_SIZE];
 
 char filename[128];
+
+static device_status_t *status;
 
 static char templogbuffer[1024];
 
@@ -430,24 +433,116 @@ static esp_err_t otaupdate(httpd_req_t *req){
     return ESP_OK;
 }
 
+static TimerHandle_t delaytimer;
+static int timercount;
+
+static void poweroff(TimerHandle_t timer) {
+    ESP_LOGI(TAG, "Timer expired -> Turning power off");
+    status->power_on = 0;
+    xTaskNotifyIndexed(status->mainloop_task, NEW_SETPOINT_NOTIFY_IDX, SETPOINT_SOURCE_REST, eSetValueWithOverwrite);
+}
+
 static esp_err_t rest_power_handler(httpd_req_t *req){
     bool put = req->method == HTTP_PUT;
     networking_ctx_t *ctx = httpd_get_global_user_ctx(req->handle);
+    bool notify = true;
+    BaseType_t success = pdTRUE;
     if (put)
     {
-        int put_data_int = -1;
+        parse_uri(req->uri);
+        int put_data_int = -2;
         int bytes = httpd_req_recv(req, httpd_temp_buffer, 255);
         httpd_temp_buffer[bytes] = 0;
         int datarecv = sscanf(httpd_temp_buffer, "%i", &put_data_int);
-        ESP_LOGI(TAG, "=== Received PUT at %s (%s) -> %i", req->uri, httpd_temp_buffer, put_data_int ? 1 : 0);
-        ESP_LOGI(TAG, "Settng power_on to %i", put_data_int ? 1 : 0);
-        ctx->status->power_on = put_data_int ? 1 : 0;
+        
+        int level = clamp(put_data_int, 0, 254);
+        ESP_LOGI(TAG, "=== Received PUT at %s (%s) -> %i", req->uri, httpd_temp_buffer, put_data_int);
+        if (substring_count == 3){
+            if (strcmp(substrings[2], "setlevel") == 0)
+            {
+                ESP_LOGI(TAG, "Settng power_on to %i", level);
+                ctx->status->setpoint = level;
+                ctx->status->fadetime_ms = 0;
+                ctx->status->setpoint_source = SETPOINT_SOURCE_REST;
+                ctx->status->power_on = 1;
+            }
+            else if (strcmp(substrings[2], "delay") == 0)
+            {
+                if (put_data_int < 1000){
+                    poweroff(delaytimer);
+                }
+                else
+                {
+                    ESP_LOGI(TAG, "Starting turn-off timer for %i ms", put_data_int);
+                    if (delaytimer == 0){
+                        delaytimer = xTimerCreate("poweroff-delay", pdMS_TO_TICKS(put_data_int), false, &timercount, poweroff);
+                    }
+                    else
+                    {
+                        success = xTimerChangePeriod(delaytimer, pdMS_TO_TICKS(put_data_int), 0);
+                    }
+                    success = (success == pdTRUE) && xTimerStart(delaytimer, 0);
+                    if (success != pdTRUE)
+                    {
+                        httpd_resp_send_500(req);
+                        return ESP_FAIL;
+                    }
+                    ESP_LOGI(TAG, "Started!"); 
+                    
+                    if (ctx->status->setpoint > 15)
+                        ctx->status->setpoint = _MAX(ctx->status->setpoint >> 2, 15);
+                    ctx->status->fadetime_ms = 1000;
+                    ctx->status->setpoint_source = SETPOINT_SOURCE_REST;
+                    xTaskNotifyIndexed(ctx->status->mainloop_task, NEW_SETPOINT_NOTIFY_IDX, SETPOINT_SOURCE_REST, eSetValueWithOverwrite);
+            
+                }
+                
+                notify = false;
+            }
+            else
+            {
+                httpd_resp_send_404(req);
+                return ESP_FAIL;
+            }
+        }
+        else
+        {
+            if (put_data_int > 0)
+            {
+                ESP_LOGI(TAG, "Turning power on at existing level");
+                ctx->status->power_on = 1;
+            }
+            else
+            {
+            
+                ESP_LOGI(TAG, "Turning power off");
+                ctx->status->power_on = 0;
+            }
+        }
+
         sprintf(httpd_temp_buffer, "OK");
-        xTaskNotifyIndexed(ctx->status->mainloop_task, NEW_SETPOINT_NOTIFY_IDX, SETPOINT_SOURCE_REST, eSetValueWithOverwrite);
+        if (notify)
+        {
+            xTaskNotifyIndexed(ctx->status->mainloop_task, NEW_SETPOINT_NOTIFY_IDX, SETPOINT_SOURCE_REST, eSetValueWithOverwrite);
+            if (delaytimer != 0){
+                success = xTimerStop(delaytimer, 0);
+                if (success != pdTRUE)
+                {
+                    httpd_resp_send_500(req);
+                }
+            }
+        }
     }
     else
     {
-        sprintf(httpd_temp_buffer, "%i", ctx->status->power_on);
+        if (delaytimer != 0 && xTimerIsTimerActive(delaytimer) && ctx->status->power_on)
+        {
+            sprintf(httpd_temp_buffer, "Timer on");
+        }
+        else
+        {
+            sprintf(httpd_temp_buffer, "%i", ctx->status->power_on);
+        }
     }
     httpd_resp_send(req, httpd_temp_buffer, HTTPD_RESP_USE_STRLEN);
     return ESP_OK;
@@ -672,9 +767,11 @@ static esp_err_t file_uploader(httpd_req_t *req){
 }
 
 static esp_err_t view_luts(httpd_req_t* req){
-    
     httpd_resp_set_type(req, "text/plain");
     level_t lev;
+    sprintf(httpd_temp_buffer, "Pointer A %i: B: %i\n", (int) &levellut, (int) status->lut);
+    
+    httpd_resp_sendstr_chunk(req, httpd_temp_buffer);
     for (int i = 0; i<= 254; i++){
         lev = levellut[i];
         sprintf(httpd_temp_buffer, "LUT Level %i: 0-10v1: %d, 0-10v2: %d, DALIA: %d, DALIB: %d, DALIC: %d, DALID: %d, DALIE: %d, DALIF: %d, ESPNOW: %d, Rly1: %d, Rly2: %d R: %d, G: %d, B: %d\n", i,
@@ -977,7 +1074,7 @@ static const httpd_uri_t get_power_on_endpoint = {
     .user_ctx  = NULL
 };
 static const httpd_uri_t put_power_on_endpoint = {
-    .uri       = "/api/power",
+    .uri       = "/api/power?*",
     .method    = HTTP_PUT,
     .handler   = rest_power_handler,
     .user_ctx  = NULL
@@ -1038,7 +1135,7 @@ static httpd_handle_t start_webserver(networking_ctx_t *ctx)
     config.max_open_sockets = 13;
     config.max_uri_handlers = 20;
     config.lru_purge_enable = true;
-
+    status = ctx->status;
     // Start the httpd server
     ESP_LOGI(TAG, "Starting server on port: '%d'", config.server_port);
     if (httpd_start(&server, &config) == ESP_OK) {
