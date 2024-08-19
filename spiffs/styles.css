@@ -91,6 +91,10 @@ div#onbutton-box {
     grid-template-columns: 5fr 1fr;
     display: none;
 }
+
+div#offmessage {
+    font-size: 200%;
+}
 button.levelbutton {
     margin-bottom: 3px;
     padding: 0.5em 0.4em 0.5em 1em;
@@ -107,6 +111,11 @@ button.levelbutton.slow {
     border-radius: 0 10em 10em 0;
     padding-right: 1em;
     font-size: 100%;
+}
+button#go {
+    border-radius: 2em;
+    font-size: 140%;
+    float: right;
 }
 
 button.levelbutton:active {
@@ -173,11 +182,16 @@ button.update  {
     color: black !important;
 }
 
+div.alarmtype {
+    grid-column: 1 / 5;
+}
+
 .alarmunit {
     display:grid;
     /* position: absolute; */
     grid-template-columns: 3fr 4fr 8fr 1fr;
-    gap: 14px;
+    column-gap: 14px;
+    row-gap: 3px;
     /* border: 1px black solid; */
     align-items: center;
     margin-bottom: 2em;

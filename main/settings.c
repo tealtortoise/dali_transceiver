@@ -23,7 +23,7 @@ static int commit_countdown = -1;
 
 static SemaphoreHandle_t nvs_mutex;
 
-esp_err_t generate_key_indexed(char* keybuffer, char* name, int element){
+esp_err_t generate_key_indexed(char* keybuffer, const char* name, int element){
     // ESP_LOGI(TAG, "generating key from %s %i", name, element);
     if (element == SETTINGS_NO_INDEX) {
         sprintf(keybuffer, "%s", name);
@@ -39,11 +39,11 @@ esp_err_t generate_key_indexed(char* keybuffer, char* name, int element){
     return ESP_OK;
 }
 
-esp_err_t generate_key(char* buffer, char* name){
+esp_err_t generate_key(char* buffer, const char* name){
     return generate_key_indexed(buffer, name, -1);
 }
 
-esp_err_t set_setting_indexed(char* name, int element, int value) {
+esp_err_t set_setting_indexed(const char* name, int element, int value) {
     char keybuffer[16];
     if (value == GET_SETTING_NOT_FOUND) return ESP_ERR_INVALID_STATE;
     // BaseType_t mutex_taken = xSemaphoreTake(nvs_mutex, pdMS_TO_TICKS(5000));
@@ -68,11 +68,11 @@ esp_err_t set_setting_indexed(char* name, int element, int value) {
     return ESP_OK;
 };
 
-esp_err_t set_setting(char* name, int value) {
+esp_err_t set_setting(const char* name, int value) {
     return set_setting_indexed(name, -1, value);
 };
 
-int get_setting_indexed(char* name, int element) {
+int get_setting_indexed(const char* name, int element) {
     char keybuffer[16];
     int out;
     esp_err_t success = 1;
@@ -97,7 +97,7 @@ int get_setting_indexed(char* name, int element) {
     return GET_SETTING_NOT_FOUND;
 };
 
-int get_setting(char* name) {
+int get_setting(const char* name) {
     return get_setting_indexed(name, -1);
 };
 
@@ -183,8 +183,6 @@ esp_err_t setup_nvs_spiffs_settings(){
     while (1){
         commapos = -1;
         out = fgets(linebuffer, 64, settingfile);
-        // sprintf(linebuffer, "test,0");
-        // printf(linebuffer);
         for (int i = 1; i <= 16; i++){
             if (linebuffer[i] == ',') {
                 commapos = i;
@@ -200,11 +198,11 @@ esp_err_t setup_nvs_spiffs_settings(){
         strncpy(key, linebuffer, commapos);
         key[commapos] = (char) 0;
         sscanf(linebuffer + commapos + 1, "%i", &outputint);
-        // ESP_LOGI(TAG,"Key %s = %i",key,outputint);
+        ESP_LOGI(TAG,"Key %s = %i",key,outputint);
         key_find_result = nvs_find_key(nvs_handle_, key, &nvstype);
         if (key_find_result == ESP_OK && !force_update)
         {
-            // ESP_LOGI(TAG, "Key '%s' already in NVS", key);
+            ESP_LOGI(TAG, "Key '%s' already in NVS", key);
             mutex_taken = xSemaphoreTake(nvs_mutex, pdMS_TO_TICKS(5000));
             if (mutex_taken == pdTRUE){
                 ESP_ERROR_CHECK(nvs_get_i32(nvs_handle_, key, &existing_int));
@@ -228,6 +226,7 @@ esp_err_t setup_nvs_spiffs_settings(){
             mutex_taken = xSemaphoreTake(nvs_mutex, pdMS_TO_TICKS(5000));
             if (mutex_taken == pdTRUE){
                 ESP_ERROR_CHECK(nvs_set_i32(nvs_handle_, key, outputint));
+                commit_countdown = COUNTDOWN_START;
                 nvs_updated = true;
                 xSemaphoreGive(nvs_mutex);
             }
@@ -240,8 +239,6 @@ esp_err_t setup_nvs_spiffs_settings(){
     }
 
     fclose(settingfile);
-    if (nvs_updated) {
-    }
     TaskHandle_t task;
     xTaskCreate(commit_task, "nvs commit task", 2400, NULL, 1, &task);
     return ESP_OK;
@@ -281,7 +278,7 @@ esp_err_t read_level_luts(level_t lut[]){
     int column_idx;
     int row_idx;
     int total_rows = 0;
-    while (1){
+    while (1) {
         commapos = -1;
         lastcommapos = -1;
         column_idx = 0;

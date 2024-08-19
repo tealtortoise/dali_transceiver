@@ -50,22 +50,16 @@ bool DRAM_ATTR but3_debounce_lock = false;
 
 TaskHandle_t DRAM_ATTR button_task_handle;
 
-bool button1_isr(void *params){
-    BaseType_t task_awoken = false;
-    xTaskNotifyFromISR(button_task_handle, 1, eSetValueWithOverwrite, &task_awoken);
-    return task_awoken == pdTRUE;
+void button1_isr(void *params){
+    xTaskNotifyFromISR(button_task_handle, 1, eSetValueWithOverwrite, NULL);
 };
 
-bool button2_isr(void *params){
-    BaseType_t task_awoken = false;
-    xTaskNotifyFromISR(button_task_handle, 2, eSetValueWithOverwrite, &task_awoken);
-    return task_awoken == pdTRUE;
+void button2_isr(void *params){
+    xTaskNotifyFromISR(button_task_handle, 2, eSetValueWithOverwrite, NULL);
 };
 
-bool button3_isr(void *params){
-    BaseType_t task_awoken = false;
-    xTaskNotifyFromISR(button_task_handle, 3, eSetValueWithOverwrite, &task_awoken);
-    return task_awoken == pdTRUE;
+void button3_isr(void *params){
+    xTaskNotifyFromISR(button_task_handle, 3, eSetValueWithOverwrite, NULL);
 };
 
 void run_calibration(button_task_ctx_t *ctx){
@@ -168,12 +162,12 @@ void button_monitor_task(void *params){
             // loops += 1;
 
             if (but1_value  && (but1_counter == 0 || but1_counter > (REPEAT_DELAY_MS * 2 / wait_ms))) {
-                setpoint_change = -4;
+                setpoint_change = -5;
                 updated = true;
             }
             else if (but2_value && (but2_counter == 0 || but2_counter > (REPEAT_DELAY_MS * 2 / wait_ms)))
             {
-                setpoint_change = 4;
+                setpoint_change = 5;
                 updated = true;
             }
             else if (but3_counter > (5000 / 10)) {
@@ -185,7 +179,7 @@ void button_monitor_task(void *params){
                 
                 ctx->status->setpoint = clamp(ctx->status->setpoint + setpoint_change, 0, 254);
                 ctx->status->setpoint_source = SETPOINT_SOURCE_BUTTONS;
-                ctx->status->fadetime_ms = USE_DEFAULT_FADETIME;
+                ctx->status->fadetime_ms = 0;
                 xTaskNotifyIndexed(ctx->status->mainloop_task, NEW_SETPOINT_NOTIFY_IDX, SETPOINT_SOURCE_BUTTONS, eSetValueWithOverwrite);
                 updated = false;
             }

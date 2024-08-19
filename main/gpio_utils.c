@@ -100,7 +100,7 @@ int get_and_log_buttons(){
     int but1 = gpio_get_level(BUT1_GPIO);
     int but2 = gpio_get_level(BUT2_GPIO);
     int but3 = gpio_get_level(BUT3_GPIO);
-    char* state = but1 ? NOT_PRESSED_MESSAGE : PRESSED_MESSAGE;
+    const char* state = but1 ? NOT_PRESSED_MESSAGE : PRESSED_MESSAGE;
     ESP_LOGI(TAG, "Button 1 is %s", state);
     state = but2 ? NOT_PRESSED_MESSAGE : PRESSED_MESSAGE;
     ESP_LOGI(TAG, "Button 2 is %s", state);
@@ -168,9 +168,6 @@ void configure_gpio(){
     configure_output_pin(PWM_010v2_GPIO, 0);
     configure_output_pin(TX_GPIO, 1);
     
-    // ESP_ERROR_CHECK(gpio_set_drive_capability(16, GPIO_DRIVE_CAP_0));
-
-
     configure_input_pin(RX_GPIO, 0, GPIO_INTR_POSEDGE);
     configure_input_pin(AIN_GPIO, 0, GPIO_INTR_DISABLE);
     configure_input_pin(EXT1_GPIO, 0, GPIO_INTR_DISABLE);

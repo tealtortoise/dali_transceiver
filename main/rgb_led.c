@@ -25,15 +25,15 @@ void rgb_led_task(void *params)
         led_strip_set_pixel(led_strip, 0, r, g, b);
         if ((count & 0xFFF) == 0)
         {
-            ESP_LOGI(TAG, "RGB %d %d %d: LUT pointer %i, 25: %d %d %d", r, g, b, (int) status->lut,
+            ESP_LOGD(TAG, "RGB %d %d %d: LUT pointer %i, 25: %d %d %d", r, g, b, (int) status->lut,
                 status->lut[25].r, status->lut[25].g, status->lut[25].b);
         }
         count += 1;
         led_strip_refresh(led_strip);
-        vTaskDelay(pdMS_TO_TICKS(10));
+        vTaskDelay(pdMS_TO_TICKS(20));
         if (0 && !status->power_on)
         {
-            r = 50; g = 10; b = 0;
+            r = 20; g = 5; b = 0;
             continue;
         }
         r = status->lut[status->setpoint].r;
@@ -46,7 +46,7 @@ void setup_rgb_led(device_status_t *status)
 {
     led_strip_config_t strip_config = {
         .strip_gpio_num = RGB_LED_GPIO,
-        .max_leds = 1, // at least one LED on board
+        .max_leds = 1,
     };
     led_strip_rmt_config_t rmt_config = {
         .resolution_hz = 10 * 1000 * 1000, // 10MHz

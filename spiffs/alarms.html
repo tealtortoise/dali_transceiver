@@ -1,23 +1,21 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
     <head>
-        <title>MulberryLight Setup</title>
+        <title></title>
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
         <link rel="shortcut icon" href="favicon.ico">
         <link rel="apple-touch-icon image_src" href="apple-touch-icon.png">
         <link rel="manifest" href="site.webmanifest">
         <link rel="stylesheet" type="text/css" href="styles.css">
+        <script type="text/javascript"   src="alarms.js"></script>
     </head>
-
 <body>
     <header>
-        <h1>
-            MulberryLight Living Room
-        </h1>
+        <h1></h1>
         <nav>
-            <a href="/"><button class="nav " level="254">Levels</button></a>
-            <a href="/setup"><button class="nav " level="254">Setup</button></a>
+            <a href="/"><button class="nav" level="254">Levels</button></a>
+            <a href="/setup"><button class="nav  selected" level="254">Setup</button></a>
             <a href="/ch"><button class="nav " level="254">Channels</button></a>
         </nav>
     </header>
@@ -29,6 +27,7 @@
             <span>Fade Time (sec)</span>
             <span>On</span>
             <!-- <span class="alarmnumber">1</span> -->
+            <div class="alarmtype">Universal Alarm</div>
             <input class="alarmsetpoint" id="setpoint1" value="0">
             <input class="alarmtime" id="alarmtime1" value="0">
             <input class="alarmfade" id="fadetime1" value="0">
@@ -39,6 +38,7 @@
                 </div>
             </div>
             <!-- <span class="alarmnumber">2</span> -->
+            <div class="alarmtype">Up Alarms</div>
             <input class="alarmsetpoint" id="setpoint2" value="0">
             <input class="alarmtime" id="alarmtime2" value="0">
             <input class="alarmfade" id="fadetime2" value="0">
@@ -66,6 +66,34 @@
                 <div class="switch">
                     <input id="enable4" class="input" type="checkbox" />
                     <label for="enable4" class="slider"></label>
+                </div>
+            </div>
+            <div class="alarmtype">Down Alarms</div>
+            <input class="alarmsetpoint" id="setpoint5" value="0">
+            <input class="alarmtime" id="alarmtime5" value="0">
+            <input class="alarmfade" id="fadetime5" value="0">
+            <div class="checkbox-wrapper-20">
+                <div class="switch">
+                    <input id="enable5" class="input" type="checkbox" />
+                    <label for="enable5" class="slider"></label>
+                </div>
+            </div>
+            <input class="alarmsetpoint" id="setpoint6" value="0">
+            <input class="alarmtime" id="alarmtime6" value="0">
+            <input class="alarmfade" id="fadetime6" value="0">
+            <div class="checkbox-wrapper-20">
+                <div class="switch">
+                    <input id="enable6" class="input" type="checkbox" />
+                    <label for="enable6" class="slider"></label>
+                </div>
+            </div>
+            <input class="alarmsetpoint" id="setpoint7" value="0">
+            <input class="alarmtime" id="alarmtime7" value="0">
+            <input class="alarmfade" id="fadetime7" value="0">
+            <div class="checkbox-wrapper-20">
+                <div class="switch">
+                    <input id="enable7" class="input" type="checkbox" />
+                    <label for="enable7" class="slider"></label>
                 </div>
             </div>
         </div>
@@ -101,6 +129,14 @@
             <input class="setting" id="dalif_address">
             <div class="settingname">Lutfile number</div>
             <input class="setting" id="lutfile">
+            <div class="settingname">Namefile number</div>
+            <input class="setting" id="namefile">
+            <div class="settingname">Startup Level</div>
+            <input class="setting" id="startup_level">
+            <div class="settingname">Idle Update Interval (s)</div>
+            <input class="setting" id="idle_intvl_ms">
+            <div class="settingname">Cooldown Duration (s)</div>
+            <input class="setting" id="idle_cooldown">
 
         </div>
         <div class="channelinfo">For DALI short addresses use 0 &lt;= channel &lt;= 63. For DALI groups use 100 &lt;= group &lt;= 115.
@@ -160,318 +196,6 @@
                 </div>
                 <button class="update" id="update2">Update all</button>
     </main>
-
-    <script>
-        "use strict";
-        let getEl = (st) => document.getElementById(st);
-        let modified = false;
-
-        let inputs = Array.from(document.getElementsByTagName("input"));
-        function pad(num) {
-            num = num.toString();
-            while (num.length < 2) num = "0" + num;
-            return num;
-        }
-        function get(uri, el, process) {
-            
-            if (!process) process = (_) => { return _; };
-            const options = {
-                method: 'GET',
-            };
-            return fetch(uri, options)
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error('Network response was not ok');
-                    }
-                    // let text = response.text()
-                    return response.text();
-                })
-                .then((st) => {
-                    if (el != null) {
-                        el.value = process(st);
-                        el.setAttribute("serverval", process(st));
-                        console.log("Got ", st, uri, el, el.value);
-                        return;
-                    }
-                    return st;
-                })
-                .catch(error => {
-                    console.error('There was a problem with your fetch operation:', error);
-                });
-        }
-
-        function send(uri, value, el, process) {
-            if (!process) process = (_) => { return _; };
-            if (el) {
-                let ui_value = el.type == "checkbox" ? el.checked : el.value;
-                let serverval = el.getAttribute("serverval");
-                if (ui_value == serverval) return Promise.resolve();
-            }
-            if (value == undefined && el != undefined) value = el.value;
-            const options = {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/plain'
-                },
-                body: `${process(value)}`
-            };
-
-            // Make the PUT request using the fetch API
-            return fetch(uri, options)
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error('Network response was not ok');
-                    }
-                    if (el != null) {
-                        if (el.type == "checkbox") {
-                            console.log(el);
-                            let label = el.nextElementSibling;
-                            label.classList.remove("modified");
-                            label.classList.add("saved");
-                        } else {
-                            el.className = "saved";
-                        }
-                    }
-                    return response;
-                })
-                .catch(error => {
-                    console.error('There was a problem with your fetch operation:', error);
-                });
-        };
-
-        function buttonclick(ev) {
-            let promises = [];
-            inputs.forEach((el) => {
-                if (el.type != "checkbox") el.className = "";
-            })
-            inputs.forEach(restoreIfBlank);
-            for (let i = 1; i <= 5; i++) {
-                let preset_el = getEl("preset" + i);
-                let preset = preset_el.value;
-                send(`/nvs/preset/${i}/`, preset, preset_el);
-                if (i>4) break;
-
-                let alarmnum = i;
-                let alarmtime_el = getEl("alarmtime" + alarmnum);
-                let fadetime_el = getEl("fadetime" + alarmnum);
-                let setpoint_el = getEl("setpoint" + alarmnum);
-                let enable_el = getEl("enable" + alarmnum);
-                let alarmtime = alarmtime_el.value;
-                // let fadetime = parseInt(fadetime_el.value, 10) * 1000;
-                let setpoint = parseInt(setpoint_el.value, 10);
-                let enabled = enable_el.checked ? 1 : 0;
-
-                if (setpoint > 254 || setpoint < 0) {
-                    console.log("Bad setpoint");
-                    setpoint_el.classList.add("error");
-                    return;
-                }
-                if (alarmtime.length == 0) {
-                    alarmtime_el.value = "1200";
-                    alarmtime = "1200";
-                }
-                else if (alarmtime.length != 4) {
-                    alarmtime_el.classList.add("error");
-                    return;
-                }
-                let hour = parseInt(alarmtime.substring(0, 2), 10);
-                let min = parseInt(alarmtime.substring(2, 4), 10);
-                if (min > 59 || min < 0) {
-                    console.log("min not valid");
-                    alarmtime_el.classList.add("error");
-                    return;
-                }
-                if (hour < 0 || hour > 23) {
-                    console.log("hour not valid");
-                    alarmtime_el.classList.add("error");
-                    return;
-                }
-                if (preset < 0) {
-                    preset = 0;
-                }
-                else if (preset > 254) {
-                    preset = 254;
-                }
-
-                send(`/nvs/alarmmin/${alarmnum}/`, min, alarmtime_el);
-                send(`/nvs/alarmhour/${alarmnum}/`, hour, alarmtime_el);
-                send(`/nvs/alarmfade/${alarmnum}/`, undefined, fadetime_el, (st) => {
-                    return st * 1000;
-                });
-                send(`/nvs/alarmsetpoint/${alarmnum}/`, setpoint, setpoint_el);
-                send(`/nvs/alarmenable/${alarmnum}/`, enabled, enable_el);
-            }
-            let default_fadetime_el = getEl("default_fadetime");
-            let default_fadetime = default_fadetime_el.value;
-            if (default_fadetime >= 0 && default_fadetime < (3600 * 10)) {
-                promises.push(send("/nvs/default_fade/", undefined, default_fadetime_el,
-                (_) => {return _ * 1000;}));
-            } else {
-                default_fadetime_el.className = "error";
-                return;
-            }
-            let slow_fadetime_el = getEl("slow_fadetime");
-            let slow_fadetime = slow_fadetime_el.value;
-            if (slow_fadetime >= 0 && slow_fadetime < (3600 * 10)) {
-                promises.push(send("/nvs/slow_fade/", undefined, slow_fadetime_el,
-                (_) => {return _ * 1000;}));
-            } else {
-                slow_fadetime_el.className = "error";
-                return;
-            }
-            
-            let full_power_el = getEl("full_power");
-            let full_power = full_power_el.value;
-            if (full_power >= 0 && full_power <= 256) {
-                promises.push(send("/nvs/full_power/", full_power, full_power_el));
-            }
-            let lutfile_el = getEl("lutfile");
-            let lutfile = lutfile_el.value;
-            promises.push(send("/nvs/lutfile/", lutfile, lutfile_el));
-
-            for (let i = 0; i < 6; i++) {
-                let channel_el = getEl("dali" + String.fromCharCode(97 + i) + "_address");
-                let channel = channel_el.value;
-                send("/nvs/" + channel_el.id + "/", channel, channel_el);
-            }
-            let configbits = 0;
-            for (let bit = 0; bit <= 6; bit++) {
-                let status = getEl("configbit" + (bit + 1)).checked;
-                configbits = configbits | (status << bit);
-            }
-            if (getEl("configbit1").getAttribute("serverval") != configbits) {
-                promises.push(send("/nvs/configbits/", configbits).then(() => {
-                    for (let bit = 0; bit <= 6; bit++) {
-                        let el = getEl("configbit" + (bit + 1));
-                        el.setAttribute("serverval", configbits);
-                        let label = el.nextElementSibling;
-                        label.classList.remove("modified");
-                        label.classList.add("saved");
-                    }
-                }));
-            }
-            Promise.all(promises).then(() => {
-                console.log("All done");
-                getEl("update1").innerHTML = "Updated!";
-                getEl("update2").innerHTML = "Updated!";
-
-            })
-        }
-        let uri;
-        for (let i = 1; i <= 5; i++) {
-            uri = `/nvs/preset/${i}/`;
-            get(uri, getEl("preset" + i));
-            if (i>4) break;
-
-            uri = `/nvs/alarmsetpoint/${i}/`;
-            get(uri, getEl(`setpoint${i}`));
-            uri = `/nvs/alarmfade/${i}/`;
-            let fadeel = getEl(`fadetime${i}`);
-            get(uri, fadeel, (st) => {
-                if (st >= 0) return st * 0.001;
-                return ""
-            });
-
-            uri = `/nvs/alarmenable/${i}/`;
-            get(uri).then((st) => {
-                let enable_el = getEl(`enable${i}`);
-                enable_el.checked = st == "1";
-                enable_el.setAttribute("serverval", st);
-            });
-            uri = `/nvs/alarmhour/${i}/`;
-            let hour;
-            let hour_prom = get(uri).then((st) => {
-                hour = st;
-            });
-            uri = `/nvs/alarmmin/${i}/`;
-            let min;
-            let min_prom = get(uri).then((st) => {
-                min = st;
-            })
-            Promise.all([min_prom, hour_prom]).then(() => {
-                let time_el = getEl(`alarmtime${i}`);
-                time_el.value = pad(hour) + pad(min);
-                time_el.setAttribute("serverval", pad(hour) + pad(min));
-            });
-        }
-        let default_fadetime_el = getEl("default_fadetime");
-        get("/nvs/default_fade/", default_fadetime_el, (st) => {
-            if (st >= 0) return st * 0.001;
-            return "";
-        });
-        let slow_fadetime_el = getEl("slow_fadetime");
-        get("/nvs/slow_fade/", slow_fadetime_el, (st) => {
-            if (st >= 0){
-                return st * 0.001;
-            }
-            return "";
-        })
-        get("/nvs/full_power/", getEl("full_power"));
-        get("/nvs/lutfile/", getEl("lutfile"));
-
-        for (let i = 0; i < 6; i++) {
-            let channel_el = getEl("dali" + String.fromCharCode(97 + i) + "_address");
-            get("/nvs/" + channel_el.id + "/", channel_el);
-        }
-
-        get("/nvs/configbits/").then((bits) => {
-            for (let bit = 0; bit <= 6; bit++) {
-                let status = (bits >> bit) & 1;
-                let configbit_el = getEl("configbit" + (bit + 1));
-                configbit_el.checked = status;
-                configbit_el.setAttribute("serverval", bits)
-            }
-        });
-
-
-        let buttons = Array.from(document.getElementsByTagName("button"));
-        buttons.forEach((button_el) => {
-            console.log("addedonclick");
-            button_el.onclick = buttonclick;
-        });
-
-        function clearInput(ev) {
-            console.log("cleared");
-            let el = ev.srcElement;
-            el.setAttribute("serverval", ev.srcElement.value);
-            el.value = "";
-            inputs.forEach((el_) => {
-                if (el_ !== el) restoreIfBlank(el_);
-            });
-
-        };
-        function markModified(ev) {
-            console.log("modified");
-            modified = true;
-
-            if (ev.srcElement.type == "checkbox") {
-                let label = ev.srcElement.nextElementSibling;
-                label.classList.add("modified");
-                label.classList.remove("saved");
-            } else {
-                ev.srcElement.className = "modified";
-            }
-        };
-
-        function restoreIfBlank(el) {
-            // let el = ev.srcElement;
-            if (el.value == "") el.value = el.getAttribute("serverval");
-        }
-        inputs.forEach((input_el) => {
-            input_el.onfocus = clearInput;
-        });
-        inputs.forEach((input_el) => {
-            input_el.onchange = markModified;
-        });
-        inputs.forEach((input_el) => {
-            input_el.addEventListener("keypress", function(event) {
-                // If the user presses the "Enter" key on the keyboard
-                if (event.key === "Enter") {
-                    document.getElementById("update1").click();
-                }
-            }) 
-        });
-    </script>
 </body>
 
 </html>

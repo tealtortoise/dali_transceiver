@@ -41,6 +41,10 @@
 #define CONFIGBIT_TRANSMIT_ESPNOW 0x20
 #define CONFIGBIT_RECEIVE_ESPNOW 0x40
 
+#define ALARM_TYPE_UNIVERSAL 0
+#define ALARM_TYPE_UP_ONLY 1
+#define ALARM_TYPE_DOWN_ONLY 2
+
 extern nvs_handle_t nvs_handle_;
 
 extern TaskHandle_t espnowtask;
@@ -85,10 +89,10 @@ typedef struct {
     TaskHandle_t mainloop_task;
     level_overrides_t level_overrides;
     level_t channel_levels;
-    level_t* lut;
+    level_t lut[255];
 } device_status_t;
 
-extern volatile level_t levellut[255];
+// extern volatile level_t levellut[255];
 
 
 #define DALI_COMMAND_COMMISSION 1
@@ -173,6 +177,10 @@ int32_t _MAX(int32_t a, int32_t b);
 
 int32_t _MIN(int32_t a, int32_t b);
 
+uint32_t _uMIN(uint32_t a, uint32_t b);
+
+uint32_t _uMAX(uint32_t a, uint32_t b);
+
 int clamp(int in, int low, int high);
 
 uint32_t uclamp(uint32_t in, uint32_t low, uint32_t high);
@@ -183,7 +191,7 @@ extern SemaphoreHandle_t log_mutex;
 
 void initialise_logbuffer();
 
-int log_string(char *logstring, int bytes_to_log, bool addtime);
+int log_string(const char *logstring, int bytes_to_log, bool addtime);
 
 typedef struct {
     const char name[24];

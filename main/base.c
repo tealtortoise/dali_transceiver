@@ -26,9 +26,9 @@ int actual_level = 0;
 int duty = -1;
 int maxduty = -1;
 
-char logbuffer[LOGBUFFER_SIZE + 16];
+__NOINIT_ATTR char logbuffer[LOGBUFFER_SIZE + 16];
 
-volatile level_t levellut[255];
+// volatile level_t levellut[255];
 
 TaskHandle_t espnowtask = NULL;
 
@@ -36,7 +36,7 @@ struct timeval time_;
 
 // extern char logbuffer[LOGBUFFER_SIZE + 16];
 
-extern int logbufferpos = 0;
+extern __NOINIT_ATTR int logbufferpos = 0;
 
 void build_nvs_key_for_gpio_gain(int gpio, char* keybuf){
     sprintf(keybuf, "GPIOPIN %hhu GAIN", gpio);
@@ -48,6 +48,7 @@ SemaphoreHandle_t log_mutex;
 inline int32_t _MAX(int32_t a, int32_t b) { return((a) > (b) ? a : b); }
 inline int32_t _MIN(int32_t a, int32_t b) { return((a) < (b) ? a : b); }
 inline uint32_t _uMIN(uint32_t a, uint32_t b) { return((a) < (b) ? a : b); }
+inline uint32_t _uMAX(uint32_t a, uint32_t b) { return((a) > (b) ? a : b); }
 
 int clamp(int in, int low, int high){
     return (in > low) ? _MIN(in, high) : low;
@@ -65,6 +66,7 @@ uint64_t get_system_time_us(uint64_t offset){
 
 void initialise_logbuffer(){
     log_mutex = xSemaphoreCreateMutex();
+    logbufferpos = 0;
     for (int i = 0; i < LOGBUFFER_SIZE; i++){
         logbuffer[i] = ' ';
         // ESP_LOGI(TAG, "%i -> i %i, %d", (size_t) logbuffer, i, logbuffer[i]);
@@ -78,16 +80,7 @@ static uint64_t last_log = 0;
 static uint64_t nowtime = 0;
 
 
-int log_string(char* logstring, int bytes_to_log, bool addtime){
-    // for (int i = 0; i < 4096; i++){
-    //     if (logstring[i] == 0) {
-    //         if (i == 0) {
-    //             sprintf(logstring, "NO DATA");
-    //         }
-    //         break;
-    //     }
-    //     if (logstring[i] != 10 && logstring[i] != 13 && logstring[i] < 32) logstring[i] = ' ';
-    // }
+int log_string(const char* logstring, int bytes_to_log, bool addtime){
     int added = 0;
     if (addtime) {
         nowtime = esp_timer_get_time();
@@ -97,7 +90,7 @@ int log_string(char* logstring, int bytes_to_log, bool addtime){
 
             time ( &rawtime );
             timeinfo = localtime ( &rawtime );
-            char* timestr = asctime(timeinfo);
+            const char* timestr = asctime(timeinfo);
             strncpy(tempbuffer, timestr, 24);
             tempbuffer[24] = '\n';
             // tempbuffer[24] = ' ';
@@ -128,12 +121,9 @@ int log_string(char* logstring, int bytes_to_log, bool addtime){
         // ESP_LOGI(TAG, "Copied %i bytes remaining into start", len- bytes_copied);
         logbufferpos += len - bytes_copied;
     }
-    // logbuffer[logbufferpos] = '\n';
-    // logbufferpos += 1;
     if (logbufferpos > (LOGBUFFER_SIZE - 1))
     {
         logbufferpos = 0;
     }
-    // logbufferpos = 0;
     return added + bytes_to_log;
 }

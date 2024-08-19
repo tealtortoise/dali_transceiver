@@ -23,7 +23,6 @@
 
 static const char* TAG = "ADC";
 
-
 static int adc_raw[2][10];
 static int raw_cal_voltage[2][10];  
 

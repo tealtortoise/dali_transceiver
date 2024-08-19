@@ -45,6 +45,7 @@ void rtc_task(void* params){
     int alarm_min;
     int alarm_hour;
     int alarm_fade;
+    int alarm_type;
     uint8_t setpoint;
     int alarm_setpoint;
     int alarm_enable;
@@ -61,7 +62,7 @@ void rtc_task(void* params){
             if (last_minute != minute) break;
         }
         // ESP_LOGI(TAG, "Hour:min %i : %i : %i", hour, minute, second);
-        for (int i = 1; i <= 4; i++){
+        for (int i = 1; i <= 7; i++){
             
             vTaskDelay(pdMS_TO_TICKS(100));
             alarm_enable = get_setting_indexed("alarmenable", i);
@@ -72,6 +73,25 @@ void rtc_task(void* params){
             if (minute != alarm_min) continue;
             ESP_LOGI(TAG, "Alarm %i !!", i);
             alarm_setpoint = get_setting_indexed("alarmsetpoint", i);
+            alarm_type = get_setting_indexed("alarmtype", i);
+            if (alarm_type == ALARM_TYPE_UP_ONLY)
+            {
+                // Up alarms
+                if (alarm_setpoint < status->setpoint)
+                {
+                    ESP_LOGI(TAG, "No action on up alarm %i - current sp %i is greater than alarm sp %i", i, status->setpoint, alarm_setpoint);
+                    continue;
+                }
+            }
+            if (alarm_type == ALARM_TYPE_DOWN_ONLY)
+            {
+                // Down alarms
+                if (alarm_setpoint > status->setpoint)
+                {
+                    ESP_LOGI(TAG, "No action on down alarm %i - current sp %i is less than alarm sp %i", i, status->setpoint, alarm_setpoint);
+                    continue;
+                }
+            }
             setpoint = alarm_setpoint;
             alarm_fade = get_setting_indexed("alarmfade", i);
 
