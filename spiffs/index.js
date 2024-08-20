@@ -1,9 +1,35 @@
 "use strict";
 
 function all(){
+    
+    let debug = document.getElementById("debug");
+    let slider = document.getElementById("levelslider");
+    let levelind = document.getElementById('ajaxlevel');
+    let currentind = document.getElementById('ledcurrent');
+    let levelbyteind = document.getElementById('levelbyte');
+    let poweronind = document.getElementById("poweron-level");
+    let offmessage_el = document.getElementById("offmessage");
+    let presetbuttons = Array.from(document.getElementsByClassName("levelbutton"));
+
+    let levelbox = document.getElementById("levelbutton-box");
+    let offbox = document.getElementById("offbutton-box");
+    let onbox = document.getElementById("onbutton-box");
+    let timermessage = "Turning Power Off in 2 minutes... Alarms will be OFF.";
+
     let powerStatus = true;
     function levelbyte_to_linear(byte){
         return Math.floor(Math.pow(10, (byte-1) * 3.0 / 253.0) * 10 + 0.5) / 100;
+    }
+
+    function stylePresets(level) {
+        presetbuttons.forEach(el => {
+            if (el.classList.contains("slow")) return;
+            if (el.getAttribute("level") == level) {
+                el.classList.add("selected");
+            } else {
+                el.classList.remove("selected");
+            }
+        });
     }
 
     function get(uri, el) {
@@ -15,8 +41,8 @@ function all(){
                 if (!response.ok) {
                     return "";
                 }
-                // let text = response.text()
-                return response.text();
+                let text = response.text()
+                return text;
             })
             .catch(error => {
                 console.error('There was a problem with your fetch operation:', error);
@@ -24,22 +50,10 @@ function all(){
     }
     var ontimeout = 0;
     var waiting = 0;
-    let debug = document.getElementById("debug");
-    let slider = document.getElementById("levelslider");
-    let levelind = document.getElementById('ajaxlevel');
-    let currentind = document.getElementById('ledcurrent');
-    let levelbyteind = document.getElementById('levelbyte');
-    let poweronind = document.getElementById("poweron-level");
-    let offmessage_el = document.getElementById("offmessage");
-
-    let levelbox = document.getElementById("levelbutton-box");
-    let offbox = document.getElementById("offbutton-box");
-    let onbox = document.getElementById("onbutton-box");
-    let timermessage = "Turning Power Off in 2 minutes... Alarms will be OFF.";
-
+    let preset_promises = [];
     for (let i = 1; i <= 5; i++) {
         let uri = `/nvs/preset/${i}/`;
-        get(uri).then((st) => {
+        preset_promises.push(get(uri).then((st) => {
             let button_el = document.getElementById("preset" + i);
             let slutton_el = button_el.nextElementSibling;
             if (st >= 0){
@@ -47,7 +61,7 @@ function all(){
                 slutton_el.setAttribute("level", st);
                 button_el.childNodes[1].innerHTML = levelToPercent(st);
             }
-        });
+        }));
     }
 
     function levelToPercent(level) {
@@ -56,7 +70,7 @@ function all(){
     }
 
     function send(data, slow, uri, source) {
-        debug.innerHTML = source + (new Date(Date.now()));
+        // debug.innerHTML = source + (new Date(Date.now()));
         const options = {
             method: 'PUT',
             headers: {
@@ -79,6 +93,7 @@ function all(){
                     throw new Error('Network response was not ok');
                 }
                 levelind.classList.remove("updating");
+                stylePresets(data);
                 return response;
             })
             .catch(error => {
@@ -87,9 +102,6 @@ function all(){
     };
 
     function sliderChangeFn(event) {
-        // if(event.cancelable == true){
-            // return;
-        // }
         let sliderval = slider.value;
         let percentstr = levelToPercent(sliderval);
         levelind.innerHTML = percentstr;
@@ -97,8 +109,13 @@ function all(){
         currentind.innerHTML = levelbyte_to_linear(sliderval) + "%";
         poweronind.innerHTML = percentstr;
         levelind.classList.add("updating");
+        debug.innerHTML = "slider.e " + sliderval + " Cancellable: " + event.cancelable;
+        
+        if (event.cancelable == true){
+            return;
+        }
+        // send(sliderval, undefined, undefined, "slider");
         if (!ontimeout){
-            send(sliderval, undefined, undefined, "slider");
             debug.innerHTML = "slider.e " + sliderval + " " + event.cancelable;
             ontimeout = 1;
             setTimeout(function() {
@@ -114,6 +131,11 @@ function all(){
             waiting = 1;
         }
     };
+
+    function sliderSendFn(event) {
+        let sliderval = slider.value;
+        send(sliderval, undefined, undefined, "slidergo");
+    }
 
     function setUIPowerOff(timeout) {
         powerStatus = false;
@@ -202,14 +224,15 @@ function all(){
         element.onclick = buttonPressFn;
     });
 
-    document.getElementById("go").onclick = sliderChangeFn;
-    slider.onclick = sliderChangeFn;
+    document.getElementById("go").onclick = sliderSendFn;
+    slider.addEventListener("input", sliderChangeFn);
 
-    function get_state(){
-        get("/setpoint").then((sp) => {
+    function get_state(skip_styling){
+        let setpoint_promise = get("/setpoint").then((sp) => {
             if (!(sp >= 0)) {
                 sp = "0"
             }
+            if (!skip_styling) stylePresets(sp);
             let percentstr = levelToPercent(sp);
             levelind.innerHTML = percentstr;
             currentind.innerHTML = levelbyte_to_linear(sp) + "%";
@@ -233,8 +256,14 @@ function all(){
             }
         });
         window.setTimeout(get_state, 20000);
+        return setpoint_promise;
     }
-    get_state(); 
+    preset_promises.push(get_state(true));
+    
+    Promise.all(preset_promises).then(() => {
+        console.log("All promises resolved!");
+        stylePresets(levelbyteind.innerHTML);
+    });
 }
 
 window.onload = all;

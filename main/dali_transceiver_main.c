@@ -44,17 +44,16 @@
 #include "settings.h"
 #include "rgb_led.h"
 
-#define MIN_EST_LOOPTIME_US 50000
+#define MIN_EST_LOOPTIME_MS 50
 
-#define LOOPTIME_TOLERANCE 10000
+#define LOOPTIME_TOLERANCE 20
 #define LOOPTIMES_OUT_OF_TOLERANCE_NEEDED 2
 
-#define IDLE_COOLDOWN_DURATION_US (120 * 1000000)
-#define IDLE_UPDATE_INTERVAL_DURING_COOLDOWN_US (500000)
-#define MAX_IDLE_UPDATE_INTERVAL_AFTER_COOLDOWN_US (60UL * 60UL * 1000000UL)
-#define MINIMUM_TARGET_LOOPTIME 15000
+#define IDLE_UPDATE_INTERVAL_DURING_COOLDOWN_MS (800)
+#define MAX_IDLE_UPDATE_INTERVAL_AFTER_COOLDOWN_MS (60UL * 60UL * 1000UL)
+#define MINIMUM_TARGET_LOOPTIME 15
 
-#define IDLE_UPDATE_INTERVAL_ADDITION_US_RECV_ESPNOW (500000)
+#define IDLE_UPDATE_INTERVAL_ADDITION_US_RECV_ESPNOW (500)
 
 #define HASH_LEN 32 /* SHA-256 digest length */
 
@@ -91,8 +90,6 @@ void list_tasks()
 static int tick_inc = 1;
 static uint8_t tick_inc_array[255] = {1};
 static uint32_t tlt_array[255] = {100};
-static uint64_t target_looptime = 0;
-static uint64_t ideal_time_between_levels_us = 0;
 static uint64_t calcreftime;
 
 int fadetime;
@@ -101,60 +98,97 @@ uint32_t get_time_ms(){
     return (uint32_t) (esp_timer_get_time() >> 10);
 }
 
-void calc_tickinc_and_looptime(uint64_t looptime, int dif)
-{
-    if (fadetime <= 50)
-    {
-        tick_inc = 254;
-        target_looptime = 0;
-        return;
-    }
-    calcreftime = esp_timer_get_time();
-    ideal_time_between_levels_us = ((uint64_t)fadetime) << 10;
-    tick_inc = 0;
-    uint64_t intermediate = ideal_time_between_levels_us / abs(dif);
-    if (intermediate > 180000000LL)
-        intermediate = 180000000LL;
-    while (tick_inc < 254)
-    {
-        tick_inc += 1;
-        target_looptime = intermediate * (uint64_t)tick_inc;
-        // fudge the numbers a bit for smoother fades at expense of accuracy
-        if (target_looptime < MINIMUM_TARGET_LOOPTIME)
-        {
-            continue;
-        }
-        if (tick_inc == 1 && (target_looptime * 1.5) >= looptime)
-            break;
-        if (tick_inc == 2 && (target_looptime * 1.3) >= looptime)
-            break;
-        if (tick_inc == 3 && (target_looptime * 1.15) >= looptime)
-            break;
+// void ___calc_tickinc_and_looptime(uint64_t looptime, int dif)
+// {
+//     if (fadetime <= 50)
+//     {
+//         tick_inc = 254;
+//         target_looptime = 0;
+//         return;
+//     }
+//     calcreftime = esp_timer_get_time();
+//     ideal_time_between_levels_us = ((uint64_t)fadetime) << 10;
+//     tick_inc = 0;
+//     uint64_t intermediate = ideal_time_between_levels_us / abs(dif);
+//     if (intermediate > 180000000LL)
+//         intermediate = 180000000LL;
+//     while (tick_inc < 254)
+//     {
+//         tick_inc += 1;
+//         target_looptime = intermediate * (uint64_t)tick_inc;
+//         // fudge the numbers a bit for smoother fades at expense of accuracy
+//         if (target_looptime < MINIMUM_TARGET_LOOPTIME)
+//         {
+//             continue;
+//         }
+//         if (tick_inc == 1 && (target_looptime * 1.5) >= looptime)
+//             break;
+//         if (tick_inc == 2 && (target_looptime * 1.3) >= looptime)
+//             break;
+//         if (tick_inc == 3 && (target_looptime * 1.15) >= looptime)
+//             break;
 
-        if (target_looptime >= looptime)
-            break;
-    }
-    // ESP_LOGI(TAG, "calc: looptime %llu, tick_inc %i, %i ()", looptime, tick_inc, dif);
-    ESP_LOGD(TAG, "Calc time %llu us", esp_timer_get_time() - calcreftime);
-}
+//         if (target_looptime >= looptime)
+//             break;
+//     }
+//     // ESP_LOGI(TAG, "calc: looptime %llu, tick_inc %i, %i ()", looptime, tick_inc, dif);
+//     ESP_LOGD(TAG, "Calc time %llu us", esp_timer_get_time() - calcreftime);
+// }
 
 uint32_t curve(uint32_t input){
-    return input * input - input << 9 + 108000;
+    return input * input - (input << 9) + 108000;
 }
 
-void _calc_tickinc_and_looptime(uint64_t looptime, int start, int finish) {
+void calc_fade_increments(uint32_t looptime, int start, int finish) {
+    if (fadetime <= 50)
+    {
+        for (int i = 0; i <= 254; i++)
+        {
+            tick_inc_array[i] = 254;
+            tlt_array[i] = 0;
+        }
+        return;
+    }
+    if (looptime < MINIMUM_TARGET_LOOPTIME)
+        looptime = MINIMUM_TARGET_LOOPTIME;
+    ESP_LOGD(TAG, "Need to calculate from %lu looptime  %i fade: %i to %i", looptime, fadetime, start, finish);
     uint32_t temp_tick_inc;
-    uint32_t looptime_ms = looptime >> 10;
+    uint32_t intermediate_tick_inc;
+    uint32_t looptime_ms = looptime;
     uint32_t temp_tlt;
+    uint64_t starttime = esp_timer_get_time();
+    uint32_t tempcurve;
+    uint32_t avg_fade_pos = (start + finish) >> 1;
+    // curve(85) is selected to give correct overall fade time
+    uint32_t prop_fadetime = (((uint64_t)fadetime * (uint64_t)curve(avg_fade_pos)) / ((uint64_t)(curve(85))  * (uint64_t)abs(finish - start))) << 8;
+    // ESP_LOGI(TAG, "prop fadetime %lu", prop_fadetime);
+    // uint32_t prop_fadetime = ((fadetime * 1000) / (1000  * abs(finish - start));
+    bool avoid_overflow = prop_fadetime > 0x7FFFFF;
     for (int i = 0; i <= 254; i++)
     {
-        if (i < start) continue;
-        if (i > finish) continue;
-        temp_tick_inc = (looptime_ms * abs(finish - start)) / fadetime;
+        // if (i < _MIN(start, finish)) continue;
+        // if (i > _MAX(start, finish)) continue;
+        tempcurve = curve(i);
+        if (avoid_overflow)
+        {
+            temp_tick_inc = 1;
+            temp_tlt = ((prop_fadetime * temp_tick_inc) / tempcurve) << 8;
+        }
+        else
+        {
+            intermediate_tick_inc = looptime_ms * (tempcurve >> 8) / prop_fadetime;
+            temp_tick_inc = intermediate_tick_inc + 1;
+            temp_tlt = (prop_fadetime * (temp_tick_inc << 8)) / tempcurve;
+        }
         
         tick_inc_array[i] = temp_tick_inc;
-        
+        tlt_array[i] = temp_tlt;
+        // if (1 && (i & 0x7) == 0)
+        // {
+            // ESP_LOGI(TAG, "Calculated index %i: Inc %lu, TLT %lu tc %lu", i, temp_tick_inc, temp_tlt, tempcurve);
+        // }
     }
+    // ESP_LOGI(TAG, "Calculation took %llu us", esp_timer_get_time() - starttime);
 }
 
 static int dali_addresses[6];
@@ -172,6 +206,28 @@ void get_dali_addresses()
         dali_addresses[i] = get_setting(dali_address_key_buffer);
     }
 }
+
+
+int configbits;
+
+int count_dali_channels(){
+    if ((configbits & CONFIGBIT_USE_DALI) == 0)
+        return 0;
+    int count = 0;
+    for (int i=0; i < 6; i++)
+    {
+        if (dali_addresses[i] != -1)
+            count += 1;
+        if (dali_addresses[i] == 200)
+            return 1;
+    }
+    return count;
+}
+
+int estimate_looptime(){
+    return _MAX(count_dali_channels() * 25 - 5, 10);
+}
+
 
 uint8_t transmit_setlevel_dali_channel(dali_transceiver_handle_t transceiver, int channel_num, int level, bool force_send)
 {
@@ -424,13 +480,13 @@ void app_main(void)
     int firsttime = 1;
     ESP_LOGI(TAG, "Preparing main loop");
     uint32_t recv_value;
-    int64_t reftime = esp_timer_get_time() - MIN_EST_LOOPTIME_US;
+    uint32_t reftime = get_time_ms();
     uint64_t reawake_time = 0;
     ESP_LOGI(TAG, "Getting settings from NVS...");
-    int configbits = get_setting("configbits");
 
     int default_fadetime = get_setting("default_fade");
-    int looptime = MIN_EST_LOOPTIME_US;
+    configbits = get_setting("configbits");
+    int looptime = MIN_EST_LOOPTIME_MS;
 
     int updates_performed = 0;
     int fade_remaining = 0;
@@ -439,8 +495,8 @@ void app_main(void)
     level_t level_el;
     int dali_broadcast;
     level_t future_el;
-    uint64_t current_time;
-    uint64_t actual_looptime;
+    uint32_t current_time;
+    uint32_t actual_looptime;
     int random_looptime = 1;
     uint8_t local_setpoint = status.setpoint;
 
@@ -478,12 +534,12 @@ void app_main(void)
     int max_lookahead;
     bool new_setpoint;
     int minlevelbits = 0;
-    uint32_t idle_reawake_interval = 1000000;
-    uint32_t cooldown_reawake_interval = 1000000;
-    uint32_t max_idle_reawake_interval = 1000000;
+    uint32_t idle_reawake_interval = 1000;
+    uint32_t cooldown_reawake_interval = 1000;
+    uint32_t max_idle_reawake_interval = 1000;
     uint32_t cooldown_duration = get_setting("idle_cooldown");
     int idle_sends = 0;
-    uint64_t idle_start_time = reftime;
+    uint32_t idle_start_time = reftime;
     int future_level;
     uint8_t start_of_fade_level = 0;
     int looptime_outside_tolerance_count = 0;
@@ -499,20 +555,26 @@ void app_main(void)
     ESP_LOGI(TAG, "Starting main loop...");
     while (1)
     {
-        actual_looptime = (esp_timer_get_time() - reftime);
-        if (actual_looptime > (target_looptime + LOOPTIME_TOLERANCE) || actual_looptime < (target_looptime - LOOPTIME_TOLERANCE))
+        actual_looptime = (get_time_ms() - reftime);
+        if (fade_remaining != 0 && actual_looptime > MINIMUM_TARGET_LOOPTIME)
         {
-            looptime_outside_tolerance_count += 1;
-        }
-        if (looptime_outside_tolerance_count >= LOOPTIMES_OUT_OF_TOLERANCE_NEEDED)
-        {
-            calc_tickinc_and_looptime(actual_looptime, status.setpoint - start_of_fade_level);
-            looptime_outside_tolerance_count = 0;
+            if (actual_looptime > (tlt_array[status.actual_level] + LOOPTIME_TOLERANCE)
+                    || actual_looptime < (tlt_array[status.actual_level] - LOOPTIME_TOLERANCE))
+            {
+                looptime_outside_tolerance_count += 1;
+            }
+            if (looptime_outside_tolerance_count >= LOOPTIMES_OUT_OF_TOLERANCE_NEEDED)
+            {
+                // calc_tickinc_and_looptime(actual_looptime, status.setpoint - start_of_fade_level);
+                calc_fade_increments(actual_looptime, start_of_fade_level, status.setpoint);
+                        
+                looptime_outside_tolerance_count = 0;
+            }
         }
         while (1)
         {
             received = xTaskNotifyWaitIndexed(NEW_SETPOINT_NOTIFY_IDX, 0, 0, &recv_value, 1);
-            current_time = esp_timer_get_time();
+            current_time = get_time_ms();
             force_resend = received;
             if (received == pdTRUE)
             {
@@ -522,8 +584,8 @@ void app_main(void)
                 gpio_set_level(LED1_GPIO, 1);
                 start_of_fade_level = status.actual_level;
                 full_power = clamp(get_setting("full_power"), 0, 512);
-                max_idle_reawake_interval = _uMAX(((uint32_t)get_setting("idle_intvl_ms")) << 10, 200000UL);
-                cooldown_duration = _uMAX(((uint32_t)get_setting("idle_cooldown")) << 10, 0UL);
+                max_idle_reawake_interval = _uMAX(((uint32_t)get_setting("idle_intvl_ms")), 200UL);
+                cooldown_duration = _uMAX(((uint32_t)get_setting("idle_cooldown")), 0UL);
                 new_setpoint = true;
                 // ESP_LOGI(TAG, "Received new setpoint: %d, fade: %lu source %s", status.setpoint, status.fadetime_ms, source_str[status.setpoint_source]);
                 random_looptime = (rand() & 127);
@@ -560,7 +622,7 @@ void app_main(void)
 
                 if (status.setpoint != status.actual_level)
                 {
-                    calc_tickinc_and_looptime(MIN_EST_LOOPTIME_US, status.setpoint - start_of_fade_level);
+                    calc_fade_increments(estimate_looptime(), start_of_fade_level, status.setpoint);
                     looptime_outside_tolerance_count = 0;
                 }
                 break;
@@ -572,19 +634,19 @@ void app_main(void)
         /////
         // process tick -> move actual_level fading towards setpoint
         /////
-        reftime = esp_timer_get_time();
+        reftime = get_time_ms();
         fade_remaining = status.setpoint - status.actual_level;
         if (fade_remaining < 0)
         {
-            status.actual_level = _MAX(status.actual_level - tick_inc, status.setpoint);
-            reawake_time = reftime + target_looptime;
+            status.actual_level = _MAX(status.actual_level - tick_inc_array[status.actual_level], status.setpoint);
+            reawake_time = reftime + tlt_array[status.actual_level];
             idle_sends = 0;
             idle_start_time = reftime;
         }
         else if (fade_remaining > 0)
         {
-            status.actual_level = _MIN(status.actual_level + tick_inc, status.setpoint);
-            reawake_time = reftime + target_looptime;
+            status.actual_level = _MIN(status.actual_level + tick_inc_array[status.actual_level], status.setpoint);
+            reawake_time = reftime + tlt_array[status.actual_level];
             idle_sends = 0;
             idle_start_time = reftime;
         }
@@ -597,19 +659,16 @@ void app_main(void)
             force_resend = true;
 
             configbits = get_setting("configbits");
-            // if (cooldown_reawake_interval < (0xFFFFF000 / 5))
-            // {
-                // cooldown_reawake_interval = (cooldown_reawake_interval * 5UL) >> 2;
-            // }
-            // idle_reawake_interval = (cooldown_reawake_interval < max_idle_reawake_interval) ? cooldown_reawake_interval : max_idle_reawake_interval;
+
+            // calculate reawake intervals
             if ((reftime - idle_start_time) < cooldown_duration)
             {
-                idle_reawake_interval = _uMIN(IDLE_UPDATE_INTERVAL_DURING_COOLDOWN_US, max_idle_reawake_interval);
+                idle_reawake_interval = _uMIN(IDLE_UPDATE_INTERVAL_DURING_COOLDOWN_MS, max_idle_reawake_interval);
             }
             else
-                idle_reawake_interval = _uMIN(MAX_IDLE_UPDATE_INTERVAL_AFTER_COOLDOWN_US, max_idle_reawake_interval);
+                idle_reawake_interval = _uMIN(MAX_IDLE_UPDATE_INTERVAL_AFTER_COOLDOWN_MS, max_idle_reawake_interval);
             reawake_time = reftime + (uint64_t) idle_reawake_interval;
-            // ESP_LOGI(TAG, "Idle reawake %lu", idle_reawake_interval);
+            ESP_LOGD(TAG, "Idle reawake %lu reftime %lu idle_start %lu cd %lu", idle_reawake_interval, reftime, idle_start_time, cooldown_duration);
             if (configbits & CONFIGBIT_RECEIVE_ESPNOW)
             {
                 // we don't want double awakening if we're receiving regular updates
@@ -686,14 +745,14 @@ void app_main(void)
         // DALI
 
         // see if any channels on
-        bool dali_bus_idle = true;
-        for (int i = 0; i < 6; i++)
-        {
-            if (level_el.dali_lvl[i] > 0 || !already_off[i] || status.level_overrides.dali[i] > 0)
-            {
-                dali_bus_idle = false;
-            }
-        }
+        bool dali_bus_idle = false;
+        // for (int i = 0; i < 6; i++)
+        // {
+        //     if (level_el.dali_lvl[i] > 0 || !already_off[i] || status.level_overrides.dali[i] > 0)
+        //     {
+        //         dali_bus_idle = false;
+        //     }
+        // }
         if (!dali_bus_idle && (configbits & CONFIGBIT_USE_DALI) && dali_take_mutex(dali_transceiver, 0))
         {
             // check for any DALI broadcast commands -> we don't need to bother with short addresses
@@ -742,7 +801,7 @@ void app_main(void)
             // We are using relays so bother logging them
             if (!(levellog_count & 5))
                 ESP_LOGI(TAG, "Lvl-> SP PWR | SRCE N | 0-10v1 0-10v2 DALIA DALIB DALIC DALID DALIE DALIF ESPN Rly1 Rly2    Fade    TLT   LT Wake");
-            ESP_LOGI(TAG, "%3.1u->%3.1d %s | %s %1.i |    %s    %s   %s   %s   %s   %s   %s   %s  %s  %s  %s %7.1i %6.1llu %4.1i  %3.1lu",
+            ESP_LOGI(TAG, "%3.1u->%3.1d %s | %s %1.i |    %s    %s   %s   %s   %s   %s   %s   %s  %s  %s  %s %7.1i %6.1lu %4.1i  %3.1lu",
                  status.actual_level,
                  status.setpoint,
                  (status.power_on) ? " ON" : "OFF",
@@ -760,16 +819,16 @@ void app_main(void)
                  (configbits & CONFIGBIT_USE_RELAY1) ? relay1_str : spaces,
                  (configbits & CONFIGBIT_USE_RELAY2) ? relay2_str : spaces,
                  fadetime,
-                 target_looptime >> 10,
-                 ((int)actual_looptime) >> 10,
-                 idle_reawake_interval >> 20);
+                 tlt_array[status.actual_level],
+                 ((int)actual_looptime),
+                 idle_reawake_interval >> 10);
         }
         else
         {
             // We're not using relay so don't bother logging them
             if (!(levellog_count & 7))
                 ESP_LOGI(TAG, "Lvl-> SP PWR | SRCE N | 0-10v1 0-10v2 DALIA DALIB DALIC DALID DALIE DALIF ESPN     Fade    TLT   LT Wake");
-            ESP_LOGI(TAG, "%3.1u->%3.1d %s | %s %1.i |    %s    %s   %s   %s   %s   %s   %s   %s  %s  %7.1i %6.1llu %4.1i  %3.1lu",
+            ESP_LOGI(TAG, "%3.1u->%3.1d %s | %s %1.i |    %s    %s   %s   %s   %s   %s   %s   %s  %s  %7.1i %6.1lu %4.1i  %3.1lu",
                  status.actual_level,
                  status.setpoint,
                  (status.power_on) ? " ON" : "OFF",
@@ -785,9 +844,9 @@ void app_main(void)
                  ((configbits & CONFIGBIT_USE_DALI) && dali_addresses[5] != -1) ? dali_str[5] : spaces,
                  (configbits & CONFIGBIT_TRANSMIT_ESPNOW) ? espnow_str : spaces,
                  fadetime,
-                 target_looptime >> 10,
-                 ((int)actual_looptime) >> 10,
-                 idle_reawake_interval >> 20);
+                 tlt_array[status.actual_level],
+                 ((int)actual_looptime),
+                 idle_reawake_interval >> 10);
         }
         new_setpoint = false;
     }
