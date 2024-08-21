@@ -1,24 +1,26 @@
 <!DOCTYPE html>
 <html lang="en">
     <head>
-        <title></title>
+        <title>%s</title>
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
         <link rel="shortcut icon" href="favicon.ico">
         <link rel="apple-touch-icon image_src" href="apple-touch-icon.png">
         <link rel="manifest" href="site.webmanifest">
         <link rel="stylesheet" type="text/css" href="styles.css">
-        <script type="text/javascript"    src="index.js"></script>
+        <script type="text/javascript" src="index.js"></script>
     </head>
 <body>
+              
     <header>
-        <h1></h1>
+        <h1>%s</h1>
         <nav>
             <a href="/"><button class="nav selected" level="254">Levels</button></a>
             <a href="/setup"><button class="nav " level="254">Setup</button></a>
             <a href="/ch"><button class="nav " level="254">Channels</button></a>
         </nav>
     </header>
+    <main class="loading">
     <div id="offbutton-box">
         <button class="levelbutton grey" id="buttonoff">All Power Off<span></span></button>
         <button class="levelbutton grey slow" id="sbuttonoff">2 Min Delay</button>
@@ -30,19 +32,19 @@
         </div>
     </div>
     <div class="levelbutton-box" id="levelbutton-box">
-        <button class="levelbutton magenta" level="254"><span>100%</span></button>
+        <button class="levelbutton magenta" level="254">%s<span>100%</span></button>
         <button class="levelbutton magenta slow" level="254">Slow</button>
-        <button class="levelbutton purple" level="240" id="preset5"><span></span></button>
+        <button class="levelbutton purple" level="240" id="preset5">%s<span></span></button>
         <button class="levelbutton purple slow" level="240" id="spreset5">Slow</button>
-        <button class="levelbutton teal" level="220" id="preset4"><span></span></button>
+        <button class="levelbutton teal" level="220" id="preset4">%s<span></span></button>
         <button class="levelbutton teal slow" level="220" id="spreset4">Slow</button>
-        <button class="levelbutton green" level="180" id="preset3"><span></span></button>
+        <button class="levelbutton green" level="180" id="preset3">%s<span></span></button>
         <button class="levelbutton green slow" level="180" id="spreset3">Slow</button>
-        <button class="levelbutton yellow" level="30" id="preset2"><span></span></button>
+        <button class="levelbutton yellow" level="30" id="preset2">%s<span></span></button>
         <button class="levelbutton yellow slow" level="30" id="spreset2">Slow</button>
-        <button class="levelbutton orange" level="10" id="preset1"><span></span></button>
+        <button class="levelbutton orange" level="10" id="preset1">%s<span></span></button>
         <button class="levelbutton orange slow " level="10" id="spreset1">Slow</button>
-        <button class="levelbutton red" level="0" id="preset0"><span>0%</span></button>
+        <button class="levelbutton red" level="0" id="preset0">%s<span>0%</span></button>
         <button class="levelbutton red slow" level="0" id="spreset0">Slow</button>
     </div>
     <div class="slidecontainer">
@@ -57,6 +59,7 @@
         
         <div id="debug"></div>
         
-    </div>
+    </div> 
+</main>
 </body>
 </html>

@@ -45,6 +45,8 @@
 #define ALARM_TYPE_UP_ONLY 1
 #define ALARM_TYPE_DOWN_ONLY 2
 
+#define STATUS_STALE_FLAG 0x12345678
+
 extern nvs_handle_t nvs_handle_;
 
 extern TaskHandle_t espnowtask;
@@ -90,6 +92,7 @@ typedef struct {
     level_overrides_t level_overrides;
     level_t channel_levels;
     level_t lut[255];
+    uint32_t stale_flag;
 } device_status_t;
 
 // extern volatile level_t levellut[255];

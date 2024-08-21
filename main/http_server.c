@@ -53,12 +53,16 @@ static const char *TAG = "http server";
 
 #define BUF_SIZE 0x3000
 
+#define MAX_SAFE_INFIX_FILE_SIZE 512
+
 #define REC_BUF_SIZE 256
 
 #define NO_DIGITS_FOUND -98765413
 
-static int infix_offsets[10] = { 0 };
-static int infix_name_commapos[10] = { 0 };
+
+#define MAX_INFIX_REPLACEMENTS 10
+static int num_infixes = 0;
+static int infix_offsets[MAX_INFIX_REPLACEMENTS] = { -1 };
 
 static char httpd_temp_buffer[BUF_SIZE];
 
@@ -166,32 +170,9 @@ static esp_err_t nvs_put_handler(httpd_req_t *req){
     ESP_LOGI(TAG, "===== REST API Handler: received PUT at %s (%s)", req->uri, httpd_temp_buffer);
     ESP_LOGD(TAG, "Received %s (%i) %i", httpd_temp_buffer, put_data_int, datarecv);
     int value = GET_SETTING_NOT_FOUND;
-    // int exists = 0;
-    // int existing = GET_SETTING_NOT_FOUND;
-    // int* reg = get_endpoint_ptr();
-    // int wait = rand() & 0xFF;
-    // ESP_LOGI(TAG, "waiting %i", wait);
-    // vTaskDelay(wait);
+    
     int index = substring_ints[2];
 
-    // if (substring_count == 2) {
-    //     // existing = get_setting(substrings[0]);
-    // }
-    // else if (substring_count == 2 && index != GET_SETTING_NOT_FOUND)
-    // {
-    //     // existing = get_setting_indexed(substrings[0], index);
-    // }
-    // existing = -3;
-    // exists = existing != GET_SETTING_NOT_FOUND;
-    // ESP_LOGD(TAG, "Existing = %i", existing);
-    
-    // if (exists == 0) {
-    //     ESP_LOGI(TAG, "Returning 404");
-    //     sprintf(httpd_temp_buffer, "Not found");
-    //     httpd_resp_set_status(req, HTTPD_404);
-    //     httpd_resp_send(req, httpd_temp_buffer, HTTPD_RESP_USE_STRLEN);
-    //     return ESP_OK;
-    // }
     if (datarecv != 1)
     {
         httpd_resp_set_status(req, HTTPD_400);
@@ -272,6 +253,7 @@ static esp_err_t current_setpoint_handler(httpd_req_t *req){
 static esp_err_t otaupdate(httpd_req_t *req){
     // return httpd_resp_send_500(req);
     // char* buffer = malloc(1024);
+    parse_uri(req->uri);
     int bytes;
     ESP_LOGI(TAG, "Received POST OTAUpdate %i bytes", req->content_len);
     
@@ -374,6 +356,11 @@ static esp_err_t otaupdate(httpd_req_t *req){
             if (err != ESP_OK) {
                 ESP_LOGE(TAG, "esp_ota_set_boot_partition failed (%s)!", esp_err_to_name(err));
                 return httpd_resp_send_500(req);
+            }
+            if (strcmp(substrings[1], "stale") == 0)
+            {
+                ESP_LOGI(TAG, "Setting stale flag");
+                status->stale_flag = STATUS_STALE_FLAG;
             }
             esp_restart();
             return ESP_OK;
@@ -579,40 +566,263 @@ static esp_err_t rest_channel_override_handler(httpd_req_t *req){
 static const char* index_filename = "/spiffs/index.html";
 static const char* alarm_filename = "/spiffs/alarms.html";
 static const char* channels_filename = "/spiffs/channels.html";
+static const char* fallback_infix_filename = "/spiffs/infixx";
 static const char* spiffsfolder = "/spiffs";
 // static const char* filenamebuf = "                         ";
 
+static void find_infixes(char* buffer, FILE *existing_open_file){
+    ESP_LOGD(TAG, "Looking for infixes in '%s'", index_filename);
+    FILE* in_file;
+    if (existing_open_file != NULL)
+    {
+        in_file = existing_open_file;
+    }
+    else
+    {
+        in_file = fopen(index_filename, "r");
+    }
+    if (in_file == NULL)
+    {
+        ESP_LOGE(TAG, "ERROR No replacement infix string positions found");
+        return;
+    }
+    
+    fseek(in_file, 0, SEEK_END);
+    long fsize = ftell(in_file);
+    fseek(in_file, 0, SEEK_SET);
+
+    if (fsize > (BUF_SIZE - 1))
+    {
+        ESP_LOGE(TAG, "%s is too big at %li bytes", index_filename, fsize);
+        fclose(in_file);
+        return;
+    }
+    fread(buffer, fsize, 1, in_file);
+    int infix_index = 0;
+    for (int bytepos=0; bytepos < fsize; bytepos++)
+    {
+        if ((buffer[bytepos] == '%') && (buffer[bytepos + 1] == 's'))
+        {
+            ESP_LOGD(TAG, "Found infix location at %i", bytepos);
+            infix_offsets[infix_index] = bytepos;
+            
+            infix_index += 1;
+            if (infix_index >=MAX_INFIX_REPLACEMENTS)
+            {
+                ESP_LOGW(TAG, "Reached replacement string limit of %i", MAX_INFIX_REPLACEMENTS);
+                break;
+            }
+        }
+        
+    }
+    ESP_LOGI(TAG, "Found %i infixes",infix_index);
+    num_infixes = infix_index;
+    if (existing_open_file == NULL)
+    {
+        fclose(in_file);
+        return;
+    }
+        
+    // return to beginning of file
+    fseek(in_file, 0, SEEK_SET);
+}
+
+static int check_buffer_bounds(int pos){
+    
+    if ((pos + 1) > BUF_SIZE)
+    {
+        ESP_LOGE(TAG, "ERROR Ran out of buffer. Perhaps too long infix file?");
+        return 1;
+    }
+    return 0;
+}
+
+static int send_file_as_chunk(httpd_req_t* req, char* filename, bool infix){
+    ESP_LOGI(TAG, "Looking for '%s'", filename);
+    FILE *in_file  = fopen(filename, "r");
+
+    if (in_file == NULL)
+    {  
+        httpd_resp_send_err(req, HTTPD_404_NOT_FOUND, "Can't find file");
+        return -1;
+    }
+    
+    fseek(in_file, 0, SEEK_END);
+    long fsize = ftell(in_file);
+    fseek(in_file, 0, SEEK_SET);
+
+    if (fsize > (BUF_SIZE - MAX_SAFE_INFIX_FILE_SIZE)) {
+        ESP_LOGI(TAG, "File probably too big for buffer, sending chunks (can't replace strings)");
+        int sent_bytes = 0;
+        int bytes_to_send;
+        while (1) {
+            bytes_to_send = _MIN(BUF_SIZE, fsize - sent_bytes);
+            if (bytes_to_send > 0) fread(httpd_temp_buffer, bytes_to_send, 1, in_file);
+            httpd_resp_send_chunk(req, httpd_temp_buffer, bytes_to_send);
+            
+            if (bytes_to_send == 0) break;
+            sent_bytes += bytes_to_send;
+        }
+        fclose(in_file);
+        return 0;
+    }
+
+    //we move on to string replacement maybe
+
+    FILE *name_file = NULL;
+    if (infix)
+    {
+        int namefile_number = get_setting("namefile");
+        char infix_filename[64] = { 0 };
+        strcat(infix_filename, filename);
+        strcat(infix_filename, ".infix");
+        int infix_filename_len = strlen(infix_filename);
+        infix_filename[infix_filename_len] = '0' + namefile_number;
+        infix_filename_len += 1;
+        infix_filename[infix_filename_len] = 0;
+
+        ESP_LOGI(TAG, "Using infix filename '%s'", infix_filename);
+        name_file  = fopen(infix_filename, "r");
+
+        if (name_file == NULL)
+        {
+            // no infix file -> we just send the original file
+            ESP_LOGI(TAG, "Couldn't file '%s' file!", infix_filename);
+
+            // try and open generic infix file
+            strcpy(infix_filename, fallback_infix_filename);
+            infix_filename[strlen(infix_filename) - 1] = '0' + namefile_number;
+            ESP_LOGI(TAG, "Trying to open fallback infix file '%s'", infix_filename);
+            name_file = fopen(infix_filename, "r");
+            if (name_file == NULL)
+            {
+                ESP_LOGI(TAG, "Couldn't find fallback infix file!");
+            }
+        }
+    }
+
+    if (name_file == NULL)
+    {
+        fread(httpd_temp_buffer, fsize, 1, in_file);
+        fclose(in_file);
+        httpd_resp_send_chunk(req, httpd_temp_buffer, fsize);
+        return 0;
+    }
+
+    // we move on to string replacement actually
+    ESP_LOGI(TAG, "Found infix file. Replacing strings...");
+    int ipos = 0; // input file buffer position
+    int opos = 0; // output buffer position
+    int total_replaces;
+    int ptr_recv;
+    char* ret;
+    int pos_pointer_str_len;
+    int last_pos_pointer = 0;
+    int pos_pointer = 0;
+
+    bool error = false;
+
+    find_infixes(httpd_temp_file_buffer ,in_file);
+    total_replaces = 0;
+    
+    ESP_LOGI(TAG, "Infixing strings...");
+    
+    int infix_str_len;
+
+    // load original file into file buffer
+
+    fseek(name_file, 0, SEEK_SET); // make sure we're at start of file
+    int bytes_copy;
+
+    // copy original file blocks around infixes
+    bool eof = false;
+    for (int replace_idx = 0; replace_idx <= num_infixes; replace_idx ++)
+    {
+        ret = fgets(infix_string_buffer, 127, name_file);
+        if (ret == NULL){
+            total_replaces = replace_idx;
+            eof = true;
+            ESP_LOGD(TAG, "Reached EOF");
+        }
+
+        if (replace_idx == 0 && num_infixes == 0)
+        {
+                ESP_LOGD(TAG, "No replacing -> just copy file");
+                memcpy(httpd_temp_buffer, httpd_temp_file_buffer, fsize);
+                ipos += fsize;
+                opos += fsize;
+                break;
+        }
+
+        if (replace_idx == num_infixes || eof) 
+        {
+            
+            ESP_LOGI(TAG, "Copy EOF...");
+            // copy tail end
+            bytes_copy = fsize - ipos;
+            if (check_buffer_bounds(opos + bytes_copy + 1)) break;
+            memcpy(httpd_temp_buffer + opos, httpd_temp_file_buffer + ipos, bytes_copy);
+            opos += bytes_copy;
+            break;
+        }
+
+        // copy head end / inbetween text
+        ESP_LOGD(TAG, "Copy inbetween text at %i -> %i", ipos, opos);
+        bytes_copy = infix_offsets[replace_idx] - ipos;
+        
+        if (check_buffer_bounds(opos + bytes_copy + 1)) break;
+        memcpy(httpd_temp_buffer + opos, httpd_temp_file_buffer + ipos, bytes_copy);
+        ipos += bytes_copy;
+        opos += bytes_copy;
+
+        // prep infix
+        int line_len = strlen(infix_string_buffer);
+        infix_str_len = line_len;
+
+        if (infix_string_buffer[line_len - 1] == 10 || infix_string_buffer[line_len - 1] == 13)
+            infix_str_len -= 1; //we don't want the newlines
+
+        // copy infix
+        ESP_LOGD(TAG, "Copy infix '%s' at %i -> %i", infix_string_buffer, ipos, opos);
+        
+        if (check_buffer_bounds(opos + infix_str_len + 1)) break;
+        memcpy(httpd_temp_buffer + opos, infix_string_buffer, infix_str_len);
+        opos += infix_str_len;
+        ipos += 2; // we don't want the '%s' characters
+
+        total_replaces = replace_idx + 1;
+    }
+    ESP_LOGD(TAG, "sending %i bytes", opos);
+    httpd_resp_send_chunk(req, httpd_temp_buffer, opos);
+    fclose(name_file);
+    fclose(in_file);
+    ESP_LOGD(TAG, "Send '%s' as chunks. Replaced %i strings", filename, total_replaces);
+    return total_replaces;
+}
+
 static esp_err_t file_handler(httpd_req_t *req){
     const char* uri = req->uri;
-    bool replace_name = false;
-    bool replace_presets = false;
+    bool is_index = false;
+    bool try_infix = false;
     if (strcmp(uri, "/") == 0) {
         strcpy(filename, index_filename);
-        replace_name = true;
-        replace_presets = true;
+        is_index = true;
+        try_infix = true;
     }
     else if (strcmp(uri, "/setup") == 0)
     {
         strcpy(filename, alarm_filename);
-        replace_name = true;
+        try_infix = true;
     }
     else if (strcmp(uri, "/ch") == 0)
     {
         strcpy(filename, channels_filename);
-        replace_name = true;
+        try_infix = true;
     }
     else
     {
         strcpy(filename, spiffsfolder);
         strcat(filename, uri);
-    }
-    ESP_LOGI(TAG, "Looking for '%s'", filename);
-    FILE *in_file  = fopen(filename, "r"); // read only
-
-    if (in_file == NULL)
-    {  
-        httpd_resp_send_err(req, HTTPD_404_NOT_FOUND, "Can't find file");
-        return ESP_ERR_NOT_FOUND;
     }
 
 
@@ -647,160 +857,15 @@ static esp_err_t file_handler(httpd_req_t *req){
         httpd_resp_set_hdr(req, "cache-control", "max-age=10");
     }
 
-    fseek(in_file, 0, SEEK_END);
-    long fsize = ftell(in_file);
-    fseek(in_file, 0, SEEK_SET);
-    if (replace_name)
-        ESP_LOGI(TAG, "Replacing name when GET file '%s'", filename);
-
-    if (fsize > BUF_SIZE - 1) {
-        ESP_LOGI(TAG, "File too big for buffer, sending chunks (can't replace name)");
-        int sent_bytes = 0;
-        int bytes_to_send;
-        while (1) {
-            bytes_to_send = _MIN(BUF_SIZE, fsize - sent_bytes);
-            if (bytes_to_send > 0) fread(httpd_temp_buffer, bytes_to_send, 1, in_file);
-            httpd_resp_send_chunk(req, httpd_temp_buffer, bytes_to_send);
-            
-            if (bytes_to_send == 0) break;
-            sent_bytes += bytes_to_send;
-        }
-        // fclose(in_file);
-        // httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Buffer too small");
-        // return ESP_ERR_NO_MEM;
-    }
-    else
+    int result;
+    result = send_file_as_chunk(req, filename, try_infix);
+    if (result < 0)
     {
-        bool error = false;
-        if (replace_name || replace_presets) {
-            int namefile_number = get_setting("namefile");
-            char filen[] = "/spiffs/namex";
-            filen[12] = '0' + namefile_number;
-            ESP_LOGI(TAG, "Using name filename '%s'", filen);
-            FILE *name_file  = fopen(filen, "r");
-            int commapos = -1;
-
-            if (name_file != NULL) {
-                int ipos = 0;
-                int opos = 0;
-                int total_replaces;
-                int infix_len;
-                int ptr_recv;
-                char* ret;
-                int pos_pointer_str_len;
-                int last_pos_pointer = 0;
-                int pos_pointer = 0;
-                if (replace_name) total_replaces = 2;
-                if (replace_presets) total_replaces = 9;
-                fread(httpd_temp_file_buffer, fsize, 1, in_file);
-                bool error = false;
-                int lines_in_name_file = total_replaces;
-
-                // first pass of file to get infix ptrs
-                for (int line_num=0; line_num < _MIN(16, total_replaces); line_num++)
-                {
-                    ret = fgets(infix_string_buffer, 127, name_file);
-                    commapos = -1;
-                    if (ret == NULL) {
-                        lines_in_name_file = line_num + 1;
-                        break;
-                    }
-                    int len = strlen(infix_string_buffer);
-                    if (infix_string_buffer[len - 1] == '10' || infix_string_buffer[len - 1] == '13')
-                        len -= 1; //we don't want the newlines
-                    ESP_LOGI(TAG, "Read first pass line '%s' %i characters", infix_string_buffer, len);
-
-                    // find comma location to split string
-                    for (int line_idx = 0; line_idx < len; line_idx++)
-                    {
-                        if (infix_string_buffer[line_idx] == ',')
-                        {
-                            commapos = line_idx;
-                            infix_string_buffer[line_idx] = 0;
-                            ESP_LOGI(TAG, "Comma detected at idx %i", line_idx);
-                            break;
-                        }
-                    }
-                    if (commapos == -1)
-                    {
-                        ESP_LOGE(TAG, "Warning no comma detected in line '%s'", infix_string_buffer);
-                        error = true;
-                        break;
-                    }
-                    pos_pointer_str_len = commapos;
-                    infix_len = len - commapos - 1;
-                    
-                    ptr_recv = sscanf(infix_string_buffer, "%i", &pos_pointer);
-                    ESP_LOGI(TAG, "Got position ptr %i", pos_pointer);
-                    infix_offsets[line_num] = pos_pointer;
-                    infix_name_commapos[line_num] = commapos;
-                }
-                
-                if (!error)
-                {
-                    ESP_LOGI(TAG, "Infixing strings...");
-                    
-                    // return to start of file for second pass
-                    int infix_str_len;
-                    fseek(name_file, 0, SEEK_SET);
-                    int bytes_copy;
-                    for (int replace_idx = 0; replace_idx < lines_in_name_file; replace_idx ++)
-                    {
-                        ret = fgets(infix_string_buffer, 127, name_file);
-                        commapos = -1;
-                        if (ret == NULL) break;
-                        int line_len = strlen(infix_string_buffer);
-                        if (infix_string_buffer[line_len - 1] == '10' || infix_string_buffer[line_len - 1] == '13')
-                            line_len -= 1; //we don't want the newlines
-                        if (replace_idx == 0)
-                        {
-                            // we need to deal with the start of the file
-                            memcpy(httpd_temp_buffer, httpd_temp_file_buffer, infix_offsets[0]);
-                            ipos += infix_offsets[0];
-                            opos += infix_offsets[0];
-                        }
-
-                        // copy infix
-                        infix_len = line_len - infix_name_commapos[replace_idx] - 1;
-                        memcpy(httpd_temp_buffer + opos, infix_string_buffer + infix_name_commapos[replace_idx] + 1, infix_len);
-                        opos += infix_len;
-
-                        if (replace_idx == (lines_in_name_file - 1))
-                        {
-                            // last infix we need to deal with the end of the file
-                            bytes_copy = fsize - ipos;
-                        }
-                        else
-                        {
-                            bytes_copy = infix_offsets[replace_idx + 1] - infix_offsets[replace_idx];
-                        }
-                        memcpy(httpd_temp_buffer + opos, httpd_temp_file_buffer + ipos, bytes_copy);
-                        opos += bytes_copy;
-                        ipos += bytes_copy;
-                    }
-                }
-                fclose(name_file);
-                
-                httpd_resp_send(req, httpd_temp_buffer, opos);
-            }
-            else
-            {
-                fread(httpd_temp_buffer, fsize, 1, in_file);
-                ESP_LOGI(TAG, "Couldn't file '%s' file!", filen);
-                httpd_resp_send(req, httpd_temp_buffer, fsize);
-            }
-        }
-        else
-        {
-            fread(httpd_temp_buffer, fsize, 1, in_file);
-            httpd_resp_send(req, httpd_temp_buffer, fsize);
-        }
+        httpd_resp_send_404(req);
+        return ESP_FAIL;
     }
-    fclose(in_file);
+    httpd_resp_send_chunk(req, httpd_temp_buffer, 0);
 
-    // httpd_temp_buffer[fsize] = 0;
-
-    // httpd_resp_send(req, httpd_temp_buffer, fsize);
     return ESP_OK;
 }
 
@@ -893,9 +958,6 @@ static esp_err_t restart(httpd_req_t* req){
     esp_restart();
     return ESP_OK;
 }
-
-
-static char logbuffercopy[LOGBUFFER_SIZE];
 
 static esp_err_t logbuffer_handler(httpd_req_t *req){
     httpd_resp_set_type(req, "text/plain");
@@ -1096,13 +1158,6 @@ static esp_err_t dali_commands_handler(httpd_req_t* req){
     return ESP_FAIL;
 }
 
-// static const httpd_uri_t hello = {
-//     .uri       = "/level/?*",
-//     .method    = HTTP_GET,
-//     .handler   = setpoint_get_handler,
-//     .user_ctx  = "Hello World!"
-// };
-
 static const httpd_uri_t files = {
     .uri       = "/?*",
     .method    = HTTP_GET,
@@ -1212,7 +1267,7 @@ static const httpd_uri_t reset_to_factory_endpoint = {
     .user_ctx  = NULL
 };
 static const httpd_uri_t post_ota = {
-    .uri       = "/otaupdate",
+    .uri       = "/otaupdate*?",
     .method    = HTTP_POST,
     .handler   = otaupdate,
     .user_ctx  = NULL
@@ -1249,7 +1304,6 @@ static httpd_handle_t start_webserver(networking_ctx_t *ctx)
     if (httpd_start(&server, &config) == ESP_OK) {
         // Set URI handlers
         ESP_LOGI(TAG, "Registering URI handlers");
-        // httpd_register_uri_handler(server, &hello);
         httpd_register_uri_handler(server, &get_setpoint);
         httpd_register_uri_handler(server, &put_setpoint);
         httpd_register_uri_handler(server, &get_power_on_endpoint);
@@ -1269,8 +1323,6 @@ static httpd_handle_t start_webserver(networking_ctx_t *ctx)
         httpd_register_uri_handler(server, &files);
         httpd_register_uri_handler(server, &file_upload);
         httpd_register_uri_handler(server, &file_del);
-        // httpd_register_uri_handler(server, &echo);
-        // httpd_register_uri_handler(server, &ctrl);
         return server;
     }
 
@@ -1320,11 +1372,9 @@ httpd_handle_t setup_httpserver(networking_ctx_t *extractx)
     ctx->extra_ctx = extractx;
     ESP_ERROR_CHECK(nvs_flash_init());
 
-    /* Register event handlers to stop the server when Wi-Fi or Ethernet is disconnected,
-     * and re-start it upon connection.
-     */
     ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &connect_handler, ctx));
     ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, &disconnect_handler, ctx));
+    
     server = start_webserver(extractx);
     return server;
 }

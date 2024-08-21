@@ -68,15 +68,9 @@ button.nav {
     
     background-image: linear-gradient(to right, #281b2a, #432f5f);
 }
-button.levelbutton.selected span{
-    color: white !important;
-    text-shadow: 1px 1px 5px black !important;
-}
 
-
-button.levelbutton.selected {
-    /* border-radius: 0em 1em 0em 1.5em! important; */
-    margin-left: 0;
+button.nav.selected {
+    border: 1px white solid;
 }
 
 header a{
@@ -87,6 +81,9 @@ div.levelbutton-box {
     margin: 1em 2em;
     display: grid;
     grid-template-columns: 4fr 1fr;
+}
+main.loading {
+    opacity: 0.2;
 }
 div#offbutton-box {
     margin: 1em 2em;
@@ -120,6 +117,14 @@ button.levelbutton.slow {
     padding-right: 1em;
     margin-left: 0;
     font-size: 100%;
+}
+
+button.levelbutton.selected span{
+    color: white !important;
+    text-shadow: 1px 1px 5px black !important;
+}
+button.levelbutton.selected {
+    margin-left: 0;
 }
 button#go {
     border-radius: 2em;

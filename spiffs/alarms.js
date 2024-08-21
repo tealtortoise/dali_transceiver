@@ -160,7 +160,7 @@ function all() {
         }
         let slow_fadetime_el = getEl("slow_fadetime");
         let slow_fadetime = slow_fadetime_el.value;
-        if (slow_fadetime >= 0 && slow_fadetime < (3600 * 10)) {
+        if (slow_fadetime >= 0 && slow_fadetime <= (3600 * 10)) {
             promises.push(send("/nvs/slow_fade/", undefined, slow_fadetime_el,
             (_) => {return _ * 1000;}));
         } else {

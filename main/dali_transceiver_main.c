@@ -94,8 +94,9 @@ static uint64_t calcreftime;
 
 int fadetime;
 
-uint32_t get_time_ms(){
-    return (uint32_t) (esp_timer_get_time() >> 10);
+uint32_t get_time_ms()
+{
+    return (uint32_t)(esp_timer_get_time() >> 10);
 }
 
 // void ___calc_tickinc_and_looptime(uint64_t looptime, int dif)
@@ -135,11 +136,15 @@ uint32_t get_time_ms(){
 //     ESP_LOGD(TAG, "Calc time %llu us", esp_timer_get_time() - calcreftime);
 // }
 
-uint32_t curve(uint32_t input){
-    return input * input - (input << 9) + 108000;
+// #define CURVE(inp) (inp * inp - (inp << 9) + 108000UL)
+
+uint32_t curve(const uint32_t input)
+{
+    return input * input - (input << 9) + 108000UL;
 }
 
-void calc_fade_increments(uint32_t looptime, int start, int finish) {
+void calc_fade_increments(uint32_t looptime, int start, int finish)
+{
     if (fadetime <= 50)
     {
         for (int i = 0; i <= 254; i++)
@@ -159,15 +164,14 @@ void calc_fade_increments(uint32_t looptime, int start, int finish) {
     uint64_t starttime = esp_timer_get_time();
     uint32_t tempcurve;
     uint32_t avg_fade_pos = (start + finish) >> 1;
-    // curve(85) is selected to give correct overall fade time
-    uint32_t prop_fadetime = (((uint64_t)fadetime * (uint64_t)curve(avg_fade_pos)) / ((uint64_t)(curve(85))  * (uint64_t)abs(finish - start))) << 8;
+
+    // curve(90) is selected to fine tune overall fade time
+    uint32_t prop_fadetime = (((uint64_t)fadetime * (uint64_t)curve(avg_fade_pos)) / ((uint64_t)curve(90) * (uint64_t)abs(finish - start))) << 8;
     // ESP_LOGI(TAG, "prop fadetime %lu", prop_fadetime);
     // uint32_t prop_fadetime = ((fadetime * 1000) / (1000  * abs(finish - start));
     bool avoid_overflow = prop_fadetime > 0x7FFFFF;
-    for (int i = 0; i <= 254; i++)
+    for (int i = _MIN(start, finish); i <= _MAX(start, finish); i++)
     {
-        // if (i < _MIN(start, finish)) continue;
-        // if (i > _MAX(start, finish)) continue;
         tempcurve = curve(i);
         if (avoid_overflow)
         {
@@ -180,12 +184,12 @@ void calc_fade_increments(uint32_t looptime, int start, int finish) {
             temp_tick_inc = intermediate_tick_inc + 1;
             temp_tlt = (prop_fadetime * (temp_tick_inc << 8)) / tempcurve;
         }
-        
+
         tick_inc_array[i] = temp_tick_inc;
         tlt_array[i] = temp_tlt;
         // if (1 && (i & 0x7) == 0)
         // {
-            // ESP_LOGI(TAG, "Calculated index %i: Inc %lu, TLT %lu tc %lu", i, temp_tick_inc, temp_tlt, tempcurve);
+        // ESP_LOGI(TAG, "Calculated index %i: Inc %lu, TLT %lu tc %lu", i, temp_tick_inc, temp_tlt, tempcurve);
         // }
     }
     // ESP_LOGI(TAG, "Calculation took %llu us", esp_timer_get_time() - starttime);
@@ -207,14 +211,14 @@ void get_dali_addresses()
     }
 }
 
-
 int configbits;
 
-int count_dali_channels(){
+int count_dali_channels()
+{
     if ((configbits & CONFIGBIT_USE_DALI) == 0)
         return 0;
     int count = 0;
-    for (int i=0; i < 6; i++)
+    for (int i = 0; i < 6; i++)
     {
         if (dali_addresses[i] != -1)
             count += 1;
@@ -224,10 +228,10 @@ int count_dali_channels(){
     return count;
 }
 
-int estimate_looptime(){
+int estimate_looptime()
+{
     return _MAX(count_dali_channels() * 25 - 5, 10);
 }
-
 
 uint8_t transmit_setlevel_dali_channel(dali_transceiver_handle_t transceiver, int channel_num, int level, bool force_send)
 {
@@ -322,7 +326,8 @@ static void print_sha256(const uint8_t *image_hash, const char *label)
     ESP_LOGI(TAG, "%s: %s", label, hash_print);
 }
 
-dali_transceiver_handle_t setup_dali(networking_ctx_t* networking_ctx){
+dali_transceiver_handle_t setup_dali(networking_ctx_t *networking_ctx)
+{
     dali_transceiver_config_t transceiver_config = dali_transceiver_sensible_default_config;
     transceiver_config.invert_input = DALI_DONT_INVERT;
     transceiver_config.invert_output = DALI_DONT_INVERT;
@@ -391,12 +396,12 @@ void check_partitions()
 
 void app_main(void)
 {
-    
     esp_reset_reason_t reason = esp_reset_reason();
-    // ESP_LOGI(TAG, "status %lu, statuslut %lu, lut %lu", (uint32_t) &status, (uint32_t) status.lut, (uint32_t) &levellut);
     configure_gpio();
-    
-    if ((reason != ESP_RST_DEEPSLEEP) && (reason != ESP_RST_SW))
+
+    bool stale = (status.stale_flag == STATUS_STALE_FLAG);
+    bool reinit = stale || ((reason != ESP_RST_DEEPSLEEP) && (reason != ESP_RST_SW));
+    if (reinit)
     {
         initialise_logbuffer();
     }
@@ -425,10 +430,16 @@ void app_main(void)
     int startup_setpoint_lvl = get_setting("startup_level");
 
     status.mainloop_task = xTaskGetCurrentTaskHandle();
-
-    if ((reason != ESP_RST_DEEPSLEEP) && (reason != ESP_RST_SW))
+    if (reinit)
     {
-        ESP_LOGI(TAG, "Fresh start up detected, loading startup level %i from NVS", startup_setpoint_lvl);
+        if (stale)
+        {
+            ESP_LOGI(TAG, "Status marked as stale - re-initialising");
+        }
+        else
+        {
+            ESP_LOGI(TAG, "Fresh start up detected, loading startup level %i from NVS", startup_setpoint_lvl);
+        }
         status.setpoint = startup_setpoint_lvl;
         status.fadetime_ms = USE_DEFAULT_FADETIME;
         status.setpoint_source = SETPOINT_SOURCE_INIT;
@@ -441,10 +452,11 @@ void app_main(void)
         status.level_overrides.espnow = -1;
         status.level_overrides.zeroten1 = -1;
         status.level_overrides.zeroten2 = -1;
+        status.stale_flag = 0;
     }
     else
     {
-        ESP_LOGI(TAG, "Software restart detected - keeping previous setpoint %d", status.setpoint);
+        ESP_LOGI(TAG, "Software restart detected - no stale flag - keeping previous setpoint %d", status.setpoint);
     }
 
     setup_rgb_led(&status);
@@ -558,8 +570,7 @@ void app_main(void)
         actual_looptime = (get_time_ms() - reftime);
         if (fade_remaining != 0 && actual_looptime > MINIMUM_TARGET_LOOPTIME)
         {
-            if (actual_looptime > (tlt_array[status.actual_level] + LOOPTIME_TOLERANCE)
-                    || actual_looptime < (tlt_array[status.actual_level] - LOOPTIME_TOLERANCE))
+            if (actual_looptime > (tlt_array[status.actual_level] + LOOPTIME_TOLERANCE) || actual_looptime < (tlt_array[status.actual_level] - LOOPTIME_TOLERANCE))
             {
                 looptime_outside_tolerance_count += 1;
             }
@@ -567,7 +578,7 @@ void app_main(void)
             {
                 // calc_tickinc_and_looptime(actual_looptime, status.setpoint - start_of_fade_level);
                 calc_fade_increments(actual_looptime, start_of_fade_level, status.setpoint);
-                        
+
                 looptime_outside_tolerance_count = 0;
             }
         }
@@ -667,7 +678,7 @@ void app_main(void)
             }
             else
                 idle_reawake_interval = _uMIN(MAX_IDLE_UPDATE_INTERVAL_AFTER_COOLDOWN_MS, max_idle_reawake_interval);
-            reawake_time = reftime + (uint64_t) idle_reawake_interval;
+            reawake_time = reftime + (uint64_t)idle_reawake_interval;
             ESP_LOGD(TAG, "Idle reawake %lu reftime %lu idle_start %lu cd %lu", idle_reawake_interval, reftime, idle_start_time, cooldown_duration);
             if (configbits & CONFIGBIT_RECEIVE_ESPNOW)
             {
@@ -786,15 +797,21 @@ void app_main(void)
         levellog_count += 1;
 
         // Write levels to individual strings
-        if (configbits & CONFIGBIT_USE_0_10v1) snprintf(zeroten1_str, 4, "%3.1i", zeroten1_lvl_to_send);
-        if (configbits & CONFIGBIT_USE_0_10v2) snprintf(zeroten2_str, 4, "%3.1i", zeroten2_lvl_to_send);
+        if (configbits & CONFIGBIT_USE_0_10v1)
+            snprintf(zeroten1_str, 4, "%3.1i", zeroten1_lvl_to_send);
+        if (configbits & CONFIGBIT_USE_0_10v2)
+            snprintf(zeroten2_str, 4, "%3.1i", zeroten2_lvl_to_send);
         for (int i = 0; i < 6; i++)
         {
-            if ((configbits & CONFIGBIT_USE_DALI) && dali_addresses[i] != -1) snprintf(dali_str[i], 4, "%3.1i", dali_levels_to_send[i]);
+            if ((configbits & CONFIGBIT_USE_DALI) && dali_addresses[i] != -1)
+                snprintf(dali_str[i], 4, "%3.1i", dali_levels_to_send[i]);
         }
-        if (configbits & CONFIGBIT_TRANSMIT_ESPNOW) snprintf(espnow_str, 4, "%3.1i", espnow_lvl_to_send);
-        if (configbits & CONFIGBIT_USE_RELAY1) snprintf(relay1_str, 4, "%3.1i", relay1_lvl_to_send);
-        if (configbits & CONFIGBIT_USE_RELAY2) snprintf(relay2_str, 4, "%3.1i", relay2_lvl_to_send);
+        if (configbits & CONFIGBIT_TRANSMIT_ESPNOW)
+            snprintf(espnow_str, 4, "%3.1i", espnow_lvl_to_send);
+        if (configbits & CONFIGBIT_USE_RELAY1)
+            snprintf(relay1_str, 4, "%3.1i", relay1_lvl_to_send);
+        if (configbits & CONFIGBIT_USE_RELAY2)
+            snprintf(relay2_str, 4, "%3.1i", relay2_lvl_to_send);
 
         if ((configbits & (CONFIGBIT_USE_RELAY1 | CONFIGBIT_USE_RELAY2)))
         {
@@ -802,26 +819,26 @@ void app_main(void)
             if (!(levellog_count & 5))
                 ESP_LOGI(TAG, "Lvl-> SP PWR | SRCE N | 0-10v1 0-10v2 DALIA DALIB DALIC DALID DALIE DALIF ESPN Rly1 Rly2    Fade    TLT   LT Wake");
             ESP_LOGI(TAG, "%3.1u->%3.1d %s | %s %1.i |    %s    %s   %s   %s   %s   %s   %s   %s  %s  %s  %s %7.1i %6.1lu %4.1i  %3.1lu",
-                 status.actual_level,
-                 status.setpoint,
-                 (status.power_on) ? " ON" : "OFF",
-                 source_str[status.setpoint_source & 0xF],
-                 (int)new_setpoint,
-                 (configbits & CONFIGBIT_USE_0_10v1) ? zeroten1_str : spaces,
-                 (configbits & CONFIGBIT_USE_0_10v2) ? zeroten2_str : spaces,
-                 ((configbits & CONFIGBIT_USE_DALI) && dali_addresses[0] != -1) ? dali_str[0] : spaces,
-                 ((configbits & CONFIGBIT_USE_DALI) && dali_addresses[1] != -1) ? dali_str[1] : spaces,
-                 ((configbits & CONFIGBIT_USE_DALI) && dali_addresses[2] != -1) ? dali_str[2] : spaces,
-                 ((configbits & CONFIGBIT_USE_DALI) && dali_addresses[3] != -1) ? dali_str[3] : spaces,
-                 ((configbits & CONFIGBIT_USE_DALI) && dali_addresses[4] != -1) ? dali_str[4] : spaces,
-                 ((configbits & CONFIGBIT_USE_DALI) && dali_addresses[5] != -1) ? dali_str[5] : spaces,
-                 (configbits & CONFIGBIT_TRANSMIT_ESPNOW) ? espnow_str : spaces,
-                 (configbits & CONFIGBIT_USE_RELAY1) ? relay1_str : spaces,
-                 (configbits & CONFIGBIT_USE_RELAY2) ? relay2_str : spaces,
-                 fadetime,
-                 tlt_array[status.actual_level],
-                 ((int)actual_looptime),
-                 idle_reawake_interval >> 10);
+                     status.actual_level,
+                     status.setpoint,
+                     (status.power_on) ? " ON" : "OFF",
+                     source_str[status.setpoint_source & 0xF],
+                     (int)new_setpoint,
+                     (configbits & CONFIGBIT_USE_0_10v1) ? zeroten1_str : spaces,
+                     (configbits & CONFIGBIT_USE_0_10v2) ? zeroten2_str : spaces,
+                     ((configbits & CONFIGBIT_USE_DALI) && dali_addresses[0] != -1) ? dali_str[0] : spaces,
+                     ((configbits & CONFIGBIT_USE_DALI) && dali_addresses[1] != -1) ? dali_str[1] : spaces,
+                     ((configbits & CONFIGBIT_USE_DALI) && dali_addresses[2] != -1) ? dali_str[2] : spaces,
+                     ((configbits & CONFIGBIT_USE_DALI) && dali_addresses[3] != -1) ? dali_str[3] : spaces,
+                     ((configbits & CONFIGBIT_USE_DALI) && dali_addresses[4] != -1) ? dali_str[4] : spaces,
+                     ((configbits & CONFIGBIT_USE_DALI) && dali_addresses[5] != -1) ? dali_str[5] : spaces,
+                     (configbits & CONFIGBIT_TRANSMIT_ESPNOW) ? espnow_str : spaces,
+                     (configbits & CONFIGBIT_USE_RELAY1) ? relay1_str : spaces,
+                     (configbits & CONFIGBIT_USE_RELAY2) ? relay2_str : spaces,
+                     fadetime,
+                     tlt_array[status.actual_level],
+                     ((int)actual_looptime),
+                     idle_reawake_interval >> 10);
         }
         else
         {
@@ -829,24 +846,24 @@ void app_main(void)
             if (!(levellog_count & 7))
                 ESP_LOGI(TAG, "Lvl-> SP PWR | SRCE N | 0-10v1 0-10v2 DALIA DALIB DALIC DALID DALIE DALIF ESPN     Fade    TLT   LT Wake");
             ESP_LOGI(TAG, "%3.1u->%3.1d %s | %s %1.i |    %s    %s   %s   %s   %s   %s   %s   %s  %s  %7.1i %6.1lu %4.1i  %3.1lu",
-                 status.actual_level,
-                 status.setpoint,
-                 (status.power_on) ? " ON" : "OFF",
-                 source_str[status.setpoint_source & 0xF],
-                 (int) new_setpoint,
-                 (configbits & CONFIGBIT_USE_0_10v1) ? zeroten1_str : spaces,
-                 (configbits & CONFIGBIT_USE_0_10v2) ? zeroten2_str : spaces,
-                 ((configbits & CONFIGBIT_USE_DALI) && dali_addresses[0] != -1) ? dali_str[0] : spaces,
-                 ((configbits & CONFIGBIT_USE_DALI) && dali_addresses[1] != -1) ? dali_str[1] : spaces,
-                 ((configbits & CONFIGBIT_USE_DALI) && dali_addresses[2] != -1) ? dali_str[2] : spaces,
-                 ((configbits & CONFIGBIT_USE_DALI) && dali_addresses[3] != -1) ? dali_str[3] : spaces,
-                 ((configbits & CONFIGBIT_USE_DALI) && dali_addresses[4] != -1) ? dali_str[4] : spaces,
-                 ((configbits & CONFIGBIT_USE_DALI) && dali_addresses[5] != -1) ? dali_str[5] : spaces,
-                 (configbits & CONFIGBIT_TRANSMIT_ESPNOW) ? espnow_str : spaces,
-                 fadetime,
-                 tlt_array[status.actual_level],
-                 ((int)actual_looptime),
-                 idle_reawake_interval >> 10);
+                     status.actual_level,
+                     status.setpoint,
+                     (status.power_on) ? " ON" : "OFF",
+                     source_str[status.setpoint_source & 0xF],
+                     (int)new_setpoint,
+                     (configbits & CONFIGBIT_USE_0_10v1) ? zeroten1_str : spaces,
+                     (configbits & CONFIGBIT_USE_0_10v2) ? zeroten2_str : spaces,
+                     ((configbits & CONFIGBIT_USE_DALI) && dali_addresses[0] != -1) ? dali_str[0] : spaces,
+                     ((configbits & CONFIGBIT_USE_DALI) && dali_addresses[1] != -1) ? dali_str[1] : spaces,
+                     ((configbits & CONFIGBIT_USE_DALI) && dali_addresses[2] != -1) ? dali_str[2] : spaces,
+                     ((configbits & CONFIGBIT_USE_DALI) && dali_addresses[3] != -1) ? dali_str[3] : spaces,
+                     ((configbits & CONFIGBIT_USE_DALI) && dali_addresses[4] != -1) ? dali_str[4] : spaces,
+                     ((configbits & CONFIGBIT_USE_DALI) && dali_addresses[5] != -1) ? dali_str[5] : spaces,
+                     (configbits & CONFIGBIT_TRANSMIT_ESPNOW) ? espnow_str : spaces,
+                     fadetime,
+                     tlt_array[status.actual_level],
+                     ((int)actual_looptime),
+                     idle_reawake_interval >> 10);
         }
         new_setpoint = false;
     }

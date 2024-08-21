@@ -242,6 +242,7 @@ function all(){
         });
         get("/api/power").then((sp) => {
             powerStatus = sp == "1";
+            if (!powerStatus && (sp != "0")) return;
             if (powerStatus) {
                 setUIPowerOn();
             } else {
@@ -263,6 +264,7 @@ function all(){
     Promise.all(preset_promises).then(() => {
         console.log("All promises resolved!");
         stylePresets(levelbyteind.innerHTML);
+        document.getElementsByTagName("main")[0].classList.remove("loading");
     });
 }
 
