@@ -14,7 +14,8 @@ function all(){
     let levelbox = document.getElementById("levelbutton-box");
     let offbox = document.getElementById("offbutton-box");
     let onbox = document.getElementById("onbutton-box");
-    let timermessage = "Turning Power Off in 2 minutes... Alarms will be OFF.";
+    let timermessage = "Turning Power Off in 2 minutes... Alarms will NOT wake.";
+    const offmessage = "Alarms will NOT wake";
 
     let powerStatus = true;
     function levelbyte_to_linear(byte){
@@ -78,22 +79,26 @@ function all(){
             },
             body: `${data}`
         };
-
+        let use_uri;
         // Make the PUT request using the fetch API
         if (uri == undefined){
             if (slow) {
-                uri = "/setpoint/slow";
+                use_uri = "/setpoint/slow";
             } else {
-                uri = "/setpoint"
+                use_uri = "/setpoint"
             }
+        } else {
+            use_uri = uri;
         }
-        return fetch(uri, options)
+        return fetch(use_uri, options)
             .then(response => {
                 if (!response.ok) {
                     throw new Error('Network response was not ok');
                 }
                 levelind.classList.remove("updating");
-                stylePresets(data);
+                if (!uri) {
+                    stylePresets(data);
+                }
                 return response;
             })
             .catch(error => {
@@ -139,7 +144,7 @@ function all(){
 
     function setUIPowerOff(timeout) {
         powerStatus = false;
-        if (!timeout) offmessage_el.innerHTML = "Alarms are OFF";
+        if (!timeout) offmessage_el.innerHTML = offmessage;
         let box = document.getElementById("levelbutton-box");
         box.style.opacity = "0.6";
         let offbox = document.getElementById("offbutton-box");
@@ -198,6 +203,7 @@ function all(){
         if (element.id == "buttonon") {
             sendPowerOn().then(() => {
                 setUIPowerOn();
+                stylePresets(levelbyteind.innerHTML);
             });
             return;
         }
@@ -251,7 +257,7 @@ function all(){
 
                     offmessage_el.innerHTML = timermessage;
                     window.setTimeout(() => {
-                        offmessage_el.innerHTML = "Alarms are OFF";
+                        offmessage_el.innerHTML = offmessage;
                     }, 60 * 1000 * 2);
                 }
             }

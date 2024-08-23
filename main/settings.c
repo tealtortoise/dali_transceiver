@@ -278,6 +278,7 @@ esp_err_t read_level_luts(level_t lut[]){
     int column_idx;
     int row_idx;
     int total_rows = 0;
+    uint8_t local_array[sizeof(level_t)];
     while (1) {
         commapos = -1;
         lastcommapos = -1;
@@ -290,7 +291,7 @@ esp_err_t read_level_luts(level_t lut[]){
         if (linebuffer[0] < '0') continue;
         if (linebuffer[0] > '9') continue;
         
-        linebuffer[64] = 0;
+        linebuffer[159] = 0;
 
         for (int i = 1; i <= 160; i++){
             if (linebuffer[i] == ',' || linebuffer[i] == 13 || linebuffer[i] == 10 || linebuffer[i] == 0) {
@@ -315,9 +316,14 @@ esp_err_t read_level_luts(level_t lut[]){
                 }
                 else
                 {
-                    uint8_t * byt = (size_t) lut + levet_t_size * row_idx + column_idx - 1;
-                    *byt = (uint8_t) cell_int;
-                
+                    // uint8_t * byt = (size_t) lut + levet_t_size * row_idx + column_idx - 1;
+                    // *byt = (uint8_t) cell_int;
+                    if (column_idx >= (sizeof(level_t) + 1)) // column_idx is 1 indexed, array is zero indexed
+                    {
+                        ESP_LOGE(TAG, "Invalid column_idx is CSV LUT (%i)", column_idx);
+                        break;
+                    }
+                    local_array[column_idx - 1] = cell_int;
                 }
                 // printf("Row %i Cell %i contents '%s' data %i\n", row_idx, column_idx, cellbuffer, cell_int);
                 column_idx += 1;
@@ -340,7 +346,7 @@ esp_err_t read_level_luts(level_t lut[]){
             fill_luts_fallback(lut);
             return ESP_ERR_NOT_FOUND;
         }
-        if (column_idx != 15){
+        if (column_idx != (sizeof(level_t) + 1)){
             ESP_LOGE(TAG, "Didn't find all columns in CSV file! Filled luts with fallback");
             fclose(lutfile);
             
@@ -348,7 +354,9 @@ esp_err_t read_level_luts(level_t lut[]){
             return ESP_ERR_INVALID_SIZE;
 
         }
-        // ESP_LOGI(TAG, "Found comma at pos %i in %s", commapos, linebuffer);
+        
+        // finally copy local_array to status struct lut array element
+        memcpy(&lut[row_idx], local_array, sizeof(local_array));
     }
     ESP_LOGI(TAG, "Finished loading LUTS (found %i)", total_rows);
     fclose(lutfile);

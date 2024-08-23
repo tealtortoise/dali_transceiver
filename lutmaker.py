@@ -62,9 +62,9 @@ columns = [
     "b",
 ]
 
-minimum_dim = 0.001
+minimum_dim = 0.0003
 
-channels = {
+living_room_channels = {
     "dalie": Channel(name="f90",
         points=[(0, 0.0), (0.3, 0.0), (0.7, 1.45), (1.0, 1.45)],
         type=ChannelType.INDEPENDENT,
@@ -81,8 +81,8 @@ channels = {
                       led=LED(vf=46, imax=650, eff=135), group=2),
     "dalib": Channel(name="tv 5000k",
                      type=ChannelType.INDEPENDENT,
-                     points=[(0.0, 0.0),(0.02, 0.0) ,(0.16, 0.8),(0.23, 0.7),(0.45, 0.58), (0.6, 0.48), (1.0, 0.31)],
-                     led=LED(imax=650, vf=33, eff=120), group=1),
+                     points=[(0.0, 0.0),(0.02, 0.0) ,(0.16, 0.8),(0.23, 0.7),(0.45, 0.55), (0.6, 0.46), (1.0, 0.28)],
+                     led=LED(imax=480, vf=40, eff=123), group=1),
     "dalic": Channel(name="tv 6500k",type=ChannelType.INDEPENDENT,
                      points=[(0.0, 1.2),(0.01, 1.0),  (0.02, 0.8), (0.16, 0.0), (1.0, 0.0)],
                      led=LED(imax=650, vf=33, eff=130), group=1, night_only=True),
@@ -92,7 +92,15 @@ channels = {
                      led=LED(imax=650, vf=33, eff=130), group=0, night_only=True),
 }
 
-channels = {}
+bedroom_channels = {
+    "dalia": Channel(name="5700k Thrive", type=ChannelType.INDEPENDENT,
+                     points=[(0.0, 1.32), (0.25, 1.32), (0.35, 1), (1.0, 1.0)],
+                     led=LED(vf=34, imax=2800, eff=120), group=0),
+    "dalib": Channel(name="5000k F90", type=ChannelType.INDEPENDENT,
+                    points=[(0.0, 0.0), (0.25, 0.0),(0.35, 0.35), (0.5, 0.73), (1.0, 1.01)],
+                    led=LED(imax=950*4, vf=51, eff=175), group=0)
+}
+
 if "fadetest" and 0:
     channels = {
         "a":Channel(name="a", type=ChannelType.INDEPENDENT, points=[(0.0,1.0), (1.0, 0.0)], led=LED(1000, 34, 120)),
@@ -100,23 +108,33 @@ if "fadetest" and 0:
     }
     columns = ["a", "b"]
 
-# highest_flux = max((curve.led.lumens for curve in channels.values()))
-highest_flux =1
 
-total_prop = [0.0, 0.0, 0.0, 0.0, 0.0,]
+channels = living_room_channels
+channels = bedroom_channels
+if 0 and "No custom channels":
+    highest_flux = 1
+    channels = {}
+
+highest_flux = max((curve.led.lumens for curve in channels.values()))
+
+
+max_group = max((channel.group for channel in channels.values()))
+
+total_prop = [0.0] * (max_group + 1);
+print(total_prop)
 if 1 and "print proportions":
     for key, channel in channels.items():
         print(f"Channel {key}: '{channel.name}': {channel.led.power}W {channel.led.lumens} ({(channel.led.lumens / highest_flux)})");
         if not channel.night_only:
             total_prop[channel.group] += channel.led.lumens / highest_flux
 
-for group in range(5):
+for group in range(max_group):
     print(f"Total group {group} daytime proportion {total_prop[group]}")
 
 
 # exit()
 
-def to_linear_custom(inp: np.ndarray, minimum_level: float = minimum_dim) -> np.ndarray:
+def to_linear_custom(inp: np.ndarray, minimum_level: float = 0.001) -> np.ndarray:
     divider = -math.log10(minimum_level)
     ary = 10 ** ((inp - 1) / 253.0 * divider) * minimum_level
     ary[inp == 0] = 0;
@@ -150,7 +168,7 @@ def to_log(inp: np.ndarray) -> np.ndarray:
 
 # print("desire flux array", desired_flux_ary)
 
-lin_flux = to_linear(inrange);
+lin_flux = to_linear_custom(inrange, minimum_dim);
 lin_flux[0] = 0.0;
 
 def main():
@@ -222,7 +240,7 @@ def main():
         else:
             name_columns.append(name)
 
-    for group in ():
+    for group in (0,):
         if len(lumens[group]) == 0: continue
         lumens[group]['sum'] = lumensum[group];
         lumens[group]['ideal'] = lin_flux * highest_flux * total_prop[group];
@@ -281,10 +299,10 @@ def main():
     dalivals['g'] = np.maximum(np.floor(out_g * white[1] * 255 - 0.5).astype(int), 0);
     dalivals['b'] = np.maximum(np.floor(out_b * white[2] * 255 - 0.5).astype(int), 0);
     df = pd.DataFrame(dalivals, columns=name_columns)
-    # df.plot(title="DALI Values")
-    # plt.show()
+    df.plot(title="DALI Values")
+    plt.show()
     print(df)
-    df.to_csv("spiffs/levelluts1.csv", index=False)
+    df.to_csv("spiffs/levelluts4.csv", index=False)
     # print("hello")
     # print(to_log(to_linear(inrange)))
 

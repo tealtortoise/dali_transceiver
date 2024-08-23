@@ -98,7 +98,10 @@ div#onbutton-box {
 }
 
 div#offmessage {
-    font-size: 200%;
+    font-size: 160%;
+    margin-left: 1em;
+    margin-top: 0.3em;
+    text-align: center;
 }
 button.levelbutton {
     margin-left: 2em;

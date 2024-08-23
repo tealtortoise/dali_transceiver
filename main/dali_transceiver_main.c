@@ -196,7 +196,6 @@ void calc_fade_increments(uint32_t looptime, int start, int finish)
 }
 
 static int dali_addresses[6];
-static level_t min_level;
 static char dali_address_key_buffer[] = "dalix_address";
 static uint8_t existing_dali_levels[6];
 
@@ -505,6 +504,7 @@ void app_main(void)
 
     bool at_setpoint;
     level_t level_el;
+    uint8_t level_el_array[sizeof(level_t)];
     int dali_broadcast;
     level_t future_el;
     uint32_t current_time;
@@ -553,17 +553,11 @@ void app_main(void)
     int idle_sends = 0;
     uint32_t idle_start_time = reftime;
     int future_level;
+    uint8_t min_level_array[sizeof(level_t)] = { 0 };
+    uint8_t future_level_array[sizeof(level_t)] = { 0 };
     uint8_t start_of_fade_level = 0;
     int looptime_outside_tolerance_count = 0;
 
-    level_t subslevel = {
-        .zeroten1_lvl = 0,
-        .zeroten2_lvl = 0,
-        .dali_lvl = {0, 0, 0, 0, 0, 0},
-        .espnow_lvl = 0,
-        .relay1 = 0,
-        .relay2 = 0,
-    };
     ESP_LOGI(TAG, "Starting main loop...");
     while (1)
     {
@@ -616,18 +610,22 @@ void app_main(void)
                 }
                 if (fadetime < 8)
                     fadetime = 8;
-                min_level = status.lut[0];
 
                 // make sure output needed later in fade are woken up
+                //
+                // reset to zero
+                memcpy(future_level_array, &status.lut[0], sizeof(level_t)); // may as well reuse this array
+                for (int ch = 0; ch < sizeof(level_t); ch++)
+                    min_level_array[ch] = future_level_array[ch];
+
+                // look through fade to see if channel is used
                 for (future_level = status.actual_level; future_level != status.setpoint; future_level += (status.setpoint > status.actual_level) ? 1 : -1)
                 {
-                    future_el = status.lut[future_level];
+                    memcpy(future_level_array, &status.lut[future_level], sizeof(level_t));
                     for (int ch = 0; ch < sizeof(level_t); ch++)
                     {
-                        if (*(((uint8_t *)&future_el) + ch) > 0)
-                        {
-                            *(((uint8_t *)&min_level) + ch) = 1;
-                        }
+                        if (future_level_array[ch] > 0)
+                            min_level_array[ch] = 1;
                     }
                 }
 
@@ -687,7 +685,12 @@ void app_main(void)
             }
             idlecount += 1;
             idle_sends += 1;
-            min_level = status.lut[0];
+
+            // reset min_level array
+            memcpy(future_level_array, &status.lut[0], sizeof(level_t)); // may as well reuse this array
+            for (int ch = 0; ch < sizeof(level_t); ch++)
+                min_level_array[ch] = future_level_array[ch];
+
             get_dali_addresses();
 
             full_power = clamp(get_setting("full_power"), 0, 512);
@@ -705,13 +708,13 @@ void app_main(void)
         level_el = status.lut[clamp((int)status.actual_level + (int)full_power - 254, 0, 254)];
 
         // ensure minimum levels
+        memcpy(level_el_array, &level_el, sizeof(level_t));
         for (int ch = 0; ch < sizeof(level_t); ch++)
         {
-            if (*((uint8_t *)&level_el + ch) < *((uint8_t *)&min_level + ch))
-            {
-                *((uint8_t *)&level_el + ch) = *((uint8_t *)&min_level + ch);
-            }
+            if (level_el_array[ch] < min_level_array[ch])
+                level_el_array[ch] = min_level_array[ch];
         }
+        memcpy(&level_el, &level_el_array, sizeof(level_t));
 
         // RELAYS
         relay1_lvl_to_send = status.power_on ? level_el.relay1 : 0;

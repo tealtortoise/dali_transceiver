@@ -43,7 +43,7 @@
 #include "settings.h"
 #include "gpio_utils.h"
 
-#define EXAMPLE_HTTP_QUERY_KEY_MAX_LEN  (64)
+#define EXAMPLE_HTTP_QUERY_KEY_MAX_LEN (64)
 
 /* A simple example that demonstrates how to create GET and POST
  * handlers for the web server.
@@ -59,10 +59,9 @@ static const char *TAG = "http server";
 
 #define NO_DIGITS_FOUND -98765413
 
-
 #define MAX_INFIX_REPLACEMENTS 10
 static int num_infixes = 0;
-static int infix_offsets[MAX_INFIX_REPLACEMENTS] = { -1 };
+static int infix_offsets[MAX_INFIX_REPLACEMENTS] = {-1};
 
 static char httpd_temp_buffer[BUF_SIZE];
 
@@ -83,7 +82,8 @@ static int uri_segment_count;
 static int substring_count;
 static int substring_ints[5];
 
-void parse_uri(const char* uri){
+void parse_uri(const char *uri)
+{
     for (int i = 0; i < 5; i++)
     {
         substring_ints[i] = GET_SETTING_NOT_FOUND;
@@ -92,9 +92,11 @@ void parse_uri(const char* uri){
     uri_segment_count = -1;
     int scanint;
     int valid;
-    for (int i = 0; i <= strlen(uri); i++){
-        if (uri[i] == '/' || uri[i] == 0){
-            if (slashes[uri_segment_count] == i-1)
+    for (int i = 0; i <= strlen(uri); i++)
+    {
+        if (uri[i] == '/' || uri[i] == 0)
+        {
+            if (slashes[uri_segment_count] == i - 1)
             {
                 // we have a double slash or EOL
                 slashes[uri_segment_count] = i;
@@ -103,7 +105,8 @@ void parse_uri(const char* uri){
             uri_segment_count += 1;
             slashes[uri_segment_count] = i;
             // printf("found slash at %i\n", i);
-            if (uri_segment_count > 4) break;
+            if (uri_segment_count > 4)
+                break;
             if (uri_segment_count > 0)
             {
                 idx_start = slashes[uri_segment_count - 1] + 1;
@@ -112,7 +115,8 @@ void parse_uri(const char* uri){
                 strncpy(substrings[uri_segment_count - 1], uri + idx_start, idx_end - idx_start);
                 substrings[uri_segment_count - 1][idx_end - idx_start] = 0;
                 valid = sscanf(substrings[uri_segment_count - 1], "%i", &scanint);
-                if (valid) {
+                if (valid)
+                {
                     substring_ints[uri_segment_count - 1] = scanint;
                 }
             }
@@ -126,13 +130,15 @@ void parse_uri(const char* uri){
     // }
 }
 
-static esp_err_t nvs_get_handler(httpd_req_t *req){
+static esp_err_t nvs_get_handler(httpd_req_t *req)
+{
     parse_uri(req->uri);
     int value = GET_SETTING_NOT_FOUND;
     // int* reg = get_endpoint_ptr();
     int index = substring_ints[2];
-        
-    if (substring_count == 2) {
+
+    if (substring_count == 2)
+    {
         value = get_setting(substrings[1]);
     }
     else if (substring_count == 3 && substring_ints[2] != GET_SETTING_NOT_FOUND)
@@ -143,7 +149,8 @@ static esp_err_t nvs_get_handler(httpd_req_t *req){
     {
         value = GET_SETTING_NOT_FOUND;
     }
-    if (value == GET_SETTING_NOT_FOUND) {
+    if (value == GET_SETTING_NOT_FOUND)
+    {
         sprintf(httpd_temp_buffer, "Not found");
         // ESP_LOGI(TAG, "%s: URI '%s', setting NOT FOUND", req->uri);
 
@@ -155,12 +162,13 @@ static esp_err_t nvs_get_handler(httpd_req_t *req){
         sprintf(httpd_temp_buffer, "%i", value);
         // ESP_LOGI(TAG, "%s: URI '%s', returning %i", req->uri, value);
     }
-    
+
     httpd_resp_send(req, httpd_temp_buffer, HTTPD_RESP_USE_STRLEN);
     return ESP_OK;
 }
 
-static esp_err_t nvs_put_handler(httpd_req_t *req){
+static esp_err_t nvs_put_handler(httpd_req_t *req)
+{
     parse_uri(req->uri);
 
     int bytes = httpd_req_recv(req, httpd_temp_buffer, 255);
@@ -170,7 +178,7 @@ static esp_err_t nvs_put_handler(httpd_req_t *req){
     ESP_LOGI(TAG, "===== REST API Handler: received PUT at %s (%s)", req->uri, httpd_temp_buffer);
     ESP_LOGD(TAG, "Received %s (%i) %i", httpd_temp_buffer, put_data_int, datarecv);
     int value = GET_SETTING_NOT_FOUND;
-    
+
     int index = substring_ints[2];
 
     if (datarecv != 1)
@@ -181,7 +189,8 @@ static esp_err_t nvs_put_handler(httpd_req_t *req){
         return ESP_FAIL;
     }
 
-    if (substring_count == 2) {
+    if (substring_count == 2)
+    {
         ESP_LOGD(TAG, "Setting key %s to %i", substrings[1], put_data_int);
         set_setting(substrings[1], put_data_int);
     }
@@ -191,13 +200,14 @@ static esp_err_t nvs_put_handler(httpd_req_t *req){
         set_setting_indexed(substrings[1], index, put_data_int);
         // ESP_LOGI(TAG, "Setting %s index %i from %s", substrings[0], index, substrings[1]);
     }
-    if (strcmp(substrings[1], "lutfile") == 0){
+    if (strcmp(substrings[1], "lutfile") == 0)
+    {
         ESP_LOGI(TAG, "Detected change of lutfile, reloading luts...");
-        
+
         networking_ctx_t *ctx = httpd_get_global_user_ctx(req->handle);
         read_level_luts(ctx->status->lut);
     }
-    
+
     sprintf(httpd_temp_buffer, "OK");
     httpd_resp_send(req, httpd_temp_buffer, HTTPD_RESP_USE_STRLEN);
 
@@ -206,20 +216,24 @@ static esp_err_t nvs_put_handler(httpd_req_t *req){
     return ESP_OK;
 }
 
-static esp_err_t current_setpoint_handler(httpd_req_t *req){
+static esp_err_t current_setpoint_handler(httpd_req_t *req)
+{
     parse_uri(req->uri);
-    if (req->method == HTTP_GET) {
+    if (req->method == HTTP_GET)
+    {
         networking_ctx_t *ctx = httpd_get_global_user_ctx(req->handle);
         sprintf(httpd_temp_buffer, "%i", ctx->status->setpoint);
     }
-    else if (req->method == HTTP_PUT){
+    else if (req->method == HTTP_PUT)
+    {
         int bytes = httpd_req_recv(req, httpd_temp_buffer, 254);
         httpd_temp_buffer[bytes] = 0;
         int data;
         int datarecv = sscanf(httpd_temp_buffer, "%i", &data);
         ESP_LOGI(TAG, "Setpoint handler: received PUT at %s (%s)", req->uri, httpd_temp_buffer);
         ESP_LOGD(TAG, "Received %s (%i) %i", httpd_temp_buffer, data, datarecv);
-        if (data >= 0 && data <= 255){
+        if (data >= 0 && data <= 255)
+        {
             int fade;
             if (substring_count == 2 && (strcmp(substrings[1], "slow") == 0))
             {
@@ -250,17 +264,17 @@ static esp_err_t current_setpoint_handler(httpd_req_t *req){
     return ESP_OK;
 }
 
-static esp_err_t otaupdate(httpd_req_t *req){
+static esp_err_t otaupdate(httpd_req_t *req)
+{
     // return httpd_resp_send_500(req);
     // char* buffer = malloc(1024);
     parse_uri(req->uri);
     int bytes;
     ESP_LOGI(TAG, "Received POST OTAUpdate %i bytes", req->content_len);
-    
-    
+
     esp_err_t err;
     /* update handle : set by esp_ota_begin(), must be freed via esp_ota_end() */
-    esp_ota_handle_t update_handle = 0 ;
+    esp_ota_handle_t update_handle = 0;
     const esp_partition_t *update_partition = NULL;
 
     ESP_LOGI(TAG, "Starting OTA example");
@@ -268,17 +282,17 @@ static esp_err_t otaupdate(httpd_req_t *req){
     const esp_partition_t *configured = esp_ota_get_boot_partition();
     const esp_partition_t *running = esp_ota_get_running_partition();
 
-    if (configured != running) {
-        ESP_LOGW(TAG, "Configured OTA boot partition at offset 0x%08"PRIx32", but running from offset 0x%08"PRIx32,
+    if (configured != running)
+    {
+        ESP_LOGW(TAG, "Configured OTA boot partition at offset 0x%08" PRIx32 ", but running from offset 0x%08" PRIx32,
                  configured->address, running->address);
         ESP_LOGW(TAG, "(This can happen if either the OTA boot data or preferred boot image become corrupted somehow.)");
     }
-    ESP_LOGI(TAG, "Running partition type %d subtype %d (offset 0x%08"PRIx32")",
+    ESP_LOGI(TAG, "Running partition type %d subtype %d (offset 0x%08" PRIx32 ")",
              running->type, running->subtype, running->address);
 
-
     update_partition = esp_ota_get_next_update_partition(NULL);
-    ESP_LOGI(TAG, "Writing to partition subtype %d at offset 0x%"PRIx32,
+    ESP_LOGI(TAG, "Writing to partition subtype %d at offset 0x%" PRIx32,
              update_partition->subtype, update_partition->address);
     assert(update_partition != NULL);
 
@@ -286,49 +300,58 @@ static esp_err_t otaupdate(httpd_req_t *req){
     bool image_header_was_checked = false;
     int binary_file_length = 0;
     int leds = 0;
-    
-    while (1){
+
+    while (1)
+    {
         bytes = httpd_req_recv(req, httpd_temp_buffer, _MIN(req->content_len, BUF_SIZE));
-        if (bytes > 1) 
+        if (bytes > 1)
         {
             ESP_LOGI(TAG, "Recv %i bytes", bytes);
             // printf(".");
             // fflush(stdout);
-            if (image_header_was_checked == false) {
+            if (image_header_was_checked == false)
+            {
                 esp_app_desc_t new_app_info;
-                if (bytes > sizeof(esp_image_header_t) + sizeof(esp_image_segment_header_t) + sizeof(esp_app_desc_t)) {
+                if (bytes > sizeof(esp_image_header_t) + sizeof(esp_image_segment_header_t) + sizeof(esp_app_desc_t))
+                {
                     // check current version with downloading
                     memcpy(&new_app_info, &httpd_temp_buffer[sizeof(esp_image_header_t) + sizeof(esp_image_segment_header_t)], sizeof(esp_app_desc_t));
                     ESP_LOGI(TAG, "New firmware version: %s", new_app_info.version);
 
                     esp_app_desc_t running_app_info;
-                    if (esp_ota_get_partition_description(running, &running_app_info) == ESP_OK) {
+                    if (esp_ota_get_partition_description(running, &running_app_info) == ESP_OK)
+                    {
                         ESP_LOGI(TAG, "Running firmware version: %s", running_app_info.version);
                     }
 
-                    const esp_partition_t* last_invalid_app = esp_ota_get_last_invalid_partition();
+                    const esp_partition_t *last_invalid_app = esp_ota_get_last_invalid_partition();
                     esp_app_desc_t invalid_app_info;
-                    if (esp_ota_get_partition_description(last_invalid_app, &invalid_app_info) == ESP_OK) {
+                    if (esp_ota_get_partition_description(last_invalid_app, &invalid_app_info) == ESP_OK)
+                    {
                         ESP_LOGI(TAG, "Last invalid firmware version: %s", invalid_app_info.version);
                     }
                     image_header_was_checked = true;
 
                     err = esp_ota_begin(update_partition, OTA_SIZE_UNKNOWN, &update_handle);
-                    if (err != ESP_OK) {
+                    if (err != ESP_OK)
+                    {
                         ESP_LOGE(TAG, "esp_ota_begin failed (%s)", esp_err_to_name(err));
                         return httpd_resp_send_500(req);
                     }
                     ESP_LOGI(TAG, "esp_ota_begin succeeded");
-                    
+
                     gpio_set_level(LED1_GPIO, (leds & 8) > 0);
                     gpio_set_level(LED2_GPIO, (leds & 16) > 0);
-                } else {
+                }
+                else
+                {
                     ESP_LOGE(TAG, "received package is not fit len");
                     return httpd_resp_send_500(req);
                 }
             }
-            err = esp_ota_write( update_handle, (const void *)httpd_temp_buffer, bytes);
-            if (err != ESP_OK) {
+            err = esp_ota_write(update_handle, (const void *)httpd_temp_buffer, bytes);
+            if (err != ESP_OK)
+            {
                 return httpd_resp_send_500(req);
             }
             binary_file_length += bytes;
@@ -344,16 +367,19 @@ static esp_err_t otaupdate(httpd_req_t *req){
             httpd_resp_send(req, httpd_temp_buffer, HTTPD_RESP_USE_STRLEN);
 
             err = esp_ota_end(update_handle);
-            if (err != ESP_OK) {
-                if (err == ESP_ERR_OTA_VALIDATE_FAILED) {
+            if (err != ESP_OK)
+            {
+                if (err == ESP_ERR_OTA_VALIDATE_FAILED)
+                {
                     ESP_LOGE(TAG, "Image validation failed, image is corrupted");
                 }
                 ESP_LOGE(TAG, "esp_ota_end failed (%s)!", esp_err_to_name(err));
                 return httpd_resp_send_500(req);
             }
-            
+
             err = esp_ota_set_boot_partition(update_partition);
-            if (err != ESP_OK) {
+            if (err != ESP_OK)
+            {
                 ESP_LOGE(TAG, "esp_ota_set_boot_partition failed (%s)!", esp_err_to_name(err));
                 return httpd_resp_send_500(req);
             }
@@ -367,7 +393,7 @@ static esp_err_t otaupdate(httpd_req_t *req){
         }
         vTaskDelay(1);
     }
-    
+
     sprintf(httpd_temp_buffer, "OK");
     httpd_resp_send(req, httpd_temp_buffer, HTTPD_RESP_USE_STRLEN);
     // free(buffer);
@@ -377,13 +403,15 @@ static esp_err_t otaupdate(httpd_req_t *req){
 static TimerHandle_t delaytimer;
 static int timercount;
 
-static void poweroff(TimerHandle_t timer) {
+static void poweroff(TimerHandle_t timer)
+{
     ESP_LOGI(TAG, "Timer expired -> Turning power off");
     status->power_on = 0;
     xTaskNotifyIndexed(status->mainloop_task, NEW_SETPOINT_NOTIFY_IDX, SETPOINT_SOURCE_REST, eSetValueWithOverwrite);
 }
 
-static esp_err_t rest_power_handler(httpd_req_t *req){
+static esp_err_t rest_power_handler(httpd_req_t *req)
+{
     bool put = req->method == HTTP_PUT;
     networking_ctx_t *ctx = httpd_get_global_user_ctx(req->handle);
     bool notify = true;
@@ -395,10 +423,11 @@ static esp_err_t rest_power_handler(httpd_req_t *req){
         int bytes = httpd_req_recv(req, httpd_temp_buffer, 255);
         httpd_temp_buffer[bytes] = 0;
         int datarecv = sscanf(httpd_temp_buffer, "%i", &put_data_int);
-        
+
         int level = clamp(put_data_int, 0, 254);
         ESP_LOGI(TAG, "=== Received PUT at %s (%s) -> %i", req->uri, httpd_temp_buffer, put_data_int);
-        if (substring_count == 3){
+        if (substring_count == 3)
+        {
             if (strcmp(substrings[2], "setlevel") == 0)
             {
                 ESP_LOGI(TAG, "Settng power_on to %i", level);
@@ -409,13 +438,15 @@ static esp_err_t rest_power_handler(httpd_req_t *req){
             }
             else if (strcmp(substrings[2], "delay") == 0)
             {
-                if (put_data_int < 1000){
+                if (put_data_int < 1000)
+                {
                     poweroff(delaytimer);
                 }
                 else
                 {
                     ESP_LOGI(TAG, "Starting turn-off timer for %i ms", put_data_int);
-                    if (delaytimer == 0){
+                    if (delaytimer == 0)
+                    {
                         delaytimer = xTimerCreate("poweroff-delay", pdMS_TO_TICKS(put_data_int), false, &timercount, poweroff);
                     }
                     else
@@ -428,16 +459,15 @@ static esp_err_t rest_power_handler(httpd_req_t *req){
                         httpd_resp_send_500(req);
                         return ESP_FAIL;
                     }
-                    ESP_LOGI(TAG, "Started!"); 
-                    
-                    if (ctx->status->setpoint > 15)
-                        ctx->status->setpoint = _MAX(ctx->status->setpoint >> 2, 15);
-                    ctx->status->fadetime_ms = 1000;
-                    ctx->status->setpoint_source = SETPOINT_SOURCE_REST;
-                    xTaskNotifyIndexed(ctx->status->mainloop_task, NEW_SETPOINT_NOTIFY_IDX, SETPOINT_SOURCE_REST, eSetValueWithOverwrite);
-            
+                    ESP_LOGI(TAG, "Started!");
+
+                    // if (ctx->status->setpoint > 15)
+                    // ctx->status->setpoint = _MAX(ctx->status->setpoint >> 2, 15);
+                    // ctx->status->fadetime_ms = 1000;
+                    // ctx->status->setpoint_source = SETPOINT_SOURCE_REST;
+                    // xTaskNotifyIndexed(ctx->status->mainloop_task, NEW_SETPOINT_NOTIFY_IDX, SETPOINT_SOURCE_REST, eSetValueWithOverwrite);
                 }
-                
+
                 notify = false;
             }
             else
@@ -455,7 +485,7 @@ static esp_err_t rest_power_handler(httpd_req_t *req){
             }
             else
             {
-            
+
                 ESP_LOGI(TAG, "Turning power off");
                 ctx->status->power_on = 0;
             }
@@ -465,7 +495,8 @@ static esp_err_t rest_power_handler(httpd_req_t *req){
         if (notify)
         {
             xTaskNotifyIndexed(ctx->status->mainloop_task, NEW_SETPOINT_NOTIFY_IDX, SETPOINT_SOURCE_REST, eSetValueWithOverwrite);
-            if (delaytimer != 0){
+            if (delaytimer != 0)
+            {
                 success = xTimerStop(delaytimer, 0);
                 if (success != pdTRUE)
                 {
@@ -489,16 +520,18 @@ static esp_err_t rest_power_handler(httpd_req_t *req){
     return ESP_OK;
 }
 
-static esp_err_t rest_channel_override_handler(httpd_req_t *req){
+static esp_err_t rest_channel_override_handler(httpd_req_t *req)
+{
     parse_uri(req->uri);
     bool put = req->method == HTTP_PUT;
     int put_data_int = -1;
-    
+
     ESP_LOGI(TAG, "===== Received GET at %s", req->uri);
-    const char* channelname = substrings[2];
-    int16_t* override_ptr;
-    if (put) {
-            
+    const char *channelname = substrings[2];
+    int16_t *override_ptr;
+    if (put)
+    {
+
         int bytes = httpd_req_recv(req, httpd_temp_buffer, 255);
         httpd_temp_buffer[bytes] = 0;
         int datarecv = sscanf(httpd_temp_buffer, "%i", &put_data_int);
@@ -517,7 +550,7 @@ static esp_err_t rest_channel_override_handler(httpd_req_t *req){
             ESP_LOGI(TAG, "Getting override pointer for DALI %i", channel_num);
             override_ptr = &ctx->status->level_overrides.dali[channel_num];
             chname = daliname;
-            daliname[4] = 'A' + (char) channel_num;
+            daliname[4] = 'A' + (char)channel_num;
             ESP_LOGI(TAG, "chname is %s", chname);
         }
         else
@@ -548,7 +581,7 @@ static esp_err_t rest_channel_override_handler(httpd_req_t *req){
     }
     if (put)
     {
-        *override_ptr = (int16_t) put_data_int;
+        *override_ptr = (int16_t)put_data_int;
         sprintf(httpd_temp_buffer, "OK");
         ESP_LOGI(TAG, "PUT: Set %s to %i", chname, put_data_int);
         xTaskNotifyIndexed(ctx->mainloop_task, NEW_SETPOINT_NOTIFY_IDX, 0, eNoAction);
@@ -558,21 +591,22 @@ static esp_err_t rest_channel_override_handler(httpd_req_t *req){
         sprintf(httpd_temp_buffer, "%i", *override_ptr);
         ESP_LOGI(TAG, "GET: %s is %i", chname, *override_ptr);
     }
-    
+
     httpd_resp_send(req, httpd_temp_buffer, HTTPD_RESP_USE_STRLEN);
     return ESP_OK;
 }
 
-static const char* index_filename = "/spiffs/index.html";
-static const char* alarm_filename = "/spiffs/alarms.html";
-static const char* channels_filename = "/spiffs/channels.html";
-static const char* fallback_infix_filename = "/spiffs/infixx";
-static const char* spiffsfolder = "/spiffs";
+static const char *index_filename = "/spiffs/index.html";
+static const char *alarm_filename = "/spiffs/alarms.html";
+static const char *channels_filename = "/spiffs/channels.html";
+static const char *fallback_infix_filename = "/spiffs/infixx";
+static const char *spiffsfolder = "/spiffs";
 // static const char* filenamebuf = "                         ";
 
-static void find_infixes(char* buffer, FILE *existing_open_file){
+static void find_infixes(char *buffer, FILE *existing_open_file)
+{
     ESP_LOGD(TAG, "Looking for infixes in '%s'", index_filename);
-    FILE* in_file;
+    FILE *in_file;
     if (existing_open_file != NULL)
     {
         in_file = existing_open_file;
@@ -586,7 +620,7 @@ static void find_infixes(char* buffer, FILE *existing_open_file){
         ESP_LOGE(TAG, "ERROR No replacement infix string positions found");
         return;
     }
-    
+
     fseek(in_file, 0, SEEK_END);
     long fsize = ftell(in_file);
     fseek(in_file, 0, SEEK_SET);
@@ -599,36 +633,36 @@ static void find_infixes(char* buffer, FILE *existing_open_file){
     }
     fread(buffer, fsize, 1, in_file);
     int infix_index = 0;
-    for (int bytepos=0; bytepos < fsize; bytepos++)
+    for (int bytepos = 0; bytepos < fsize; bytepos++)
     {
         if ((buffer[bytepos] == '%') && (buffer[bytepos + 1] == 's'))
         {
             ESP_LOGD(TAG, "Found infix location at %i", bytepos);
             infix_offsets[infix_index] = bytepos;
-            
+
             infix_index += 1;
-            if (infix_index >=MAX_INFIX_REPLACEMENTS)
+            if (infix_index >= MAX_INFIX_REPLACEMENTS)
             {
                 ESP_LOGW(TAG, "Reached replacement string limit of %i", MAX_INFIX_REPLACEMENTS);
                 break;
             }
         }
-        
     }
-    ESP_LOGI(TAG, "Found %i infixes",infix_index);
+    ESP_LOGI(TAG, "Found %i infixes", infix_index);
     num_infixes = infix_index;
     if (existing_open_file == NULL)
     {
         fclose(in_file);
         return;
     }
-        
+
     // return to beginning of file
     fseek(in_file, 0, SEEK_SET);
 }
 
-static int check_buffer_bounds(int pos){
-    
+static int check_buffer_bounds(int pos)
+{
+
     if ((pos + 1) > BUF_SIZE)
     {
         ESP_LOGE(TAG, "ERROR Ran out of buffer. Perhaps too long infix file?");
@@ -637,43 +671,48 @@ static int check_buffer_bounds(int pos){
     return 0;
 }
 
-static int send_file_as_chunk(httpd_req_t* req, char* filename, bool infix){
+static int send_file_as_chunk(httpd_req_t *req, char *filename, bool infix)
+{
     ESP_LOGI(TAG, "Looking for '%s'", filename);
-    FILE *in_file  = fopen(filename, "r");
+    FILE *in_file = fopen(filename, "r");
 
     if (in_file == NULL)
-    {  
+    {
         httpd_resp_send_err(req, HTTPD_404_NOT_FOUND, "Can't find file");
         return -1;
     }
-    
+
     fseek(in_file, 0, SEEK_END);
     long fsize = ftell(in_file);
     fseek(in_file, 0, SEEK_SET);
 
-    if (fsize > (BUF_SIZE - MAX_SAFE_INFIX_FILE_SIZE)) {
+    if (fsize > (BUF_SIZE - MAX_SAFE_INFIX_FILE_SIZE))
+    {
         ESP_LOGI(TAG, "File probably too big for buffer, sending chunks (can't replace strings)");
         int sent_bytes = 0;
         int bytes_to_send;
-        while (1) {
+        while (1)
+        {
             bytes_to_send = _MIN(BUF_SIZE, fsize - sent_bytes);
-            if (bytes_to_send > 0) fread(httpd_temp_buffer, bytes_to_send, 1, in_file);
+            if (bytes_to_send > 0)
+                fread(httpd_temp_buffer, bytes_to_send, 1, in_file);
             httpd_resp_send_chunk(req, httpd_temp_buffer, bytes_to_send);
-            
-            if (bytes_to_send == 0) break;
+
+            if (bytes_to_send == 0)
+                break;
             sent_bytes += bytes_to_send;
         }
         fclose(in_file);
         return 0;
     }
 
-    //we move on to string replacement maybe
+    // we move on to string replacement maybe
 
     FILE *name_file = NULL;
     if (infix)
     {
         int namefile_number = get_setting("namefile");
-        char infix_filename[64] = { 0 };
+        char infix_filename[64] = {0};
         strcat(infix_filename, filename);
         strcat(infix_filename, ".infix");
         int infix_filename_len = strlen(infix_filename);
@@ -682,7 +721,7 @@ static int send_file_as_chunk(httpd_req_t* req, char* filename, bool infix){
         infix_filename[infix_filename_len] = 0;
 
         ESP_LOGI(TAG, "Using infix filename '%s'", infix_filename);
-        name_file  = fopen(infix_filename, "r");
+        name_file = fopen(infix_filename, "r");
 
         if (name_file == NULL)
         {
@@ -715,18 +754,18 @@ static int send_file_as_chunk(httpd_req_t* req, char* filename, bool infix){
     int opos = 0; // output buffer position
     int total_replaces;
     int ptr_recv;
-    char* ret;
+    char *ret;
     int pos_pointer_str_len;
     int last_pos_pointer = 0;
     int pos_pointer = 0;
 
     bool error = false;
 
-    find_infixes(httpd_temp_file_buffer ,in_file);
+    find_infixes(httpd_temp_file_buffer, in_file);
     total_replaces = 0;
-    
+
     ESP_LOGI(TAG, "Infixing strings...");
-    
+
     int infix_str_len;
 
     // load original file into file buffer
@@ -736,10 +775,11 @@ static int send_file_as_chunk(httpd_req_t* req, char* filename, bool infix){
 
     // copy original file blocks around infixes
     bool eof = false;
-    for (int replace_idx = 0; replace_idx <= num_infixes; replace_idx ++)
+    for (int replace_idx = 0; replace_idx <= num_infixes; replace_idx++)
     {
         ret = fgets(infix_string_buffer, 127, name_file);
-        if (ret == NULL){
+        if (ret == NULL)
+        {
             total_replaces = replace_idx;
             eof = true;
             ESP_LOGD(TAG, "Reached EOF");
@@ -747,20 +787,21 @@ static int send_file_as_chunk(httpd_req_t* req, char* filename, bool infix){
 
         if (replace_idx == 0 && num_infixes == 0)
         {
-                ESP_LOGD(TAG, "No replacing -> just copy file");
-                memcpy(httpd_temp_buffer, httpd_temp_file_buffer, fsize);
-                ipos += fsize;
-                opos += fsize;
-                break;
+            ESP_LOGD(TAG, "No replacing -> just copy file");
+            memcpy(httpd_temp_buffer, httpd_temp_file_buffer, fsize);
+            ipos += fsize;
+            opos += fsize;
+            break;
         }
 
-        if (replace_idx == num_infixes || eof) 
+        if (replace_idx == num_infixes || eof)
         {
-            
+
             ESP_LOGI(TAG, "Copy EOF...");
             // copy tail end
             bytes_copy = fsize - ipos;
-            if (check_buffer_bounds(opos + bytes_copy + 1)) break;
+            if (check_buffer_bounds(opos + bytes_copy + 1))
+                break;
             memcpy(httpd_temp_buffer + opos, httpd_temp_file_buffer + ipos, bytes_copy);
             opos += bytes_copy;
             break;
@@ -769,8 +810,9 @@ static int send_file_as_chunk(httpd_req_t* req, char* filename, bool infix){
         // copy head end / inbetween text
         ESP_LOGD(TAG, "Copy inbetween text at %i -> %i", ipos, opos);
         bytes_copy = infix_offsets[replace_idx] - ipos;
-        
-        if (check_buffer_bounds(opos + bytes_copy + 1)) break;
+
+        if (check_buffer_bounds(opos + bytes_copy + 1))
+            break;
         memcpy(httpd_temp_buffer + opos, httpd_temp_file_buffer + ipos, bytes_copy);
         ipos += bytes_copy;
         opos += bytes_copy;
@@ -780,12 +822,13 @@ static int send_file_as_chunk(httpd_req_t* req, char* filename, bool infix){
         infix_str_len = line_len;
 
         if (infix_string_buffer[line_len - 1] == 10 || infix_string_buffer[line_len - 1] == 13)
-            infix_str_len -= 1; //we don't want the newlines
+            infix_str_len -= 1; // we don't want the newlines
 
         // copy infix
         ESP_LOGD(TAG, "Copy infix '%s' at %i -> %i", infix_string_buffer, ipos, opos);
-        
-        if (check_buffer_bounds(opos + infix_str_len + 1)) break;
+
+        if (check_buffer_bounds(opos + infix_str_len + 1))
+            break;
         memcpy(httpd_temp_buffer + opos, infix_string_buffer, infix_str_len);
         opos += infix_str_len;
         ipos += 2; // we don't want the '%s' characters
@@ -800,11 +843,13 @@ static int send_file_as_chunk(httpd_req_t* req, char* filename, bool infix){
     return total_replaces;
 }
 
-static esp_err_t file_handler(httpd_req_t *req){
-    const char* uri = req->uri;
+static esp_err_t file_handler(httpd_req_t *req)
+{
+    const char *uri = req->uri;
     bool is_index = false;
     bool try_infix = false;
-    if (strcmp(uri, "/") == 0) {
+    if (strcmp(uri, "/") == 0)
+    {
         strcpy(filename, index_filename);
         is_index = true;
         try_infix = true;
@@ -824,7 +869,6 @@ static esp_err_t file_handler(httpd_req_t *req){
         strcpy(filename, spiffsfolder);
         strcat(filename, uri);
     }
-
 
     int urilen = strlen(uri);
     if (urilen > 4 && strcmp(uri + urilen - 4, ".ico") == 0)
@@ -857,32 +901,33 @@ static esp_err_t file_handler(httpd_req_t *req){
         httpd_resp_set_hdr(req, "cache-control", "max-age=10");
     }
 
-    int result;
-    result = send_file_as_chunk(req, filename, try_infix);
-    if (result < 0)
+    int str_replacements = send_file_as_chunk(req, filename, try_infix);
+    if (str_replacements < 0)
     {
         httpd_resp_send_404(req);
         return ESP_FAIL;
     }
-    httpd_resp_send_chunk(req, httpd_temp_buffer, 0);
 
+    // signal we're all done with sending
+    httpd_resp_send_chunk(req, httpd_temp_buffer, 0);
     return ESP_OK;
 }
 
-static esp_err_t file_uploader(httpd_req_t *req){
-    const char* uri = req->uri;
-    
+static esp_err_t file_uploader(httpd_req_t *req)
+{
+    const char *uri = req->uri;
+
     strcpy(filename, spiffsfolder);
     strcat(filename, uri + 7);
     if (req->method == HTTP_POST)
     {
-        ESP_LOGI(TAG, "POST at URI %s",uri);
+        ESP_LOGI(TAG, "POST at URI %s", uri);
     }
     else if (req->method == HTTP_DELETE)
     {
-        ESP_LOGI(TAG, "DELETE at URI %s",uri);
-        ESP_LOGI(TAG, "Filename '%s'",filename);
-        
+        ESP_LOGI(TAG, "DELETE at URI %s", uri);
+        ESP_LOGI(TAG, "Filename '%s'", filename);
+
         FILE *f = fopen(filename, "r");
         if (f == NULL)
         {
@@ -906,60 +951,65 @@ static esp_err_t file_uploader(httpd_req_t *req){
     int bytes_recv;
     int bytes_tot = 0;
     FILE *f = fopen(filename, "w");
-    while (1) {
+    while (1)
+    {
         bytes_recv = httpd_req_recv(req, httpd_temp_buffer, BUF_SIZE);
-        if (bytes_recv == 0) break;
+        if (bytes_recv == 0)
+            break;
         fwrite(httpd_temp_buffer, 1, bytes_recv, f);
         bytes_tot += bytes_recv;
     }
     fclose(f);
     sprintf(httpd_temp_buffer, "Uploaded %i bytes to '%s'", bytes_tot, filename);
     httpd_resp_send(req, httpd_temp_buffer, HTTPD_RESP_USE_STRLEN);
-    if (strncmp(filename, "/spiffs/levellut", 16) == 0){
-        
+    if (strncmp(filename, "/spiffs/levellut", 16) == 0)
+    {
+
         networking_ctx_t *ctx = httpd_get_global_user_ctx(req->handle);
         read_level_luts(ctx->status->lut);
     }
     return ESP_OK;
 }
 
-static esp_err_t view_luts(httpd_req_t* req){
+static esp_err_t view_luts(httpd_req_t *req)
+{
     httpd_resp_set_type(req, "text/plain");
-    level_t lev;
     sprintf(httpd_temp_buffer, "Lvl 0-10v1 0-10v2 DALIA DALIB DALIC DALID DALIE DALIF ESPNOW Rly1 Rly2   R   G   B\n");
     httpd_resp_sendstr_chunk(req, httpd_temp_buffer);
     networking_ctx_t *ctx = httpd_get_global_user_ctx(req->handle);
-    for (int i = 0; i<= 254; i++){
-        lev = ctx->status->lut[i];
+    for (int i = 0; i <= 254; i++)
+    {
+        level_t lev = ctx->status->lut[i];
         sprintf(httpd_temp_buffer, "%3.1i    %3.1d    %3.1d   %3.1d   %3.1d   %3.1d   %3.1d   %3.1d   %3.1d    %3.1d  %3.1d  %3.1d %3.1d %3.1d %3.1d\n",
-            i,
-            lev.zeroten1_lvl,
-            lev.zeroten2_lvl,
-            lev.dali_lvl[0],
-            lev.dali_lvl[1],
-            lev.dali_lvl[2],
-            lev.dali_lvl[3],
-            lev.dali_lvl[4],
-            lev.dali_lvl[5],
-            lev.espnow_lvl,
-            lev.relay1,
-            lev.relay2,
-            lev.r,
-            lev.g,
-            lev.b
-        );
+                i,
+                lev.zeroten1_lvl,
+                lev.zeroten2_lvl,
+                lev.dali_lvl[0],
+                lev.dali_lvl[1],
+                lev.dali_lvl[2],
+                lev.dali_lvl[3],
+                lev.dali_lvl[4],
+                lev.dali_lvl[5],
+                lev.espnow_lvl,
+                lev.relay1,
+                lev.relay2,
+                lev.r,
+                lev.g,
+                lev.b);
         httpd_resp_sendstr_chunk(req, httpd_temp_buffer);
     }
     httpd_resp_send_chunk(req, httpd_temp_buffer, 0);
     return ESP_OK;
 }
 
-static esp_err_t restart(httpd_req_t* req){
+static esp_err_t restart(httpd_req_t *req)
+{
     esp_restart();
     return ESP_OK;
 }
 
-static esp_err_t logbuffer_handler(httpd_req_t *req){
+static esp_err_t logbuffer_handler(httpd_req_t *req)
+{
     httpd_resp_set_type(req, "text/plain");
     httpd_resp_send_chunk(req, logbuffer + logbufferpos, LOGBUFFER_SIZE - logbufferpos);
     httpd_resp_send_chunk(req, logbuffer, logbufferpos);
@@ -967,24 +1017,27 @@ static esp_err_t logbuffer_handler(httpd_req_t *req){
     return ESP_OK;
 }
 
-static void send_block_plaintext(httpd_req_t *req, char* buf, int start, int end){
-    if ((end - start) <= 0) return;
+static void send_block_plaintext(httpd_req_t *req, char *buf, int start, int end)
+{
+    if ((end - start) <= 0)
+        return;
 
     char inbyte;
-    bool send;
-    for (int bytepos = start; bytepos < end; bytepos++){
-        send = false;
+    for (int bytepos = start; bytepos < end; bytepos++)
+    {
+        bool send = false;
         inbyte = buf[bytepos];
         if (inbyte == '\n')
         {
             send = true;
         }
-        
+
         else if (inbyte >= 32)
         {
             send = true;
         }
-        if (send){
+        if (send)
+        {
             httpd_temp_buffer[bytepos - start] = inbyte;
         }
         else
@@ -995,7 +1048,8 @@ static void send_block_plaintext(httpd_req_t *req, char* buf, int start, int end
     httpd_resp_send_chunk(req, httpd_temp_buffer, end - start);
 }
 
-static esp_err_t logbuffer_plaintext_handler(httpd_req_t *req){
+static esp_err_t logbuffer_plaintext_handler(httpd_req_t *req)
+{
     httpd_resp_set_type(req, "text/plain");
     int blockstart = logbufferpos;
     int blocksize = _MIN(1024, LOGBUFFER_SIZE);
@@ -1024,9 +1078,12 @@ static esp_err_t logbuffer_plaintext_handler(httpd_req_t *req){
     return ESP_OK;
 }
 
-static esp_err_t deal_with_command_response(httpd_req_t* req){
+static esp_err_t deal_with_command_response(httpd_req_t *req)
+{
     dali_command_return_t retr;
-    BaseType_t received = xTaskNotifyWaitIndexed(DALI_COMMAND_RETURN_INDEX, 0, 0, (uint32_t*) &retr, pdMS_TO_TICKS(30000));
+    uint32_t intretr;
+    BaseType_t received = xTaskNotifyWaitIndexed(DALI_COMMAND_RETURN_INDEX, 0, 0, &intretr, pdMS_TO_TICKS(30000));
+    memcpy(&retr, &intretr, sizeof(dali_command_return_t));
 
     if (received != pdTRUE)
     {
@@ -1045,24 +1102,24 @@ static esp_err_t deal_with_command_response(httpd_req_t* req){
     return ESP_OK;
 }
 
-static esp_err_t commission(httpd_req_t* req){
+static esp_err_t commission(httpd_req_t *req)
+{
     networking_ctx_t *ctx = httpd_get_global_user_ctx(req->handle);
     dali_command_t command = {
         .command = DALI_COMMAND_COMMISSION,
         .address = 0,
-        .notify_task = xTaskGetCurrentTaskHandle()
-    };
-    if (ctx->dali_command_queue != NULL) 
+        .notify_task = xTaskGetCurrentTaskHandle()};
+    if (ctx->dali_command_queue != NULL)
     {
         xQueueSend(ctx->dali_command_queue, &command, pdMS_TO_TICKS(5000));
         return deal_with_command_response(req);
-        
     }
     httpd_resp_send_500(req);
     return ESP_FAIL;
 }
 
-static esp_err_t reset_factory(httpd_req_t* req){
+static esp_err_t reset_factory(httpd_req_t *req)
+{
     ESP_LOGW(TAG, "Resetting NVS!!!");
     nvs_flash_erase_partition("nvs2");
     httpd_resp_send(req, "OK", HTTPD_RESP_USE_STRLEN);
@@ -1071,42 +1128,46 @@ static esp_err_t reset_factory(httpd_req_t* req){
     return ESP_OK;
 }
 
-static esp_err_t dali_commands_handler(httpd_req_t* req){
+static esp_err_t dali_commands_handler(httpd_req_t *req)
+{
     networking_ctx_t *ctx = httpd_get_global_user_ctx(req->handle);
     parse_uri(req->uri);
     bool post = req->method == HTTP_POST;
     bool get = req->method == HTTP_GET;
     int data = -1;
-
     int address = substring_ints[2];
-    if (post) {
+    if (post)
+    {
         int bytes = httpd_req_recv(req, httpd_temp_buffer, 255);
         httpd_temp_buffer[bytes] = 0;
         int datarecv = sscanf(httpd_temp_buffer, "%i", &data);
         ESP_LOGI(TAG, "===== Received POST at %s (%s)", req->uri, httpd_temp_buffer);
         ESP_LOGD(TAG, "Received %s (%i) %i", httpd_temp_buffer, data, datarecv);
     }
-    if (get)
+    else if (get)
     {
         ESP_LOGI(TAG, "===== Received GET at %s, address %i", req->uri, address);
+    }
+    else
+    {
+        return ESP_FAIL;
     }
     uint8_t cmd = 255;
     dali_command_t command = {
         .command = cmd,
         .address = address,
         .value = post ? data : 0,
-        .notify_task = xTaskGetCurrentTaskHandle()
-    };
+        .notify_task = xTaskGetCurrentTaskHandle()};
     bool not_allowed = false;
     if (strcmp(substrings[1], "power-on-level") == 0)
     {
-        if (post) 
+        if (post)
         {
             command.command = DALI_COMMAND_SET_POWER_ON_LEVEL;
             ESP_LOGI(TAG, "Setting power on level for address %d to %d", command.address, command.value);
         }
         else
-        { 
+        {
             command.command = DALI_COMMAND_GET_POWER_ON_LEVEL;
             ESP_LOGI(TAG, "Getting power on level for address %d", command.address);
         }
@@ -1143,13 +1204,14 @@ static esp_err_t dali_commands_handler(httpd_req_t* req){
         httpd_resp_send_404(req);
         return ESP_FAIL;
     }
+
     if (not_allowed)
     {
         httpd_resp_set_status(req, "405 Method Not Allowed");
         httpd_resp_send(req, "Does not support GET", HTTPD_RESP_USE_STRLEN);
         return ESP_FAIL;
     }
-    if (ctx->dali_command_queue != NULL) 
+    if (ctx->dali_command_queue != NULL)
     {
         xQueueSend(ctx->dali_command_queue, &command, pdMS_TO_TICKS(1000));
         return deal_with_command_response(req);
@@ -1159,135 +1221,100 @@ static esp_err_t dali_commands_handler(httpd_req_t* req){
 }
 
 static const httpd_uri_t files = {
-    .uri       = "/?*",
-    .method    = HTTP_GET,
-    .handler   = file_handler,
-    .user_ctx  = NULL
-};
+    .uri = "/?*",
+    .method = HTTP_GET,
+    .handler = file_handler,
+    .user_ctx = NULL};
 static const httpd_uri_t file_upload = {
-    .uri       = "/spiffs/?*",
-    .method    = HTTP_POST,
-    .handler   = file_uploader,
-    .user_ctx  = NULL
-};
+    .uri = "/spiffs/?*",
+    .method = HTTP_POST,
+    .handler = file_uploader,
+    .user_ctx = NULL};
 static const httpd_uri_t file_del = {
-    .uri       = "/spiffs/?*",
-    .method    = HTTP_DELETE,
-    .handler   = file_uploader,
-    .user_ctx  = NULL
-};
+    .uri = "/spiffs/?*",
+    .method = HTTP_DELETE,
+    .handler = file_uploader,
+    .user_ctx = NULL};
 static const httpd_uri_t get_setpoint = {
-    .uri       = "/setpoint?*",
-    .method    = HTTP_GET,
-    .handler   = current_setpoint_handler,
-    .user_ctx  = NULL
-};
+    .uri = "/setpoint?*",
+    .method = HTTP_GET,
+    .handler = current_setpoint_handler,
+    .user_ctx = NULL};
 static const httpd_uri_t put_setpoint = {
-    .uri       = "/setpoint?*",
-    .method    = HTTP_PUT,
-    .handler   = current_setpoint_handler,
-    .user_ctx  = NULL
-};
+    .uri = "/setpoint?*",
+    .method = HTTP_PUT,
+    .handler = current_setpoint_handler,
+    .user_ctx = NULL};
 static const httpd_uri_t rest_get = {
-    .uri       = "/nvs/?*",
-    .method    = HTTP_GET,
-    .handler   = nvs_get_handler,
-    .user_ctx  = NULL
-};
+    .uri = "/nvs/?*",
+    .method = HTTP_GET,
+    .handler = nvs_get_handler,
+    .user_ctx = NULL};
 static const httpd_uri_t log_get = {
-    .uri       = "/logterm?*",
-    .method    = HTTP_GET,
-    .handler   = logbuffer_handler,
-    .user_ctx  = NULL
-};
+    .uri = "/logterm?*",
+    .method = HTTP_GET,
+    .handler = logbuffer_handler,
+    .user_ctx = NULL};
 static const httpd_uri_t log_get_plaintext = {
-    .uri       = "/log",
-    .method    = HTTP_GET,
-    .handler   = logbuffer_plaintext_handler,
-    .user_ctx  = NULL
-};
+    .uri = "/log",
+    .method = HTTP_GET,
+    .handler = logbuffer_plaintext_handler,
+    .user_ctx = NULL};
 static const httpd_uri_t rest_put = {
-    .uri       = "/nvs/?*",
-    .method    = HTTP_PUT,
-    .handler   = nvs_put_handler,
-    .user_ctx  = NULL
-};
+    .uri = "/nvs/?*",
+    .method = HTTP_PUT,
+    .handler = nvs_put_handler,
+    .user_ctx = NULL};
 static const httpd_uri_t rest_put_channel_level = {
-    .uri       = "/api/channel/?*",
-    .method    = HTTP_PUT,
-    .handler   = rest_channel_override_handler,
-    .user_ctx  = NULL
-};
+    .uri = "/api/channel/?*",
+    .method = HTTP_PUT,
+    .handler = rest_channel_override_handler,
+    .user_ctx = NULL};
 static const httpd_uri_t rest_get_channel_level = {
-    .uri       = "/api/channel/?*",
-    .method    = HTTP_GET,
-    .handler   = rest_channel_override_handler,
-    .user_ctx  = NULL
-};
+    .uri = "/api/channel/?*",
+    .method = HTTP_GET,
+    .handler = rest_channel_override_handler,
+    .user_ctx = NULL};
 static const httpd_uri_t get_power_on_endpoint = {
-    .uri       = "/api/power",
-    .method    = HTTP_GET,
-    .handler   = rest_power_handler,
-    .user_ctx  = NULL
-};
+    .uri = "/api/power",
+    .method = HTTP_GET,
+    .handler = rest_power_handler,
+    .user_ctx = NULL};
 static const httpd_uri_t put_power_on_endpoint = {
-    .uri       = "/api/power?*",
-    .method    = HTTP_PUT,
-    .handler   = rest_power_handler,
-    .user_ctx  = NULL
-};
+    .uri = "/api/power?*",
+    .method = HTTP_PUT,
+    .handler = rest_power_handler,
+    .user_ctx = NULL};
 static const httpd_uri_t view_luts_endpoint = {
-    .uri       = "/luts",
-    .method    = HTTP_GET,
-    .handler   = view_luts,
-    .user_ctx  = NULL
-};
+    .uri = "/luts",
+    .method = HTTP_GET,
+    .handler = view_luts,
+    .user_ctx = NULL};
 static const httpd_uri_t restart_endpoint = {
-    .uri       = "/restart",
-    .method    = HTTP_POST,
-    .handler   = restart,
-    .user_ctx  = NULL
-};
+    .uri = "/restart",
+    .method = HTTP_POST,
+    .handler = restart,
+    .user_ctx = NULL};
 static const httpd_uri_t dali_command_post_endpoint = {
-    .uri       = "/dali/*?",
-    .method    = HTTP_POST,
-    .handler   = dali_commands_handler,
-    .user_ctx  = NULL
-};
+    .uri = "/dali/*?",
+    .method = HTTP_POST,
+    .handler = dali_commands_handler,
+    .user_ctx = NULL};
 static const httpd_uri_t dali_command_get_endpoint = {
-    .uri       = "/dali/*?",
-    .method    = HTTP_GET,
-    .handler   = dali_commands_handler,
-    .user_ctx  = NULL
-};
+    .uri = "/dali/*?",
+    .method = HTTP_GET,
+    .handler = dali_commands_handler,
+    .user_ctx = NULL};
 static const httpd_uri_t reset_to_factory_endpoint = {
-    .uri       = "/factory",
-    .method    = HTTP_POST,
-    .handler   = reset_factory,
-    .user_ctx  = NULL
-};
+    .uri = "/factory",
+    .method = HTTP_POST,
+    .handler = reset_factory,
+    .user_ctx = NULL};
 static const httpd_uri_t post_ota = {
-    .uri       = "/otaupdate*?",
-    .method    = HTTP_POST,
-    .handler   = otaupdate,
-    .user_ctx  = NULL
-};
-
-esp_err_t http_404_error_handler(httpd_req_t *req, httpd_err_code_t err)
-{
-    if (strcmp("/hello", req->uri) == 0) {
-        httpd_resp_send_err(req, HTTPD_404_NOT_FOUND, "/hello URI is not available");
-        /* Return ESP_OK to keep underlying socket open */
-        return ESP_OK;
-    } else if (strcmp("/echo", req->uri) == 0) {
-        httpd_resp_send_err(req, HTTPD_404_NOT_FOUND, "/echo URI is not available");
-        /* Return ESP_FAIL to close underlying socket */
-        return ESP_FAIL;
-    }
-    /* For any other URI send 404 and close socket */
-    httpd_resp_send_err(req, HTTPD_404_NOT_FOUND, "Some 404 error message");
-    return ESP_FAIL;
-}
+    .uri = "/otaupdate*?",
+    .method = HTTP_POST,
+    .handler = otaupdate,
+    .user_ctx = NULL};
 
 static httpd_handle_t start_webserver(networking_ctx_t *ctx)
 {
@@ -1301,7 +1328,8 @@ static httpd_handle_t start_webserver(networking_ctx_t *ctx)
     status = ctx->status;
     // Start the httpd server
     ESP_LOGI(TAG, "Starting server on port: '%d'", config.server_port);
-    if (httpd_start(&server, &config) == ESP_OK) {
+    if (httpd_start(&server, &config) == ESP_OK)
+    {
         // Set URI handlers
         ESP_LOGI(TAG, "Registering URI handlers");
         httpd_register_uri_handler(server, &get_setpoint);
@@ -1330,39 +1358,40 @@ static httpd_handle_t start_webserver(networking_ctx_t *ctx)
     return NULL;
 }
 
-#if !CONFIG_IDF_TARGET_LINUX
 static esp_err_t stop_webserver(httpd_handle_t server)
 {
     // Stop the httpd server
     return httpd_stop(server);
 }
 
-static void disconnect_handler(void* arg, esp_event_base_t event_base,
-                               int32_t event_id, void* event_data)
+static void disconnect_handler(void *arg, esp_event_base_t event_base,
+                               int32_t event_id, void *event_data)
 {
     handler_ctx *ctx = (handler_ctx*) arg;
-    // httpd_handle_t* server = (httpd_handle_t*) arg;
-    if (ctx->server) {
+    if (ctx->server)
+    {
         ESP_LOGI(TAG, "Stopping webserver");
-        if (stop_webserver(ctx->server) == ESP_OK) {
+        if (stop_webserver(ctx->server) == ESP_OK)
+        {
             ctx->server = NULL;
-        } else {
+        }
+        else
+        {
             ESP_LOGE(TAG, "Failed to stop http server");
         }
     }
 }
 
-static void connect_handler(void* arg, esp_event_base_t event_base,
-                            int32_t event_id, void* event_data)
+static void connect_handler(void *arg, esp_event_base_t event_base,
+                            int32_t event_id, void *event_data)
 {
-    handler_ctx *ctx = (handler_ctx*) arg;
-    // httpd_handle_t* server = (httpd_handle_t*) arg;
-    if (ctx->server == NULL) {
+    handler_ctx *ctx = (handler_ctx *)arg;
+    if (ctx->server == NULL)
+    {
         ESP_LOGI(TAG, "Starting webserver");
         ctx->server = start_webserver(ctx->extra_ctx);
     }
 }
-#endif // !CONFIG_IDF_TARGET_LINUX
 
 httpd_handle_t setup_httpserver(networking_ctx_t *extractx)
 {
@@ -1374,7 +1403,7 @@ httpd_handle_t setup_httpserver(networking_ctx_t *extractx)
 
     ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &connect_handler, ctx));
     ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, &disconnect_handler, ctx));
-    
+
     server = start_webserver(extractx);
     return server;
 }
