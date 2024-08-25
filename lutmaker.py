@@ -34,7 +34,7 @@ class LED(object):
 
 @dataclass
 class Channel(object):
-    name: str
+    friendly_name: str
     type: ChannelType
     points: list[tuple[float, float]] | None
     led: LED
@@ -42,6 +42,7 @@ class Channel(object):
     night_only: bool = False
     driver_min: float = 0.001
     requires_relay: Relay = Relay.NO_RELAY
+    priority: int = 0
 
     @property
     def is_proportioned(self):
@@ -74,14 +75,14 @@ iterations = 400
 
 living_room_channels = {
     "dalie": Channel(
-        name="f90",
+        friendly_name="f90",
         points=[(0, 0.0), (0.3, 0.0), (0.7, 1.45), (1.0, 1.45)],
         type=ChannelType.INDEPENDENT,
         led=LED(imax=450 * 2, vf=50, eff=185),
         group=0,
     ),
     "dalia": Channel(
-        name="hexagons",
+        friendly_name="hexagons",
         type=ChannelType.INDEPENDENT,
         points=[
             (0.0, 0.0),
@@ -95,14 +96,14 @@ living_room_channels = {
         group=0,
     ),
     "espnow": Channel(
-        name="piano",
+        friendly_name="piano",
         type=ChannelType.INDEPENDENT,
         points=[(0.0, 1.3), (0.05, 1.1), (0.16, 0.9), (1.0, 0.5)],
         led=LED(vf=46, imax=650, eff=135),
         group=2,
     ),
     "dalib": Channel(
-        name="tv 5000k",
+        friendly_name="tv 5000k",
         type=ChannelType.INDEPENDENT,
         points=[
             (0.0, 0.0),
@@ -117,7 +118,7 @@ living_room_channels = {
         group=1,
     ),
     "dalic": Channel(
-        name="tv 6500k",
+        friendly_name="tv 6500k",
         type=ChannelType.INDEPENDENT,
         points=[(0.0, 1.2), (0.01, 1.0), (0.02, 0.8), (0.16, 0.0), (1.0, 0.0)],
         led=LED(imax=650, vf=33, eff=130),
@@ -125,7 +126,7 @@ living_room_channels = {
         night_only=True,
     ),
     "dalid": Channel(
-        name="corner 6500k",
+        friendly_name="corner 6500k",
         type=ChannelType.INDEPENDENT,
         points=[(0.0, 1.75), (0.02, 1.75), (0.16, 0.0), (1.0, 0.0)],
         led=LED(imax=650, vf=33, eff=130),
@@ -139,7 +140,7 @@ fade = 1.1
 
 bedroom_fullthrive_channels = {
     "dalia": Channel(
-        name="5700k Thrive",
+        friendly_name="5700k Thrive",
         type=ChannelType.INDEPENDENT,
         points=[(0.0, 4), (1.0, 4)],
         led=LED(vf=34, imax=2800, eff=125),
@@ -148,7 +149,7 @@ bedroom_fullthrive_channels = {
         requires_relay=Relay.RELAY1
     ),
     "dalib": Channel(
-        name="5000k F90",
+        friendly_name="5000k F90",
         type=ChannelType.INDEPENDENT,
         points=[(0.0, 0.0), (0.28 / fade, 0.0), (0.28 * fade**3, f90_prop),(1.0, f90_prop)],
         led=LED(imax=950, vf=51, eff=177),
@@ -157,7 +158,7 @@ bedroom_fullthrive_channels = {
         requires_relay=Relay.RELAY2
     ),
     "dalic": Channel(
-        name="5000k F90 2",
+        friendly_name="5000k F90 2",
         type=ChannelType.INDEPENDENT,
         points=[(0.0, 0.0), (0.44 / fade, 0.0), (0.44 * fade, f90_prop), (1.0, f90_prop)],
         led=LED(imax=950, vf=51, eff=177),
@@ -166,7 +167,7 @@ bedroom_fullthrive_channels = {
         requires_relay=Relay.RELAY2
     ),
     "dalid": Channel(
-        name="5000k F90 3",
+        friendly_name="5000k F90 3",
         type=ChannelType.INDEPENDENT,
         points=[(0.0, 0.0), (0.58 / fade, 0.0), (0.58 * fade, f90_prop), (1.0, f90_prop)],
         led=LED(imax=950, vf=51, eff=177),
@@ -175,7 +176,7 @@ bedroom_fullthrive_channels = {
         requires_relay=Relay.RELAY2
     ),
     "dalie": Channel(
-        name="5000k F90 4",
+        friendly_name="5000k F90 4",
         type=ChannelType.INDEPENDENT,
         points=[(0.0, 0.0), (0.73 / fade, 0.0), (0.73 * fade, f90_prop), (1.0, f90_prop)],
         led=LED(imax=950, vf=51, eff=177),
@@ -186,10 +187,10 @@ bedroom_fullthrive_channels = {
 }
 
 f90_prop = 3.0
-fade = 0.08
+fade = 0.04
 bedroom_lessthrive_channels = {
     "dalia": Channel(
-        name="5700k Thrive",
+        friendly_name="5700k Thrive",
         type=ChannelType.INDEPENDENT,
         points=[(0.0, 4), (1.0, 4)],
         led=LED(vf=34, imax=2800, eff=125),
@@ -198,7 +199,7 @@ bedroom_lessthrive_channels = {
         requires_relay=Relay.RELAY1
     ),
     "dalib": Channel(
-        name="5000k F90",
+        friendly_name="5000k F90",
         type=ChannelType.INDEPENDENT,
         points=[(0.0, 0.0), (0.27 - fade, 0.0), (0.27 + fade, f90_prop),(1.0, f90_prop)],
         led=LED(imax=950, vf=51, eff=177),
@@ -207,7 +208,7 @@ bedroom_lessthrive_channels = {
         requires_relay=Relay.RELAY2
     ),
     "dalic": Channel(
-        name="5000k F90 2",
+        friendly_name="5000k F90 2",
         type=ChannelType.INDEPENDENT,
         points=[(0.0, 0.0), (0.41 - fade, 0.0), (0.41 + fade, f90_prop), (1.0, f90_prop)],
         led=LED(imax=950, vf=51, eff=177),
@@ -216,7 +217,7 @@ bedroom_lessthrive_channels = {
         requires_relay=Relay.RELAY2
     ),
     "dalid": Channel(
-        name="5000k F90 3",
+        friendly_name="5000k F90 3",
         type=ChannelType.INDEPENDENT,
         points=[(0.0, 0.0), (0.58 - fade, 0.0), (0.58 + fade, f90_prop), (1.0, f90_prop)],
         led=LED(imax=950, vf=51, eff=177),
@@ -225,7 +226,7 @@ bedroom_lessthrive_channels = {
         requires_relay=Relay.RELAY2
     ),
     "dalie": Channel(
-        name="5000k F90 4",
+        friendly_name="5000k F90 4",
         type=ChannelType.INDEPENDENT,
         points=[(0.0, 0.0), (0.73 - fade, 0.0), (0.73 + fade, f90_prop), (1.0, f90_prop)],
         led=LED(imax=950, vf=51, eff=177),
@@ -239,13 +240,13 @@ bedroom_lessthrive_channels = {
 if "fadetest" and 0:
     channels = {
         "a": Channel(
-            name="a",
+            friendly_name="a",
             type=ChannelType.INDEPENDENT,
             points=[(0.0, 1.0), (1.0, 0.0)],
             led=LED(1000, 34, 120),
         ),
         "b": Channel(
-            name="b",
+            friendly_name="b",
             type=ChannelType.INDEPENDENT,
             points=[(0.0, 0.0), (1.0, 1.0)],
             led=LED(1000, 34, 120),
@@ -264,13 +265,14 @@ highest_flux = max((curve.led.lumens for curve in channels.values()))
 
 
 max_group = max((channel.group for channel in channels.values()))
+max_priority = max(channel.priority for channel in channels.values())
 
 total_prop = [0.0] * (max_group + 1)
 print(total_prop)
 if 1 and "print proportions":
     for key, channel in channels.items():
         print(
-            f"Channel {key}: '{channel.name}': {channel.led.power}W {channel.led.lumens} ({(channel.led.lumens / highest_flux)})"
+            f"Channel {key}: '{channel.friendly_name}': {channel.led.power}W {channel.led.lumens} ({(channel.led.lumens / highest_flux)})"
         )
         if not channel.night_only:
             total_prop[channel.group] += channel.led.lumens / highest_flux
@@ -335,6 +337,7 @@ def main():
     groupcolumns = [[], [], [], [], []]
 
     group_offsets = [np.zeros(inrange.size) for _ in range(max_group + 1)]
+    channel_offsets = {key:np.zeros(inrange.size) for key in channels.keys()}
 
     for iteration in range(iterations):
         saturated = {key: np.zeros(inrange.size) for key in channels}
@@ -357,42 +360,15 @@ def main():
             interpolated_curve = np.interp(
                 lin_flux, flux_points, prop_points * lamp_lumen_ratio
             )
-            raw_dalivals = (to_log(interpolated_curve * lin_flux) + 0.0).astype(int)
-            # lumensum += interpolated_curve * channel;
-            # for i, element in enumerate(raw_dalivals):
-            # if element > 254:
-            # print(f"WARNING! Not enough lumens available at {i}")
-            offsets = group_offsets[channel.group].copy()
+            raw_dali = (to_log(interpolated_curve * lin_flux) + 0.0).astype(int)
 
-            # we don't want to turn on lights without a better option
-            if iteration <= ((iterations * 2) // 4):
-                offsets[raw_dalivals == 0] = 0
-            else:
-                # we don't want to turn on lights without a better option
-                all_saturated = np.all(list(saturated.values()), 0)
-                offsets[
-                    np.all((raw_dalivals == 0, np.logical_not(all_saturated)), 0)
-                ] = 0
-
-            if 0 and iteration > (iterations - 2):
-                ## try and smooth things out on last go
-                # smoothed_offsets = np.convolve(offsets, np.ones(5) / 5, mode="same")
-                # offsets[np.any([raw_dalivals == 0,raw_dalivals == 254], 0)] = smoothed_offsets
-                # offsets = smoothed_offsets
-                dalivals[key] = np.clip(
-                    np.convolve(
-                        raw_dalivals + offsets, np.ones(5) / 5, mode="same"),
-                    0,
-                    254,
-                ).astype(int)
-            else:
-                dalivals[key] = np.clip(raw_dalivals + offsets, 0, 254).astype(int)
+            dalivals[key] = np.clip(raw_dali + channel_offsets[key], 0, 254).astype(int)
             channel_lumens = to_linear_with_minimum(dalivals[key], minimum=channel.driver_min) * channel.led.lumens
-            lumens[channel.group][channel.name] = channel_lumens
+            lumens[channel.group][channel.friendly_name] = channel_lumens
             lumensum[channel.group] += channel_lumens
             powersum[channel.group] += channel_lumens / channel.led.eff
             if iteration == 0:
-                groupcolumns[channel.group].append(channel.name)
+                groupcolumns[channel.group].append(channel.friendly_name)
 
         for key in columns:
             if key not in channels:
@@ -403,12 +379,30 @@ def main():
         for group in range(max_group + 1):
             if len(lumens[group]) == 0:
                 continue
-            lumens[group]["sum"] = lumensum[group]
-            lumens[group]["ideal"] = lin_flux * highest_flux * total_prop[group]
-            group_offsets[group][lumens[group]["sum"] > lumens[group]["ideal"]] -= 0.5
-            group_offsets[group][lumens[group]["sum"] < lumens[group]["ideal"]] += 0.5
+            group_lumens = lumensum[group]
+            target_lumens = lin_flux * highest_flux * total_prop[group]
+            inc_needed = group_lumens < target_lumens
+            dec_needed = group_lumens > target_lumens
+            change = np.zeros(inrange.size)
+            change[inc_needed] = 0.5
+            change[dec_needed] = -0.5
+            for ch_key in reversed(channels.keys()):
+                # first pass we only change existing unsaturated lights
+                not_sat = np.logical_not(saturated[ch_key])
+                old_vals = np.clip(dalivals[ch_key] + channel_offsets[ch_key], 0, 254)
+                channel_offsets[ch_key][not_sat] += change[not_sat]
+                diff = np.clip(dalivals[ch_key] + channel_offsets[ch_key], 0, 254) - old_vals
+                change -= diff
+            for ch_key in reversed(channels.keys()):
+                # now we can turn on lights
+                old_vals = np.clip(dalivals[ch_key] + channel_offsets[ch_key], 0, 254)
+                channel_offsets[ch_key] += change
+                diff = np.clip(dalivals[ch_key] + channel_offsets[ch_key], 0, 254) - old_vals
+                change -= diff
             
             if iteration == ((iterations * 2) // 4) or iteration == 0:
+                lumens[group]["sum"] = group_lumens
+                lumens[group]["ideal"] = target_lumens
                 lumen_df = pd.DataFrame(
                     lumens[group],
                     columns=groupcolumns[group] + ["sum", "ideal"],
@@ -428,11 +422,11 @@ def main():
     name_columns = []
     for name in columns:
         if name in channels:
-            name_columns.append(channels[name].name)
-            dalivals[channels[name].name] = dalivals[name]
+            name_columns.append(channels[name].friendly_name)
+            dalivals[channels[name].friendly_name] = dalivals[name]
             if name in lumens:
                 lumendict = lumens[channels[name].group]
-                lumendict[channels[name].name] = lumendict[name]
+                lumendict[channels[name].friendly_name] = lumendict[name]
         else:
             name_columns.append(name)
 
