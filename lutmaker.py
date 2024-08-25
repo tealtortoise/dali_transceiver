@@ -134,10 +134,10 @@ living_room_channels = {
     ),
 }
 
-f90_prop = 1
-fade = 1.07
+f90_prop = 0.5
+fade = 1.1
 
-bedroom_channels = {
+bedroom_fullthrive_channels = {
     "dalia": Channel(
         name="5700k Thrive",
         type=ChannelType.INDEPENDENT,
@@ -150,7 +150,7 @@ bedroom_channels = {
     "dalib": Channel(
         name="5000k F90",
         type=ChannelType.INDEPENDENT,
-        points=[(0.0, 0.0), (0.25, 0.0), (0.25 * fade, f90_prop),(1.0, f90_prop)],
+        points=[(0.0, 0.0), (0.28 / fade, 0.0), (0.28 * fade**3, f90_prop),(1.0, f90_prop)],
         led=LED(imax=950, vf=51, eff=177),
         group=0,
         driver_min=0.01,
@@ -159,7 +159,7 @@ bedroom_channels = {
     "dalic": Channel(
         name="5000k F90 2",
         type=ChannelType.INDEPENDENT,
-        points=[(0.0, 0.0), (0.41, 0.0), (0.41 * fade, f90_prop), (1.0, f90_prop)],
+        points=[(0.0, 0.0), (0.44 / fade, 0.0), (0.44 * fade, f90_prop), (1.0, f90_prop)],
         led=LED(imax=950, vf=51, eff=177),
         group=0,
         driver_min=0.01,
@@ -168,7 +168,7 @@ bedroom_channels = {
     "dalid": Channel(
         name="5000k F90 3",
         type=ChannelType.INDEPENDENT,
-        points=[(0.0, 0.0), (0.63, 0.0), (0.63 * fade, f90_prop), (1.0, f90_prop)],
+        points=[(0.0, 0.0), (0.58 / fade, 0.0), (0.58 * fade, f90_prop), (1.0, f90_prop)],
         led=LED(imax=950, vf=51, eff=177),
         group=0,
         driver_min=0.01,
@@ -177,7 +177,7 @@ bedroom_channels = {
     "dalie": Channel(
         name="5000k F90 4",
         type=ChannelType.INDEPENDENT,
-        points=[(0.0, 0.0), (0.79, 0.0), (0.79 * fade, f90_prop), (1.0, f90_prop)],
+        points=[(0.0, 0.0), (0.73 / fade, 0.0), (0.73 * fade, f90_prop), (1.0, f90_prop)],
         led=LED(imax=950, vf=51, eff=177),
         group=0,
         driver_min=0.01,
@@ -185,6 +185,57 @@ bedroom_channels = {
     ),
 }
 
+f90_prop = 3.0
+fade = 0.08
+bedroom_lessthrive_channels = {
+    "dalia": Channel(
+        name="5700k Thrive",
+        type=ChannelType.INDEPENDENT,
+        points=[(0.0, 4), (1.0, 4)],
+        led=LED(vf=34, imax=2800, eff=125),
+        group=0,
+        driver_min=0.001,
+        requires_relay=Relay.RELAY1
+    ),
+    "dalib": Channel(
+        name="5000k F90",
+        type=ChannelType.INDEPENDENT,
+        points=[(0.0, 0.0), (0.27 - fade, 0.0), (0.27 + fade, f90_prop),(1.0, f90_prop)],
+        led=LED(imax=950, vf=51, eff=177),
+        group=0,
+        driver_min=0.01,
+        requires_relay=Relay.RELAY2
+    ),
+    "dalic": Channel(
+        name="5000k F90 2",
+        type=ChannelType.INDEPENDENT,
+        points=[(0.0, 0.0), (0.41 - fade, 0.0), (0.41 + fade, f90_prop), (1.0, f90_prop)],
+        led=LED(imax=950, vf=51, eff=177),
+        group=0,
+        driver_min=0.01,
+        requires_relay=Relay.RELAY2
+    ),
+    "dalid": Channel(
+        name="5000k F90 3",
+        type=ChannelType.INDEPENDENT,
+        points=[(0.0, 0.0), (0.58 - fade, 0.0), (0.58 + fade, f90_prop), (1.0, f90_prop)],
+        led=LED(imax=950, vf=51, eff=177),
+        group=0,
+        driver_min=0.01,
+        requires_relay=Relay.RELAY2
+    ),
+    "dalie": Channel(
+        name="5000k F90 4",
+        type=ChannelType.INDEPENDENT,
+        points=[(0.0, 0.0), (0.73 - fade, 0.0), (0.73 + fade, f90_prop), (1.0, f90_prop)],
+        led=LED(imax=950, vf=51, eff=177),
+        group=0,
+        driver_min=0.01,
+        requires_relay=Relay.RELAY2
+    ),
+}
+
+    
 if "fadetest" and 0:
     channels = {
         "a": Channel(
@@ -204,7 +255,7 @@ if "fadetest" and 0:
 
 
 # channels = living_room_channels
-channels = bedroom_channels
+channels = bedroom_lessthrive_channels
 if 0 and "No custom channels":
     highest_flux = 1
     channels = {}
@@ -391,7 +442,7 @@ def main():
         if len(lumens[group]) == 0:
             continue
         lumens[group]["sum"] = lumensum[group]
-        lumens[group]["power"] = lumensum[group] / powersum[group] * 1000
+        lumens[group]["power"] = lumensum[group] / powersum[group] * 100
         lumens[group]["ideal"] = lin_flux * highest_flux * total_prop[group]
         lumen_df = pd.DataFrame(
             lumens[group],

@@ -6,10 +6,10 @@
 
 typedef struct {
     httpd_handle_t server;
-    networking_ctx_t *extra_ctx;
+    networking_ctx_t *networking_ctx;
 } handler_ctx;
 
-httpd_handle_t setup_httpserver(networking_ctx_t *extractx);
+httpd_handle_t setup_httpserver(networking_ctx_t *networking_ctx);
 
 #endif // HTTP_SERVER_H
 
