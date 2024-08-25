@@ -705,7 +705,14 @@ void app_main(void)
         // process sends for tick
         /////
         fade_remaining = status.setpoint - status.actual_level;
-        level_el = status.lut[clamp((int)status.actual_level + (int)full_power - 254, 0, 254)];
+        if (status.actual_level == 0)
+        {
+            level_el = status.lut[0];
+        }
+        else
+        {
+            level_el = status.lut[clamp((int)status.actual_level + (int)full_power - 254, 0, 254)];
+        }
 
         // ensure minimum levels
         memcpy(level_el_array, &level_el, sizeof(level_t));

@@ -974,7 +974,7 @@ static esp_err_t stop_webserver(httpd_handle_t server)
 static void disconnect_handler(void *arg, esp_event_base_t event_base,
                                int32_t event_id, void *event_data)
 {
-    handler_ctx *ctx = (handler_ctx*) arg;
+    handler_ctx_t *ctx = (handler_ctx_t*) arg;
     if (ctx->server)
     {
         ESP_LOGI(TAG, "Stopping webserver");
@@ -992,7 +992,7 @@ static void disconnect_handler(void *arg, esp_event_base_t event_base,
 static void connect_handler(void *arg, esp_event_base_t event_base,
                             int32_t event_id, void *event_data)
 {
-    handler_ctx *ctx = (handler_ctx *)arg;
+    handler_ctx_t *ctx = (handler_ctx_t *)arg;
     if (ctx->server == NULL)
     {
         ESP_LOGI(TAG, "Starting webserver");
@@ -1003,7 +1003,7 @@ static void connect_handler(void *arg, esp_event_base_t event_base,
 httpd_handle_t setup_httpserver(networking_ctx_t *networking_ctx)
 {
     static httpd_handle_t server = NULL;
-    handler_ctx *handler_ctx = malloc(sizeof(handler_ctx));
+    handler_ctx_t *handler_ctx = malloc(sizeof(handler_ctx_t));
     handler_ctx->server = server;
     handler_ctx->networking_ctx = networking_ctx;
     ESP_ERROR_CHECK(nvs_flash_init());
@@ -1011,6 +1011,6 @@ httpd_handle_t setup_httpserver(networking_ctx_t *networking_ctx)
     ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &connect_handler, handler_ctx));
     ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, &disconnect_handler, handler_ctx));
 
-    server = start_webserver(networking_ctx);
+    handler_ctx->server = start_webserver(networking_ctx);
     return server;
 }

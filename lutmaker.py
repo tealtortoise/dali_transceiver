@@ -12,10 +12,12 @@ class ChannelType(Enum):
     RESIDUAL = 1
     INDEPENDENT = 2
 
+
 class Relay(Enum):
     NO_RELAY = 0
     RELAY1 = 1
     RELAY2 = 2
+
 
 @dataclass
 class LED(object):
@@ -49,9 +51,9 @@ class Channel(object):
         return self.type == ChannelType.DIRECTED or self.type == ChannelType.RESIDUAL
 
 
-inrange = np.arange(0, 255, 1)
+INRANGE = np.arange(0, 255, 1)
 
-columns = [
+COLUMNS = [
     "level",
     "zeroten1",  # F90s
     "zeroten2",
@@ -69,11 +71,12 @@ columns = [
     "b",
 ]
 
-minimum_dim = 0.0003
+MINIMUM_DIM = 0.001
 
-iterations = 400
+ITERATIONS = 400
+REVERSE_PRIORITY = False
 
-living_room_channels = {
+LIVING_ROOM_CHANNELS = {
     "dalie": Channel(
         friendly_name="f90",
         points=[(0, 0.0), (0.3, 0.0), (0.7, 1.45), (1.0, 1.45)],
@@ -135,10 +138,10 @@ living_room_channels = {
     ),
 }
 
-f90_prop = 0.5
-fade = 1.1
+F90_PROP = 0.5
+FADE = 1.1
 
-bedroom_fullthrive_channels = {
+FULLTHRIVE_CHANNELS = {
     "dalia": Channel(
         friendly_name="5700k Thrive",
         type=ChannelType.INDEPENDENT,
@@ -146,49 +149,75 @@ bedroom_fullthrive_channels = {
         led=LED(vf=34, imax=2800, eff=125),
         group=0,
         driver_min=0.001,
-        requires_relay=Relay.RELAY1
+        requires_relay=Relay.RELAY1,
+        priority=0,
     ),
     "dalib": Channel(
         friendly_name="5000k F90",
         type=ChannelType.INDEPENDENT,
-        points=[(0.0, 0.0), (0.28 / fade, 0.0), (0.28 * fade**3, f90_prop),(1.0, f90_prop)],
+        points=[
+            (0.0, 0.0),
+            (0.28 / FADE, 0.0),
+            (0.28 * FADE**3, F90_PROP),
+            (1.0, F90_PROP),
+        ],
         led=LED(imax=950, vf=51, eff=177),
         group=0,
         driver_min=0.01,
-        requires_relay=Relay.RELAY2
+        requires_relay=Relay.RELAY2,
+        priority=1,
     ),
     "dalic": Channel(
         friendly_name="5000k F90 2",
         type=ChannelType.INDEPENDENT,
-        points=[(0.0, 0.0), (0.44 / fade, 0.0), (0.44 * fade, f90_prop), (1.0, f90_prop)],
+        points=[
+            (0.0, 0.0),
+            (0.44 / FADE, 0.0),
+            (0.44 * FADE, F90_PROP),
+            (1.0, F90_PROP),
+        ],
         led=LED(imax=950, vf=51, eff=177),
         group=0,
         driver_min=0.01,
-        requires_relay=Relay.RELAY2
+        requires_relay=Relay.RELAY2,
+        priority=1,
     ),
     "dalid": Channel(
         friendly_name="5000k F90 3",
         type=ChannelType.INDEPENDENT,
-        points=[(0.0, 0.0), (0.58 / fade, 0.0), (0.58 * fade, f90_prop), (1.0, f90_prop)],
+        points=[
+            (0.0, 0.0),
+            (0.58 / FADE, 0.0),
+            (0.58 * FADE, F90_PROP),
+            (1.0, F90_PROP),
+        ],
         led=LED(imax=950, vf=51, eff=177),
         group=0,
         driver_min=0.01,
-        requires_relay=Relay.RELAY2
+        requires_relay=Relay.RELAY2,
+        priority=1,
     ),
     "dalie": Channel(
         friendly_name="5000k F90 4",
         type=ChannelType.INDEPENDENT,
-        points=[(0.0, 0.0), (0.73 / fade, 0.0), (0.73 * fade, f90_prop), (1.0, f90_prop)],
+        points=[
+            (0.0, 0.0),
+            (0.73 / FADE, 0.0),
+            (0.73 * FADE, F90_PROP),
+            (1.0, F90_PROP),
+        ],
         led=LED(imax=950, vf=51, eff=177),
         group=0,
         driver_min=0.01,
-        requires_relay=Relay.RELAY2
+        requires_relay=Relay.RELAY2,
+        priority=1,
     ),
 }
 
-f90_prop = 3.0
-fade = 0.04
-bedroom_lessthrive_channels = {
+F90_PROP = 3.0
+FADE = 0.04
+
+LESSTHRIVE_CHANNELS = {
     "dalia": Channel(
         friendly_name="5700k Thrive",
         type=ChannelType.INDEPENDENT,
@@ -196,49 +225,74 @@ bedroom_lessthrive_channels = {
         led=LED(vf=34, imax=2800, eff=125),
         group=0,
         driver_min=0.001,
-        requires_relay=Relay.RELAY1
+        requires_relay=Relay.RELAY1,
+        priority=0,
     ),
     "dalib": Channel(
         friendly_name="5000k F90",
         type=ChannelType.INDEPENDENT,
-        points=[(0.0, 0.0), (0.27 - fade, 0.0), (0.27 + fade, f90_prop),(1.0, f90_prop)],
+        points=[
+            (0.0, 0.0),
+            (0.27 - FADE, 0.0),
+            (0.27 + FADE, F90_PROP),
+            (1.0, F90_PROP),
+        ],
         led=LED(imax=950, vf=51, eff=177),
         group=0,
         driver_min=0.01,
-        requires_relay=Relay.RELAY2
+        requires_relay=Relay.RELAY2,
+        priority=1,
     ),
     "dalic": Channel(
         friendly_name="5000k F90 2",
         type=ChannelType.INDEPENDENT,
-        points=[(0.0, 0.0), (0.41 - fade, 0.0), (0.41 + fade, f90_prop), (1.0, f90_prop)],
+        points=[
+            (0.0, 0.0),
+            (0.41 - FADE, 0.0),
+            (0.41 + FADE, F90_PROP),
+            (1.0, F90_PROP),
+        ],
         led=LED(imax=950, vf=51, eff=177),
         group=0,
         driver_min=0.01,
-        requires_relay=Relay.RELAY2
+        requires_relay=Relay.RELAY2,
+        priority=1,
     ),
     "dalid": Channel(
         friendly_name="5000k F90 3",
         type=ChannelType.INDEPENDENT,
-        points=[(0.0, 0.0), (0.58 - fade, 0.0), (0.58 + fade, f90_prop), (1.0, f90_prop)],
+        points=[
+            (0.0, 0.0),
+            (0.58 - FADE, 0.0),
+            (0.58 + FADE, F90_PROP),
+            (1.0, F90_PROP),
+        ],
         led=LED(imax=950, vf=51, eff=177),
         group=0,
         driver_min=0.01,
-        requires_relay=Relay.RELAY2
+        requires_relay=Relay.RELAY2,
+        priority=1,
     ),
     "dalie": Channel(
         friendly_name="5000k F90 4",
         type=ChannelType.INDEPENDENT,
-        points=[(0.0, 0.0), (0.73 - fade, 0.0), (0.73 + fade, f90_prop), (1.0, f90_prop)],
+        points=[
+            (0.0, 0.0),
+            (0.73 - FADE, 0.0),
+            (0.73 + FADE, F90_PROP),
+            (1.0, F90_PROP),
+        ],
         led=LED(imax=950, vf=51, eff=177),
         group=0,
         driver_min=0.01,
-        requires_relay=Relay.RELAY2
+        requires_relay=Relay.RELAY2,
+        priority=1,
     ),
 }
 
-    
+
 if "fadetest" and 0:
-    channels = {
+    CHANNELS = {
         "a": Channel(
             friendly_name="a",
             type=ChannelType.INDEPENDENT,
@@ -252,25 +306,24 @@ if "fadetest" and 0:
             led=LED(1000, 34, 120),
         ),
     }
-    columns = ["a", "b"]
+    COLUMNS = ["a", "b"]
 
 
-# channels = living_room_channels
-channels = bedroom_lessthrive_channels
+CHANNELS = LIVING_ROOM_CHANNELS
+# CHANNELS = FULLTHRIVE_CHANNELS
 if 0 and "No custom channels":
     highest_flux = 1
-    channels = {}
+    CHANNELS = {}
+REFINE_GROUPS = (0,)
 
-highest_flux = max((curve.led.lumens for curve in channels.values()))
-
-
-max_group = max((channel.group for channel in channels.values()))
-max_priority = max(channel.priority for channel in channels.values())
+highest_flux = max((curve.led.lumens for curve in CHANNELS.values()))
+max_group = max((channel.group for channel in CHANNELS.values()))
+max_priority = max(channel.priority for channel in CHANNELS.values())
 
 total_prop = [0.0] * (max_group + 1)
 print(total_prop)
 if 1 and "print proportions":
-    for key, channel in channels.items():
+    for key, channel in CHANNELS.items():
         print(
             f"Channel {key}: '{channel.friendly_name}': {channel.led.power}W {channel.led.lumens} ({(channel.led.lumens / highest_flux)})"
         )
@@ -303,152 +356,181 @@ def to_linear_with_minimum(inp: np.ndarray, minimum: float) -> np.ndarray:
     lin[lin < minimum] = minimum
     lin[inp == 0] = 0
     return lin
-
-
-# def to_log_custom(inp: np.ndarray, minimum_level: float=minimum_dim) -> np.ndarray:
-#     divider = -math.log10(minimum_level)
-#     return np.maximum(np.log10(inp / minimum_level) * 253.0 / divider + 1.0, 0)
-
+    
 
 def to_log(inp: np.ndarray) -> np.ndarray:
     # return to_log_custom(inp)
-    return np.maximum(np.log10(inp * 1000) * 253.0 / 3.0 + 1.0, 0)
+    return np.maximum(np.log10(inp * 1000) * 253.0 / 3.0 + 1.0, 0.0)
 
-
-# native_flux_proportions: dict[str, float] = {}
-# for key, value in curves.items():
-# native_flux_proportions[key] = value.native_lumens / total_proportioned_flux_available
-
-# print("native flux proportions", native_flux_proportions)
-
-# desired_flux_ary = to_linear_custom(inrange) * desired_total_proportioned_flux
-
-# print("desire flux array", desired_flux_ary)
-
-lin_flux = to_linear_custom(inrange, minimum_dim)
-lin_flux[0] = 0.0
-
+LIN_FLUX_TARGET = to_linear_custom(INRANGE, MINIMUM_DIM)
+LIN_FLUX_TARGET[0] = 0.0
 
 def main():
     warnings = []
-    dalivals = {}
+    dalivals_float = {}
     lumens = [{} for _ in range(max_group + 1)]
 
     groupcolumns = [[], [], [], [], []]
 
-    group_offsets = [np.zeros(inrange.size) for _ in range(max_group + 1)]
-    channel_offsets = {key:np.zeros(inrange.size) for key in channels.keys()}
+    group_offsets = [np.zeros(INRANGE.size) for _ in range(max_group + 1)]
+    channel_offsets = {key: np.zeros(INRANGE.size) for key in CHANNELS.keys()}
 
-    for iteration in range(iterations):
-        saturated = {key: np.zeros(inrange.size) for key in channels}
-        lumensum = [np.zeros(inrange.size) for _ in range(max_group +1)]
-        powersum = [np.zeros(inrange.size) for _ in range(max_group +1)]
+    for iteration in range(ITERATIONS):
+        saturated = {key: np.zeros(INRANGE.size) for key in CHANNELS}
+        lumensum = [np.zeros(INRANGE.size) for _ in range(max_group + 1)]
+        lumensum_quantised = [np.zeros(INRANGE.size) for _ in range(max_group + 1)]
+        powersum = [np.zeros(INRANGE.size) for _ in range(max_group + 1)]
 
-        for key in columns:
-            if key not in channels:
-                dalivals[key] = inrange
+        for key in COLUMNS:
+            if key not in CHANNELS:
+                dalivals_float[key] = INRANGE
                 continue
 
             # interpolate curves
-            channel = channels[key]
+            channel = CHANNELS[key]
             x, y = zip(*channel.points)
             # print("Processing curve ", key, x, y)
             flux_points = np.array(x, dtype=float)
             prop_points = np.array(y, dtype=float)
             lamp_lumen_ratio = highest_flux / channel.led.lumens
-            print(f"Lamp lumen ratio {lamp_lumen_ratio}")
             interpolated_curve = np.interp(
-                lin_flux, flux_points, prop_points * lamp_lumen_ratio
+                LIN_FLUX_TARGET, flux_points, prop_points * lamp_lumen_ratio
             )
-            raw_dali = (to_log(interpolated_curve * lin_flux) + 0.0).astype(int)
+            raw_dali = to_log(interpolated_curve * LIN_FLUX_TARGET)
 
-            dalivals[key] = np.clip(raw_dali + channel_offsets[key], 0, 254).astype(int)
-            channel_lumens = to_linear_with_minimum(dalivals[key], minimum=channel.driver_min) * channel.led.lumens
+            dalivals_float[key] = np.clip(raw_dali + channel_offsets[key], 0, 254)
+            channel_lumens = (
+                to_linear_with_minimum(
+                    dalivals_float[key], minimum=channel.driver_min
+                )
+                * channel.led.lumens
+            )
+            channel_lumens_quantised = (
+                to_linear_with_minimum(
+                    (dalivals_float[key]).astype(int), minimum=channel.driver_min
+                )
+                * channel.led.lumens
+            )
             lumens[channel.group][channel.friendly_name] = channel_lumens
             lumensum[channel.group] += channel_lumens
+            lumensum_quantised[channel.group] += channel_lumens_quantised
             powersum[channel.group] += channel_lumens / channel.led.eff
             if iteration == 0:
                 groupcolumns[channel.group].append(channel.friendly_name)
 
-        for key in columns:
-            if key not in channels:
-                dalivals[key] = inrange
+        for key in COLUMNS:
+            if key not in CHANNELS:
+                dalivals_float[key] = INRANGE
                 continue
-            saturated[key] = np.any((dalivals[key] == 254, dalivals[key] == 0), 0)
+            saturated[key] = np.any(
+                (dalivals_float[key] == 254, dalivals_float[key] == 0), 0
+            )
 
-        for group in range(max_group + 1):
+        for group in REFINE_GROUPS:
             if len(lumens[group]) == 0:
                 continue
             group_lumens = lumensum[group]
-            target_lumens = lin_flux * highest_flux * total_prop[group]
+            target_lumens = LIN_FLUX_TARGET * highest_flux * total_prop[group]
             inc_needed = group_lumens < target_lumens
             dec_needed = group_lumens > target_lumens
-            change = np.zeros(inrange.size)
-            change[inc_needed] = 0.5
-            change[dec_needed] = -0.5
-            for ch_key in reversed(channels.keys()):
+            change_inc = (
+                1.0
+                if max(np.abs(group_lumens[1:] - target_lumens[1:]) / target_lumens[1:])
+                > 0.04
+                else 0.2
+            )
+            print(
+                iteration,
+                change_inc,
+                max(np.abs(group_lumens[1:] - target_lumens[1:]) / target_lumens[1:]),
+            )
+            change = np.zeros(INRANGE.size)
+            change[inc_needed] = change_inc
+            change[dec_needed] = -change_inc
+
+            for priority in (
+                range(max_priority + 1)
+                if REVERSE_PRIORITY
+                else reversed(range(max_priority + 1))
+            ):
+                channels_in_priority = []
+                for ch_key, ch in reversed(CHANNELS.items()):
+                    if ch.priority == priority:
+                        channels_in_priority.append(ch_key)
+                num_channels = len(channels_in_priority)
+
                 # first pass we only change existing unsaturated lights
-                not_sat = np.logical_not(saturated[ch_key])
-                old_vals = np.clip(dalivals[ch_key] + channel_offsets[ch_key], 0, 254)
-                channel_offsets[ch_key][not_sat] += change[not_sat]
-                diff = np.clip(dalivals[ch_key] + channel_offsets[ch_key], 0, 254) - old_vals
-                change -= diff
-            for ch_key in reversed(channels.keys()):
+                prio_change = np.zeros(INRANGE.size)
+                for ch_key in channels_in_priority:
+                    # not_sat = np.logical_not(saturated[ch_key])
+                    not_sat = dalivals_float[ch_key] > 1
+                    old_vals = np.clip(
+                        dalivals_float[ch_key] + channel_offsets[ch_key], 0, 254
+                    )
+                    channel_offsets[ch_key][not_sat] += (change / num_channels)[
+                        not_sat
+                    ]
+                    diff = (
+                        np.clip(
+                            dalivals_float[ch_key] + channel_offsets[ch_key], 0, 254
+                        )
+                        - old_vals
+                    )
+                    prio_change += diff
+                change -= prio_change
+
                 # now we can turn on lights
-                old_vals = np.clip(dalivals[ch_key] + channel_offsets[ch_key], 0, 254)
-                channel_offsets[ch_key] += change
-                diff = np.clip(dalivals[ch_key] + channel_offsets[ch_key], 0, 254) - old_vals
-                change -= diff
-            
-            if iteration == ((iterations * 2) // 4) or iteration == 0:
+                # for ch_key in channels_in_priority:
+                #     allow_expand = np.convolve(dalivals_float[ch_key] > 1, np.ones(3), "same") > 0
+                #     old_vals = np.clip(dalivals_float[ch_key] + channel_offsets[ch_key], 0, 254)
+                #     channel_offsets[ch_key][allow_expand] += change[allow_expand]
+                #     diff = np.clip(dalivals_float[ch_key] + channel_offsets[ch_key], 0, 254) - old_vals
+                #     change -= diff
+
+            if iteration == 0:
                 lumens[group]["sum"] = group_lumens
                 lumens[group]["ideal"] = target_lumens
                 lumen_df = pd.DataFrame(
                     lumens[group],
                     columns=groupcolumns[group] + ["sum", "ideal"],
-                    index=lin_flux,
+                    index=LIN_FLUX_TARGET,
                 )
                 lumen_df.plot(loglog=True, title=f"Lumens Group {group}")
                 plt.show()
                 lumen_df.plot(loglog=False, title=f"Lumens Group {group}")
                 plt.show()
 
-    for key, channel in channels.items():
-        print(key, dalivals[key], dalivals[key].size)
-
-    # plt.plot(inrange, lumensum);
-    # plt.show();
+    for key, channel in CHANNELS.items():
+        print(key, dalivals_float[key], dalivals_float[key].size)
 
     name_columns = []
-    for name in columns:
-        if name in channels:
-            name_columns.append(channels[name].friendly_name)
-            dalivals[channels[name].friendly_name] = dalivals[name]
+    for name in COLUMNS:
+        if name in CHANNELS:
+            name_columns.append(CHANNELS[name].friendly_name)
+            dalivals_float[CHANNELS[name].friendly_name] = dalivals_float[name]
             if name in lumens:
-                lumendict = lumens[channels[name].group]
-                lumendict[channels[name].friendly_name] = lumendict[name]
+                lumendict = lumens[CHANNELS[name].group]
+                lumendict[CHANNELS[name].friendly_name] = lumendict[name]
         else:
             name_columns.append(name)
-
-    # smoothing
 
     for group in (0,):
         if len(lumens[group]) == 0:
             continue
-        lumens[group]["sum"] = lumensum[group]
-        lumens[group]["power"] = lumensum[group] / powersum[group] * 100
-        lumens[group]["ideal"] = lin_flux * highest_flux * total_prop[group]
+        lumens[group]["sum"] = lumensum_quantised[group]
+        lumens[group]["power"] = lumensum_quantised[group] / powersum[group] * 100
+        lumens[group]["ideal"] = LIN_FLUX_TARGET * highest_flux * total_prop[group]
         lumen_df = pd.DataFrame(
             lumens[group],
             columns=groupcolumns[group] + ["sum", "ideal", "power"],
-            index=lin_flux,
+            index=LIN_FLUX_TARGET,
         )
         lumen_df.plot(loglog=True, title=f"Lumens Group {group}")
         plt.show()
         lumen_df.plot(loglog=False, title=f"Lumens Group {group}")
         plt.show()
         print(group_offsets[group])
-        plt.plot(inrange, group_offsets[group])
+        plt.plot(INRANGE, group_offsets[group])
         plt.show()
     # exit()
 
@@ -492,15 +574,15 @@ def main():
     colour_g = [(point[1][1] / 255) ** 2.2 for point in colourpoints]
     colour_b = [(point[1][2] / 255) ** 2.2 for point in colourpoints]
 
-    lin_r = np.interp(inrange, colour_reflevels, colour_r)
-    lin_g = np.interp(inrange, colour_reflevels, colour_g)
-    lin_b = np.interp(inrange, colour_reflevels, colour_b)
+    lin_r = np.interp(INRANGE, colour_reflevels, colour_r)
+    lin_g = np.interp(INRANGE, colour_reflevels, colour_g)
+    lin_b = np.interp(INRANGE, colour_reflevels, colour_b)
 
-    out_r = np.zeros(inrange.size)
-    out_g = np.zeros(inrange.size)
-    out_b = np.zeros(inrange.size)
+    out_r = np.zeros(INRANGE.size)
+    out_g = np.zeros(INRANGE.size)
+    out_b = np.zeros(INRANGE.size)
 
-    for idx in inrange:
+    for idx in INRANGE:
         r = lin_r[idx]
         g = lin_g[idx]
         b = lin_b[idx]
@@ -509,27 +591,33 @@ def main():
         out_g[idx] = out[1]
         out_b[idx] = out[2]
 
-    dalivals["r"] = np.maximum(np.floor(out_r * white[0] * 255 - 0.5).astype(int), 0)
-    dalivals["g"] = np.maximum(np.floor(out_g * white[1] * 255 - 0.5).astype(int), 0)
-    dalivals["b"] = np.maximum(np.floor(out_b * white[2] * 255 - 0.5).astype(int), 0)
+    dalivals_float["r"] = np.maximum(
+        np.floor(out_r * white[0] * 255 - 0.5).astype(int), 0
+    )
+    dalivals_float["g"] = np.maximum(
+        np.floor(out_g * white[1] * 255 - 0.5).astype(int), 0
+    )
+    dalivals_float["b"] = np.maximum(
+        np.floor(out_b * white[2] * 255 - 0.5).astype(int), 0
+    )
 
     # build relay arrays
-    relay1_needed = np.zeros(inrange.size, dtype=int)
-    relay2_needed = np.zeros(inrange.size, dtype=int)
+    relay1_needed = np.zeros(INRANGE.size, dtype=int)
+    relay2_needed = np.zeros(INRANGE.size, dtype=int)
 
-    for name, dalival in dalivals.items():
-        selector = dalival > 0
-        if name not in channels:
+    for name, dalival in dalivals_float.items():
+        selector = dalival > 1
+        if name not in CHANNELS:
             continue
-        if channels[name].requires_relay == Relay.RELAY1:
+        if CHANNELS[name].requires_relay == Relay.RELAY1:
             relay1_needed[selector] = 1
-        if channels[name].requires_relay == Relay.RELAY2:
+        if CHANNELS[name].requires_relay == Relay.RELAY2:
             relay2_needed[selector] = 1
 
-    dalivals["relay1"] = relay1_needed
-    dalivals["relay2"] = relay2_needed
+    dalivals_float["relay1"] = relay1_needed
+    dalivals_float["relay2"] = relay2_needed
 
-    df = pd.DataFrame(dalivals, columns=name_columns)
+    df = pd.DataFrame(dalivals_float, columns=name_columns).astype(int)
     df.plot(title="DALI Values")
     plt.show()
     print(df)

@@ -65,7 +65,7 @@ void relay_timeout_task(void* params) {
         current1 = counter1 > 0 && !offcounter1;
         current2 = counter2 > 0 && !offcounter2;
         gpio_set_level(RELAY1_GPIO, current1);
-        vTaskDelay(pdMS_TO_TICKS(10));
+        vTaskDelay(pdMS_TO_TICKS(125));
         gpio_set_level(RELAY2_GPIO, current2);
         // ESP_LOGI(TAG, "%i, %i, %i, %i", counter1, counter2,  current1,current2);
         if (current1 < last1) {
@@ -78,7 +78,7 @@ void relay_timeout_task(void* params) {
         };
         if (current1 > last1) ESP_LOGI(TAG, "Relay 1 Now ON");
         if (current2 > last2) ESP_LOGI(TAG, "Relay 2 Now ON");
-        vTaskDelay(pdMS_TO_TICKS(269));
+        vTaskDelay(pdMS_TO_TICKS(169));
     }
 }
 

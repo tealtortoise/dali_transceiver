@@ -7,7 +7,7 @@
 typedef struct {
     httpd_handle_t server;
     networking_ctx_t *networking_ctx;
-} handler_ctx;
+} handler_ctx_t;
 
 httpd_handle_t setup_httpserver(networking_ctx_t *networking_ctx);
 
