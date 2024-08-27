@@ -53,6 +53,26 @@ inline uint32_t _uMAX(uint32_t a, uint32_t b) { return((a) > (b) ? a : b); }
 int clamp(int in, int low, int high){
     return (in > low) ? _MIN(in, high) : low;
 }
+int flexclamp(int in, int a, int b){
+    if (a > b && in >= b && in <= a) return in;
+    if (a > b && in >= b) return a;
+    if (a > b) return b;
+    if (in <= b && in >= a) return in;
+    if (in <= b) return a;
+    return b;
+}
+
+void test_flexclamp(){
+    while (1)
+    {
+        int8_t a = rand() & 0xFF;
+        int8_t b = rand() & 0xFF;
+        int8_t c = rand() & 0xFF;
+
+        ESP_LOGI(TAG, "testing %d >= %d >= %d -> %d", a, c, b, flexclamp(c, a, b));
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+}
 
 uint32_t uclamp(uint32_t in, uint32_t low, uint32_t high){
     return (in > low) ? _uMIN(in, high) : low;

@@ -73,6 +73,10 @@ COLUMNS = [
 
 MINIMUM_DIM = 0.001
 
+FILENAME = "spiffs/levelluts5.csv"
+
+RGB_NIGHTLIGHT = True
+
 ITERATIONS = 400
 REVERSE_PRIORITY = False
 
@@ -309,16 +313,19 @@ if "fadetest" and 0:
     COLUMNS = ["a", "b"]
 
 
-CHANNELS = LIVING_ROOM_CHANNELS
-# CHANNELS = FULLTHRIVE_CHANNELS
-if 0 and "No custom channels":
+# CHANNELS = LIVING_ROOM_CHANNELS
+CHANNELS = FULLTHRIVE_CHANNELS
+if 1 and "No custom channels":
     highest_flux = 1
+    max_group = 0
     CHANNELS = {}
+else:
+    highest_flux = max((curve.led.lumens for curve in CHANNELS.values()))
+    max_group = max((channel.group for channel in CHANNELS.values()))
+    max_priority = max(channel.priority for channel in CHANNELS.values())
+
 REFINE_GROUPS = (0,)
 
-highest_flux = max((curve.led.lumens for curve in CHANNELS.values()))
-max_group = max((channel.group for channel in CHANNELS.values()))
-max_priority = max(channel.priority for channel in CHANNELS.values())
 
 total_prop = [0.0] * (max_group + 1)
 print(total_prop)
@@ -601,18 +608,30 @@ def main():
         np.floor(out_b * white[2] * 255 - 0.5).astype(int), 0
     )
 
-    # build relay arrays
-    relay1_needed = np.zeros(INRANGE.size, dtype=int)
-    relay2_needed = np.zeros(INRANGE.size, dtype=int)
 
-    for name, dalival in dalivals_float.items():
-        selector = dalival > 1
-        if name not in CHANNELS:
-            continue
-        if CHANNELS[name].requires_relay == Relay.RELAY1:
-            relay1_needed[selector] = 1
-        if CHANNELS[name].requires_relay == Relay.RELAY2:
-            relay2_needed[selector] = 1
+    if RGB_NIGHTLIGHT:
+        dalivals_float["r"][0] = 254;
+        dalivals_float["g"][0] = 254;
+        dalivals_float["b"][0] = 254;
+    # build relay arrays
+
+    if len(CHANNELS) > 0:
+        relay1_needed = np.zeros(INRANGE.size, dtype=int)
+        relay2_needed = np.zeros(INRANGE.size, dtype=int)
+        for name, dalival in dalivals_float.items():
+            selector = dalival > 1
+            if name not in CHANNELS:
+                continue
+            if CHANNELS[name].requires_relay == Relay.RELAY1:
+                relay1_needed[selector] = 1
+            if CHANNELS[name].requires_relay == Relay.RELAY2:
+                relay2_needed[selector] = 1
+    else:
+        relay1_needed = np.ones(INRANGE.size, dtype=int)
+        relay2_needed = np.ones(INRANGE.size, dtype=int)
+        relay1_needed[0] = 0
+        relay2_needed[0] = 0
+
 
     dalivals_float["relay1"] = relay1_needed
     dalivals_float["relay2"] = relay2_needed
@@ -621,7 +640,7 @@ def main():
     df.plot(title="DALI Values")
     plt.show()
     print(df)
-    df.to_csv("spiffs/levelluts4.csv", index=False)
+    df.to_csv(FILENAME, index=False)
     # print("hello")
     # print(to_log(to_linear(inrange)))
 

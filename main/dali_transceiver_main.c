@@ -53,6 +53,8 @@
 #define MAX_IDLE_UPDATE_INTERVAL_AFTER_COOLDOWN_MS (60UL * 60UL * 1000UL)
 #define MINIMUM_TARGET_LOOPTIME 15
 
+#define BALLAST_WAKE_LOOKAHEAD_MS 2000
+
 #define IDLE_UPDATE_INTERVAL_ADDITION_US_RECV_ESPNOW (500)
 
 #define HASH_LEN 32 /* SHA-256 digest length */
@@ -393,11 +395,22 @@ void check_partitions()
     }
 }
 
+level_t get_level_el(uint8_t level, device_status_t status, uint16_t full_power){
+    if (status.actual_level == 0)
+    {
+        // we need to always ensure zero is off regardless of full_power setting
+        return status.lut[0];
+    }
+    else
+    {
+        return status.lut[clamp((int)level + (int)full_power - 254, 0, 254)];
+    }
+}
+
 void app_main(void)
 {
     esp_reset_reason_t reason = esp_reset_reason();
     configure_gpio();
-
     bool stale = (status.stale_flag == STATUS_STALE_FLAG);
     bool reinit = stale || ((reason != ESP_RST_DEEPSLEEP) && (reason != ESP_RST_SW));
     if (reinit)
@@ -410,6 +423,7 @@ void app_main(void)
     check_partitions();
     ESP_LOGI(TAG, "Seeding random...");
     srand(time(NULL));
+    // test_flexclamp();
     vTaskPrioritySet(NULL, 6);
     // rotate_gpio_outputs();
 
@@ -503,7 +517,6 @@ void app_main(void)
     int fade_remaining = 0;
 
     bool at_setpoint;
-    level_t level_el;
     uint8_t level_el_array[sizeof(level_t)];
     int dali_broadcast;
     level_t future_el;
@@ -554,13 +567,15 @@ void app_main(void)
     uint32_t idle_start_time = reftime;
     int future_level;
     uint8_t min_level_array[sizeof(level_t)] = { 0 };
-    uint8_t future_level_array[sizeof(level_t)] = { 0 };
     uint8_t start_of_fade_level = 0;
     int looptime_outside_tolerance_count = 0;
 
     ESP_LOGI(TAG, "Starting main loop...");
     while (1)
     {
+        //
+        // do loop timing housekeeping
+        //
         actual_looptime = (get_time_ms() - reftime);
         if (fade_remaining != 0 && actual_looptime > MINIMUM_TARGET_LOOPTIME)
         {
@@ -578,6 +593,10 @@ void app_main(void)
         }
         while (1)
         {
+            //s
+            // spin until next tick or new setpoint received 
+            //
+
             received = xTaskNotifyWaitIndexed(NEW_SETPOINT_NOTIFY_IDX, 0, 0, &recv_value, 1);
             current_time = get_time_ms();
             force_resend = received;
@@ -586,6 +605,7 @@ void app_main(void)
                 old_status = status;
                 status.setpoint = clamp(status.setpoint, 0, 254);
 
+                // signal new setpoint
                 gpio_set_level(LED1_GPIO, 1);
                 start_of_fade_level = status.actual_level;
                 full_power = clamp(get_setting("full_power"), 0, 512);
@@ -596,38 +616,22 @@ void app_main(void)
                 random_looptime = (rand() & 127);
                 tick_inc = 1;
                 configbits = get_setting("configbits");
-                if (status.fadetime_ms == USE_DEFAULT_FADETIME)
-                {
-                    fadetime = get_setting("default_fade");
-                }
-                else if (status.fadetime_ms == USE_SLOW_FADETIME)
-                {
-                    fadetime = get_setting("slow_fade");
-                }
-                else
-                {
-                    fadetime = status.fadetime_ms;
-                }
-                if (fadetime < 8)
-                    fadetime = 8;
-
-                // make sure output needed later in fade are woken up
-                //
-                // reset to zero
-                memcpy(future_level_array, &status.lut[0], sizeof(level_t)); // may as well reuse this array
-                for (int ch = 0; ch < sizeof(level_t); ch++)
-                    min_level_array[ch] = future_level_array[ch];
-
-                // look through fade to see if channel is used
-                for (future_level = status.actual_level; future_level != status.setpoint; future_level += (status.setpoint > status.actual_level) ? 1 : -1)
-                {
-                    memcpy(future_level_array, &status.lut[future_level], sizeof(level_t));
-                    for (int ch = 0; ch < sizeof(level_t); ch++)
-                    {
-                        if (future_level_array[ch] > 0)
-                            min_level_array[ch] = 1;
+                switch (status.fadetime_ms){
+                    case USE_DEFAULT_FADETIME: {
+                        fadetime = get_setting("default_fade");
+                        break;
                     }
+                    case USE_SLOW_FADETIME: {
+                        fadetime = get_setting("slow_fade");
+                        break;
+                    }
+                    default: {
+                        fadetime = status.fadetime_ms;
+                    };
                 }
+                if (fadetime < 8) 
+                    // it's basically no fade lets avoid any divide by zeros
+                    fadetime = 8;
 
                 if (status.setpoint != status.actual_level)
                 {
@@ -644,24 +648,73 @@ void app_main(void)
         // process tick -> move actual_level fading towards setpoint
         /////
         reftime = get_time_ms();
+
+        // reset lookahead array to be paranoid
+        memcpy(min_level_array, &status.lut[0], sizeof(level_t));
+
         fade_remaining = status.setpoint - status.actual_level;
-        if (fade_remaining < 0)
+        if (fade_remaining != 0)
         {
-            status.actual_level = _MAX(status.actual_level - tick_inc_array[status.actual_level], status.setpoint);
+            // process fade tick
+            //
+
+            // look ahead to rewake ballasts ahead of time
+            int end_lookahead_level;
+            uint32_t time_acc = 0;
+            int sign = fade_remaining > 0 ? 1 : -1;
+            int lvl = status.actual_level;
+            int loops = 0;
+            while (lvl != status.setpoint)
+            {
+                loops += 1;
+                if (loops > 255)
+                {
+                    ESP_LOGE(TAG, "Something went wrong in fade search loop. Loop count timeout.");
+                    break;
+                }
+                ESP_LOGD(TAG, "Looking at lvl %d. Adding %lu to acc (%lu). Ticking %d", lvl, tlt_array[lvl], time_acc, tick_inc_array[lvl]);
+                time_acc += tlt_array[lvl];
+                lvl += sign * (int)tick_inc_array[lvl];
+                
+                // check to see if we've gone far enough ahead
+                if (time_acc > BALLAST_WAKE_LOOKAHEAD_MS) break;
+                // check if we've reached or gone past setpoint
+                // if ((lvl * sign) > ((int)status.setpoint * sign))
+                // {
+                    // lvl = status.setpoint;
+                // }
+                lvl = flexclamp(lvl, status.actual_level, status.setpoint);
+                // get iterable copy so we avoid type punning shenanigans
+                uint8_t future_level_array[sizeof(level_t)];
+                level_t future_el = get_level_el(lvl, status, full_power);
+                memcpy(future_level_array, &future_el, sizeof(level_t));
+
+                // iterate over array to check for used channels
+                for (int ch = 0; ch < sizeof(level_t); ch++)
+                {
+                    if (future_level_array[ch] > 0)
+                        min_level_array[ch] = 1;
+                }
+            }
+            
+            // prepare next loop
             reawake_time = reftime + tlt_array[status.actual_level];
             idle_sends = 0;
             idle_start_time = reftime;
-        }
-        else if (fade_remaining > 0)
-        {
-            status.actual_level = _MIN(status.actual_level + tick_inc_array[status.actual_level], status.setpoint);
-            reawake_time = reftime + tlt_array[status.actual_level];
-            idle_sends = 0;
-            idle_start_time = reftime;
+
+            // tick increment
+            int act = status.actual_level;
+            int inc = (int)tick_inc_array[status.actual_level] * sign;
+
+            // we need to make sure we never overshoot
+            status.actual_level = flexclamp(act + inc, act, status.setpoint);
         }
         else
         {
             // we're at setpoint
+            //
+
+            // signal end of fade
             gpio_set_level(LED1_GPIO, 0);
 
             // Resend all levels just to be sure
@@ -680,39 +733,29 @@ void app_main(void)
             ESP_LOGD(TAG, "Idle reawake %lu reftime %lu idle_start %lu cd %lu", idle_reawake_interval, reftime, idle_start_time, cooldown_duration);
             if (configbits & CONFIGBIT_RECEIVE_ESPNOW)
             {
-                // we don't want double awakening if we're receiving regular updates
+                // we don't want double awakening if we're receiving regular updates so we add a bit extra to accommodate network latency
                 reawake_time += IDLE_UPDATE_INTERVAL_ADDITION_US_RECV_ESPNOW;
             }
-            idlecount += 1;
-            idle_sends += 1;
 
             // reset min_level array
-            memcpy(future_level_array, &status.lut[0], sizeof(level_t)); // may as well reuse this array
-            for (int ch = 0; ch < sizeof(level_t); ch++)
-                min_level_array[ch] = future_level_array[ch];
-
+            memcpy(min_level_array, &status.lut[0], sizeof(level_t));
+            // refresh local data from NVS
             get_dali_addresses();
-
             full_power = clamp(get_setting("full_power"), 0, 512);
 
+            idlecount += 1;
+            idle_sends += 1;
             if (!(idlecount & 0x3F))
             {
                 ESP_LOGI(TAG, "Min free heap %i", heap_caps_get_minimum_free_size(MALLOC_CAP_8BIT));
                 ESP_LOGI(TAG, "Free heap %i", heap_caps_get_free_size(MALLOC_CAP_8BIT));
             }
         }
+
         /////
         // process sends for tick
         /////
-        fade_remaining = status.setpoint - status.actual_level;
-        if (status.actual_level == 0)
-        {
-            level_el = status.lut[0];
-        }
-        else
-        {
-            level_el = status.lut[clamp((int)status.actual_level + (int)full_power - 254, 0, 254)];
-        }
+        level_t level_el = get_level_el(status.actual_level, status, full_power);
 
         // ensure minimum levels
         memcpy(level_el_array, &level_el, sizeof(level_t));
@@ -826,7 +869,7 @@ void app_main(void)
         if ((configbits & (CONFIGBIT_USE_RELAY1 | CONFIGBIT_USE_RELAY2)))
         {
             // We are using relays so bother logging them
-            if (!(levellog_count & 5))
+            if (!(levellog_count & 7))
                 ESP_LOGI(TAG, "Lvl-> SP PWR | SRCE N | 0-10v1 0-10v2 DALIA DALIB DALIC DALID DALIE DALIF ESPN Rly1 Rly2    Fade    TLT   LT Wake");
             ESP_LOGI(TAG, "%3.1u->%3.1d %s | %s %1.i |    %s    %s   %s   %s   %s   %s   %s   %s  %s  %s  %s %7.1i %6.1lu %4.1i  %3.1lu",
                      status.actual_level,

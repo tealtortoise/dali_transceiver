@@ -186,6 +186,10 @@ uint32_t _uMAX(uint32_t a, uint32_t b);
 
 int clamp(int in, int low, int high);
 
+int flexclamp(int in, int a, int b);
+
+void test_flexclamp();
+
 uint32_t uclamp(uint32_t in, uint32_t low, uint32_t high);
 
 uint64_t get_system_time_us(uint64_t offset);
