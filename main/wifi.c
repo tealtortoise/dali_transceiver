@@ -18,11 +18,11 @@
 #include "espnow.h"
 #include "wifi.h"
 
-#define LIGHTING_WIFI_SSID "vodafone10BD78"
-#define LIGHTING_WIFI_PASSWORD "9Crabstickerponcho"
+// #define LIGHTING_WIFI_SSID "vodafone10BD78"
+// #define LIGHTING_WIFI_PASSWORD "9Crabstickerponcho"
 
-// #define LIGHTING_WIFI_SSID "Verity"
-// #define LIGHTING_WIFI_PASSWORD "f39e27cc"
+#define LIGHTING_WIFI_SSID "Verity"
+#define LIGHTING_WIFI_PASSWORD "f39e27cc"
 
 /* FreeRTOS event group to signal when we are connected*/
 static EventGroupHandle_t s_wifi_event_group;
@@ -66,6 +66,7 @@ void wifi_reconnect_task(void *params) {
                 vTaskDelay(pdMS_TO_TICKS(60000));
                 ESP_LOGI(TAG, "Waiting 60 seconds before reconnecting...");
             }
+            vTaskDelay(pdMS_TO_TICKS(5000));
             ESP_LOGI(TAG, "Reconnecting...");
             esp_wifi_connect();
         }

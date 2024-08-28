@@ -407,6 +407,8 @@ level_t get_level_el(uint8_t level, device_status_t status, uint16_t full_power)
     }
 }
 
+static networking_ctx_t networking_ctx;
+
 void app_main(void)
 {
     esp_reset_reason_t reason = esp_reset_reason();
@@ -474,12 +476,11 @@ void app_main(void)
 
     setup_rgb_led(&status);
     xTaskNotifyIndexed(xTaskGetCurrentTaskHandle(), NEW_SETPOINT_NOTIFY_IDX, SETPOINT_SOURCE_INIT, eSetValueWithOverwrite);
-    networking_ctx_t networking_ctx = {
-        .mainloop_task = xTaskGetCurrentTaskHandle(),
-        .dali_command_queue = NULL,
-        .status = &status,
-    };
+
     TaskHandle_t networktask;
+    networking_ctx.mainloop_task = xTaskGetCurrentTaskHandle();
+    networking_ctx.dali_command_queue = NULL;
+    networking_ctx.status = &status;
     xTaskCreate(setup_networking, "setup_networking", 4096, (void *)&networking_ctx, 2, &networktask);
 
     zeroten_handle_t pwm1;

@@ -931,12 +931,16 @@ static const httpd_uri_t post_ota = {
     .handler = otaupdate,
     .user_ctx = NULL};
 
+
+static void nullfree(void* c)
+{}
 static httpd_handle_t start_webserver(networking_ctx_t *ctx)
 {
     httpd_handle_t server = NULL;
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.uri_match_fn = httpd_uri_match_wildcard;
     config.global_user_ctx = ctx;
+    config.global_user_ctx_free_fn = nullfree;
     config.max_open_sockets = 13;
     config.max_uri_handlers = 21;
     config.lru_purge_enable = true;
@@ -976,7 +980,9 @@ static httpd_handle_t start_webserver(networking_ctx_t *ctx)
 static esp_err_t stop_webserver(httpd_handle_t server)
 {
     // Stop the httpd server
-    return httpd_stop(server);
+    esp_err_t e = httpd_stop(server);
+    vTaskDelay(2000);
+    return e;
 }
 
 static void disconnect_handler(void *arg, esp_event_base_t event_base,
