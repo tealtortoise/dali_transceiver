@@ -27,12 +27,11 @@ typedef struct {
 bool IRAM_ATTR dali_transmit_isr(gptimer_handle_t timer, const gptimer_alarm_event_data_t *edata, void *user_ctx) {
     dali_transmit_isr_ctx *ctx = (dali_transmit_isr_ctx *) user_ctx;
     switch (ctx->state) {
-        case DALI_ISR_STATE_BITPREPARE: {
+        case DALI_ISR_STATE_BITPREPARE:
             gpio_set_level(ctx->gpio_pin, 1 - ctx->bitwork);
             ctx->state = DALI_ISR_STATE_BITDATA;
             break;
-        }
-        case DALI_ISR_STATE_BITDATA: {
+        case DALI_ISR_STATE_BITDATA:
             gpio_set_level(ctx->gpio_pin, ctx->bitwork);
             if (ctx->bitpos < 15) {
                 ctx->bitpos += 1;
@@ -45,8 +44,7 @@ bool IRAM_ATTR dali_transmit_isr(gptimer_handle_t timer, const gptimer_alarm_eve
                 ctx->state = DALI_ISR_STATE_ENDDATA;
             }
             break;
-        }
-        case DALI_ISR_STATE_STARTED: {
+        case DALI_ISR_STATE_STARTED:
             gpio_set_level(ctx->gpio_pin, 1 - ctx->invert);
             // BaseType_t received = xQueuePeekFromISR(ctx->isr_queue,  (dali_transmit_isr_job*) &ctx->job);
             // ctx->data = ctx->job.data;
@@ -54,22 +52,19 @@ bool IRAM_ATTR dali_transmit_isr(gptimer_handle_t timer, const gptimer_alarm_eve
             ctx->state = DALI_ISR_STATE_BITPREPARE;
             ctx->bitwork = ctx->invert ^ ((ctx->data >> (15 - ctx->bitpos)) & 1);
             break;
-        }
-        case DALI_ISR_STATE_ENDDATA: {
+        case DALI_ISR_STATE_ENDDATA:
             gpio_set_level(ctx->gpio_pin, 1 - ctx->invert);
             ctx->alarmconf.alarm_count = 833 * 2;
             gptimer_set_alarm_action(ctx->timer, &ctx->alarmconf);
             ctx->state = DALI_ISR_STATE_STOP;
             break;
-        }
-        case DALI_ISR_STATE_STOP: {
+        case DALI_ISR_STATE_STOP:
             ctx->alarmconf.alarm_count = 9200;
             gptimer_set_alarm_action(ctx->timer, &ctx->alarmconf);
             ctx->state = DALI_ISR_STATE_SETTLING;
             // ESP_DRAM_LOGI(TAG, "Call count %u", callcount);
             break;
-        }
-        case DALI_ISR_STATE_SETTLING: {
+        case DALI_ISR_STATE_SETTLING:
             gptimer_stop(ctx->timer);
             // xQueueReset(ctx->isr_queue);
             ctx->state = DALI_ISR_STATE_IDLE;
@@ -80,12 +75,10 @@ bool IRAM_ATTR dali_transmit_isr(gptimer_handle_t timer, const gptimer_alarm_eve
                 eSetValueWithOverwrite,
                 &ctx->taskawoken);
             break;
-        }
-        case DALI_ISR_STATE_IDLE: {
+        case DALI_ISR_STATE_IDLE:
             ESP_DRAM_LOGI(TAG, "How have we ended up here ctxdata: %u", ctx->data);
             ESP_ERROR_CHECK(ESP_ERR_NOT_ALLOWED);
             break;
-        }
 
     }
     return ctx->taskawoken == pdTRUE;

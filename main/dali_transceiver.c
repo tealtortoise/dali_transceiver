@@ -270,6 +270,22 @@ esp_err_t dali_configure_and_verify(dali_transceiver_handle_t handle, uint8_t fi
     return ESP_OK;
 }
 
+esp_err_t dali_query_fade_time(dali_transceiver_handle_t handle, uint8_t short_address, uint8_t *fadetime)
+{
+    dali_frame_t frame = dali_transmit_frame_and_wait_for_backward_frame(handle, get_dali_command_address_byte(short_address), DALI_SECONDBYTE_QUERY_FADE_RATE, pdMS_TO_TICKS(1000));
+    if (frame.type == DALI_NO_FRAME_TYPE){
+        ESP_LOGE(TAG, "No response to fade time query from control gear");
+        return ESP_ERR_NOT_FOUND;
+    }
+    if (frame.type == DALI_MANGLED_FRAME){
+        ESP_LOGE(TAG, "Mangled response to fade time query from control gear");
+        return ESP_ERR_INVALID_RESPONSE;
+    }
+    // we have a backwards frame
+    *fadetime = (frame.firstbyte >> 4);
+    ESP_LOGI(TAG, "Received return fade time of %d", *fadetime);
+    return ESP_OK;
+}
 
 esp_err_t dali_set_fade_time(dali_transceiver_handle_t handle, uint8_t short_address, uint8_t fade_time){
     
@@ -284,21 +300,19 @@ esp_err_t dali_set_fade_time(dali_transceiver_handle_t handle, uint8_t short_add
     if (dali_send_twice(handle, get_dali_command_address_byte(short_address), DALI_SECONDBYTE_STORE_DTR_AS_FADE_TIME)) {
         return ESP_ERR_NOT_FINISHED;
     };
-    dali_frame_t frame = dali_transmit_frame_and_wait_for_backward_frame(handle, get_dali_command_address_byte(short_address), DALI_SECONDBYTE_QUERY_FADE_RATE, pdMS_TO_TICKS(1000));
-    if (frame.type == DALI_NO_FRAME_TYPE){
-        ESP_LOGE(TAG, "No response to fade time query from control gear");
-        return ESP_ERR_NOT_FOUND;
-    }
-    if (frame.type == DALI_MANGLED_FRAME){
-        ESP_LOGE(TAG, "Mangled response to fade time query from control gear");
+    uint8_t returned_fadetime;
+    esp_err_t err = dali_query_fade_time(handle, short_address, &returned_fadetime);
+
+    if (err == ESP_OK){
+        if (returned_fadetime == fade_time)
+        {
+            ESP_LOGI(TAG, "Fade time verified.");
+            return err;
+        }
+        ESP_LOGI(TAG, "Fadetime did not verify correctly( %d != %d )",returned_fadetime ,fade_time);
         return ESP_ERR_INVALID_RESPONSE;
     }
-    if ((frame.firstbyte >> 4) != fade_time) {
-        ESP_LOGE(TAG, "Query did not give expected response %d != %d", (frame.firstbyte >> 4), fade_time);
-        return ESP_ERR_INVALID_RESPONSE;
-    }
-    ESP_LOGI(TAG, "Success - fade time on %d now %d", short_address, fade_time);
-    return ESP_OK;
+    return err;
 }
 
 esp_err_t dali_get_power_on_level(dali_transceiver_handle_t handle, uint8_t short_address, uint8_t *level)

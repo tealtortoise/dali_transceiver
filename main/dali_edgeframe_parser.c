@@ -107,13 +107,15 @@ void edgeframe_queue_log_task(void* params) {
                 last_edge_elapsed = receivedframe.edges[i].time;
                 if (error || strobestate == EDGEDECODE_STATE_END) break;
                 edge = receivedframe.edges[i];
-                if (edge.edgetype == EDGETYPE_RISING) baud_time = edge.time - first_bit_time;
+                // if (edge.edgetype == EDGETYPE_RISING)
+                // {
+                //     baud_time = edge.time - first_bit_time;
+                // }
                 switch (strobestate) {
-                    case EDGEDECODE_STATE_INIT: {
+                    case EDGEDECODE_STATE_INIT:
                         strobestate = EDGEDECODE_STATE_CHECKSTART;
                         break;
-                    }
-                    case EDGEDECODE_STATE_CHECKSTART: {
+                    case EDGEDECODE_STATE_CHECKSTART:
                         if (edge.edgetype == EDGETYPE_RISING && check_if_half_period(edge.time)) {
                             strobestate = EDGEDECODE_STATE_BITREADY;
                             last_valid_bit_time = edge.time;
@@ -126,8 +128,7 @@ void edgeframe_queue_log_task(void* params) {
                             error = true;
                         }
                         break;
-                    }
-                    case EDGEDECODE_STATE_BITREADY: {
+                    case EDGEDECODE_STATE_BITREADY:
 
                         if (edge.edgetype == EDGETYPE_NONE) {
                             strobestate = EDGEDECODE_STATE_END;
@@ -157,10 +158,9 @@ void edgeframe_queue_log_task(void* params) {
                         }
 
                         break;
-                    }
                 }
             }
-            int baud_bits_sub = (output >> (output_bit_pos+1)) & 1 ? 0 : 1;
+            // int baud_bits_sub = (output >> (output_bit_pos+1)) & 1 ? 0 : 1;
             // ESP_LOGD(PTAG, "Final output %lu", output);
             // ESP_LOGI(PTAG, "Final output  >> 8 %lu", output >> 8);
             // if (baud_time) ESP_LOGI(PTAG, "Baud rate %u", );

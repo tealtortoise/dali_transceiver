@@ -62,7 +62,11 @@ esp_err_t dali_broadcast_level_noblock(dali_transceiver_handle_t handle, uint8_t
 
 esp_err_t dali_set_and_verify_dtr(dali_transceiver_handle_t handle, uint8_t broadcast_value, uint8_t short_address_verify);
 
-esp_err_t dali_set_fade_time(dali_transceiver_handle_t handle, uint8_t short_address, uint8_t fade_time);
+esp_err_t dali_query_fade_time(dali_transceiver_handle_t handle,
+                               uint8_t short_address, uint8_t *fadetime);
+
+esp_err_t dali_set_fade_time(dali_transceiver_handle_t handle,
+                             uint8_t short_address, uint8_t fade_time);
 
 esp_err_t dali_get_power_on_level(dali_transceiver_handle_t handle, uint8_t short_address, uint8_t *level);
 

@@ -1,0 +1,68 @@
+from lutmaker import Channel, ChannelType, LED, process
+
+
+LIVING_ROOM_CHANNELS = {
+    "dalie": Channel(
+        friendly_name="f90",
+        points=[(0, 0.0), (0.3, 0.0), (0.7, 1.45), (1.0, 1.45)],
+        type=ChannelType.INDEPENDENT,
+        led=LED(imax=450 * 2, vf=50, eff=185),
+        group=0,
+    ),
+    "dalia": Channel(
+        friendly_name="hexagons",
+        type=ChannelType.INDEPENDENT,
+        points=[
+            (0.0, 0.0),
+            (0.02, 0.0),
+            (0.16, 1.85),
+            (0.3, 1.75),
+            (0.7, 0.38),
+            (1.0, 0.83),
+        ],
+        led=LED(vf=17, imax=650 * 5, eff=120),
+        group=0,
+    ),
+    "espnow": Channel(
+        friendly_name="piano",
+        type=ChannelType.INDEPENDENT,
+        points=[(0.0, 1.3), (0.05, 1.1), (0.16, 0.9), (1.0, 0.5)],
+        led=LED(vf=46, imax=650, eff=135),
+        group=2,
+    ),
+    "dalib": Channel(
+        friendly_name="tv 5000k",
+        type=ChannelType.INDEPENDENT,
+        points=[
+            (0.0, 0.0),
+            (0.02, 0.0),
+            (0.16, 0.8),
+            (0.23, 0.7),
+            (0.45, 0.55),
+            (0.6, 0.46),
+            (1.0, 0.28),
+        ],
+        led=LED(imax=480, vf=40, eff=123),
+        group=1,
+    ),
+    "dalic": Channel(
+        friendly_name="tv 6500k",
+        type=ChannelType.INDEPENDENT,
+        points=[(0.0, 1.2), (0.01, 1.0), (0.02, 0.8), (0.16, 0.0), (1.0, 0.0)],
+        led=LED(imax=650, vf=33, eff=130),
+        group=1,
+        night_only=True,
+    ),
+    "dalid": Channel(
+        friendly_name="corner 6500k",
+        type=ChannelType.INDEPENDENT,
+        points=[(0.0, 1.75), (0.02, 1.75), (0.16, 0.0), (1.0, 0.0)],
+        led=LED(imax=650, vf=33, eff=130),
+        group=0,
+        night_only=True,
+    ),
+}
+
+process(channels=LIVING_ROOM_CHANNELS,
+        minimum_dim = 0.0003,
+        filename = "../spiffs/levelluts2.csv",)

@@ -793,8 +793,16 @@ static esp_err_t dali_commands_handler(httpd_req_t *req)
     }
     else if (strcmp(substrings[1], "fade-time") == 0)
     {
-        command.command = DALI_COMMAND_SET_FADE_TIME;
-        ESP_LOGI(TAG, "Setting fade time for address %d to %d", command.address, command.value);
+        if (post)
+        {
+            command.command = DALI_COMMAND_SET_FADE_TIME;
+            ESP_LOGI(TAG, "Setting fade time for address %d to %d", command.address, command.value);
+        }
+        else
+        {
+            command.command = DALI_COMMAND_GET_FADE_TIME;
+            ESP_LOGI(TAG, "Querying fade time for address %d to %d", command.address, command.value);
+        }
     }
     else if (strcmp(substrings[1], "commission") == 0)
     {

@@ -135,11 +135,12 @@ esp_err_t _dali_assign_short_addresses(dali_transceiver_handle_t handle, int sta
                 ESP_LOGE(TAG, "What??? start != end %#08lx %#08lx", start, end);
                 return ESP_ERR_INVALID_STATE;
             }
+            vTaskDelay(pdMS_TO_TICKS(100));
             ESP_LOGI(TAG, "Assigning short address to %#08lx", end);
             ESP_LOGI(TAG, "Programming short address %u", short_address);
             dali_transmit_frame_and_wait(handle, 
                 DALI_FIRSTBYTE_PROGRAM_SHORT_ADDRESS, 
-                get_dali_command_address_byte(short_address), pdMS_TO_TICKS(100));
+                get_dali_command_address_byte(short_address), pdMS_TO_TICKS(1000));
             ESP_LOGI(TAG, "Verify short address...");
             frame = dali_transmit_frame_and_wait_for_backward_frame(handle, DALI_FIRSTBYTE_VERIFY_SHORT_ADDRESS, get_dali_command_address_byte(short_address), pdMS_TO_TICKS(1000));
             if (frame.type != DALI_BACKWARD_FRAME_TYPE)
@@ -239,6 +240,15 @@ void dali_command_monitor_task(void* params){
                 retr.err = err;
                 retr.value = 0;
                 break;
+            case DALI_COMMAND_GET_FADE_TIME:
+            {
+                ESP_LOGI(TAG, "Received GET_FADE_TIME command...");
+                uint8_t returned_fadetime;
+                err = dali_query_fade_time(transceiver, command.address, &returned_fadetime);
+                retr.err = err;
+                retr.value = returned_fadetime;
+                break;
+            }
             default:
                 ESP_LOGE(TAG, "Unknown command %i", command.command);
                 retr.err = 0xFF;

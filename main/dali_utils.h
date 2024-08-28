@@ -1,7 +1,10 @@
 #ifndef DALI_UTILS_H
 #define DALI_UTILS_H
 
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 #include "dali.h"
+
 #include <stdint.h>
 #include "esp_log.h"
 
@@ -12,7 +15,7 @@ typedef struct {
     uint8_t address;
     uint8_t value;
     uint8_t extra;
-    uint32_t notify_task;
+    TaskHandle_t notify_task;
 } dali_command_t;
 
 typedef struct {

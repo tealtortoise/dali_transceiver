@@ -617,17 +617,14 @@ void app_main(void)
                 tick_inc = 1;
                 configbits = get_setting("configbits");
                 switch (status.fadetime_ms){
-                    case USE_DEFAULT_FADETIME: {
+                    case USE_DEFAULT_FADETIME:
                         fadetime = get_setting("default_fade");
                         break;
-                    }
-                    case USE_SLOW_FADETIME: {
+                    case USE_SLOW_FADETIME:
                         fadetime = get_setting("slow_fade");
                         break;
-                    }
-                    default: {
+                    default:
                         fadetime = status.fadetime_ms;
-                    };
                 }
                 if (fadetime < 8) 
                     // it's basically no fade lets avoid any divide by zeros
@@ -670,20 +667,20 @@ void app_main(void)
                 if (loops > 255)
                 {
                     ESP_LOGE(TAG, "Something went wrong in fade search loop. Loop count timeout.");
+                    // zero array
+                    memcpy(min_level_array, &status.lut[0], sizeof(level_t));
                     break;
                 }
                 ESP_LOGD(TAG, "Looking at lvl %d. Adding %lu to acc (%lu). Ticking %d", lvl, tlt_array[lvl], time_acc, tick_inc_array[lvl]);
-                time_acc += tlt_array[lvl];
-                lvl += sign * (int)tick_inc_array[lvl];
-                
+
                 // check to see if we've gone far enough ahead
+                time_acc += tlt_array[lvl];
                 if (time_acc > BALLAST_WAKE_LOOKAHEAD_MS) break;
-                // check if we've reached or gone past setpoint
-                // if ((lvl * sign) > ((int)status.setpoint * sign))
-                // {
-                    // lvl = status.setpoint;
-                // }
-                lvl = flexclamp(lvl, status.actual_level, status.setpoint);
+                // get test level
+                int next_lvl_unclamped = lvl + sign * (int)tick_inc_array[lvl];
+                lvl =  flexclamp(next_lvl_unclamped, status.actual_level, status.setpoint);
+                
+
                 // get iterable copy so we avoid type punning shenanigans
                 uint8_t future_level_array[sizeof(level_t)];
                 level_t future_el = get_level_el(lvl, status, full_power);
@@ -693,6 +690,7 @@ void app_main(void)
                 for (int ch = 0; ch < sizeof(level_t); ch++)
                 {
                     if (future_level_array[ch] > 0)
+                        // ensure channel does not switch completely off
                         min_level_array[ch] = 1;
                 }
             }
@@ -705,7 +703,6 @@ void app_main(void)
             // tick increment
             int act = status.actual_level;
             int inc = (int)tick_inc_array[status.actual_level] * sign;
-
             // we need to make sure we never overshoot
             status.actual_level = flexclamp(act + inc, act, status.setpoint);
         }
@@ -728,9 +725,13 @@ void app_main(void)
                 idle_reawake_interval = _uMIN(IDLE_UPDATE_INTERVAL_DURING_COOLDOWN_MS, max_idle_reawake_interval);
             }
             else
+            {
                 idle_reawake_interval = _uMIN(MAX_IDLE_UPDATE_INTERVAL_AFTER_COOLDOWN_MS, max_idle_reawake_interval);
+            }
+            // set reawake time
             reawake_time = reftime + (uint64_t)idle_reawake_interval;
             ESP_LOGD(TAG, "Idle reawake %lu reftime %lu idle_start %lu cd %lu", idle_reawake_interval, reftime, idle_start_time, cooldown_duration);
+
             if (configbits & CONFIGBIT_RECEIVE_ESPNOW)
             {
                 // we don't want double awakening if we're receiving regular updates so we add a bit extra to accommodate network latency
@@ -747,6 +748,7 @@ void app_main(void)
             idle_sends += 1;
             if (!(idlecount & 0x3F))
             {
+                // log RAM situation every 1000 loops
                 ESP_LOGI(TAG, "Min free heap %i", heap_caps_get_minimum_free_size(MALLOC_CAP_8BIT));
                 ESP_LOGI(TAG, "Free heap %i", heap_caps_get_free_size(MALLOC_CAP_8BIT));
             }
@@ -787,37 +789,41 @@ void app_main(void)
         // 0-10V
         if (configbits & CONFIGBIT_USE_0_10v1)
         {
-            zeroten1_lvl_to_send = (status.level_overrides.zeroten1 == -1) ? level_el.zeroten1_lvl : status.level_overrides.zeroten1;
+            int16_t override = status.level_overrides.zeroten1;
+            zeroten1_lvl_to_send = (override == -1) ? level_el.zeroten1_lvl : override;
             if (!status.power_on)
+            {
                 zeroten1_lvl_to_send = 0;
+            }
             set_0_10v_level(pwm1, zeroten1_lvl_to_send);
+            
+            if (configbits & CONFIGBIT_USE_0_10v2)
+            {
+                int16_t override = status.level_overrides.zeroten2;
+                zeroten2_lvl_to_send = (override == -1) ? level_el.zeroten2_lvl : override;
+                if (!status.power_on)
+                {
+                    zeroten2_lvl_to_send = 0;
+                }
+                set_0_10v_level(pwm2, zeroten2_lvl_to_send);
+            }
+            else
+            {
+                set_zero_duty_pwm_channel(pwm2);
+            }
         }
         else
         {
-            set_0_10v_level(pwm1, 0);
-            set_0_10v_level(pwm2, 0);
+            // we can't use channel 2 without channel 1 so stop both
+            set_zero_duty_pwm_channel(pwm1);
+            set_zero_duty_pwm_channel(pwm2);
         }
 
-        if (configbits & CONFIGBIT_USE_0_10v2)
-        {
-            zeroten2_lvl_to_send = (status.level_overrides.zeroten2 == -1) ? level_el.zeroten2_lvl : status.level_overrides.zeroten2;
-            if (!status.power_on)
-                zeroten2_lvl_to_send = 0;
-            set_0_10v_level(pwm2, zeroten2_lvl_to_send);
-        }
 
         // DALI
 
-        // see if any channels on
-        bool dali_bus_idle = false;
-        // for (int i = 0; i < 6; i++)
-        // {
-        //     if (level_el.dali_lvl[i] > 0 || !already_off[i] || status.level_overrides.dali[i] > 0)
-        //     {
-        //         dali_bus_idle = false;
-        //     }
-        // }
-        if (!dali_bus_idle && (configbits & CONFIGBIT_USE_DALI) && dali_take_mutex(dali_transceiver, 0))
+        // if we're using DALI use mutex to make sure we're uninterruped by any dali config commands from the REST API
+        if ((configbits & CONFIGBIT_USE_DALI) && dali_take_mutex(dali_transceiver, 0))
         {
             // check for any DALI broadcast commands -> we don't need to bother with short addresses
             dali_broadcast = -1;
@@ -870,7 +876,10 @@ void app_main(void)
         {
             // We are using relays so bother logging them
             if (!(levellog_count & 7))
+            {
+                // log legend every 8 logs
                 ESP_LOGI(TAG, "Lvl-> SP PWR | SRCE N | 0-10v1 0-10v2 DALIA DALIB DALIC DALID DALIE DALIF ESPN Rly1 Rly2    Fade    TLT   LT Wake");
+            }
             ESP_LOGI(TAG, "%3.1u->%3.1d %s | %s %1.i |    %s    %s   %s   %s   %s   %s   %s   %s  %s  %s  %s %7.1i %6.1lu %4.1i  %3.1lu",
                      status.actual_level,
                      status.setpoint,
@@ -897,7 +906,10 @@ void app_main(void)
         {
             // We're not using relay so don't bother logging them
             if (!(levellog_count & 7))
+            {
+                // log legend every 8 logs
                 ESP_LOGI(TAG, "Lvl-> SP PWR | SRCE N | 0-10v1 0-10v2 DALIA DALIB DALIC DALID DALIE DALIF ESPN     Fade    TLT   LT Wake");
+            }
             ESP_LOGI(TAG, "%3.1u->%3.1d %s | %s %1.i |    %s    %s   %s   %s   %s   %s   %s   %s  %s  %7.1i %6.1lu %4.1i  %3.1lu",
                      status.actual_level,
                      status.setpoint,

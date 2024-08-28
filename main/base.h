@@ -104,6 +104,7 @@ typedef struct {
 #define DALI_COMMAND_SET_POWER_ON_LEVEL 3
 #define DALI_COMMAND_GET_POWER_ON_LEVEL 0x43
 #define DALI_COMMAND_SET_FADE_TIME 5
+#define DALI_COMMAND_GET_FADE_TIME 0x45
 
 typedef struct {
     uint16_t time;
