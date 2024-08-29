@@ -10,7 +10,8 @@
 
 #include "dali_transceiver.h"
 
-typedef struct {
+typedef struct
+{
     uint8_t command;
     uint8_t address;
     uint8_t value;
@@ -18,7 +19,8 @@ typedef struct {
     TaskHandle_t notify_task;
 } dali_command_t;
 
-typedef struct {
+typedef struct
+{
     int16_t value;
     uint16_t err;
 } dali_command_return_t;

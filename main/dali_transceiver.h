@@ -9,10 +9,10 @@
 #include "dali_transmit.h"
 #include "dali_edgeframe_parser.h"
 #include "edgeframe_logger.h"
-// #import 
+// #import
 
-
-typedef struct {
+typedef struct
+{
     uint8_t receive_gpio_pin;
     uint8_t transmit_gpio_pin;
     uint8_t invert_input;
@@ -41,7 +41,6 @@ bool stop_receiver_and_clear_queues(dali_transceiver_handle_t handle);
 
 uint32_t dali_transmit_frame(dali_transceiver_handle_t handle, uint8_t firstbyte, uint8_t secondbyte, int queuefull_timeout);
 
-
 BaseType_t dali_transmit_frame_and_wait(dali_transceiver_handle_t handle, uint8_t firstbyte, uint8_t secondbyte, TickType_t ticks_to_wait);
 
 dali_frame_t dali_transmit_frame_and_wait_for_backward_frame(dali_transceiver_handle_t handle, uint8_t firstbyte, uint8_t secondbyte, TickType_t ticks_to_wait);
@@ -67,6 +66,10 @@ esp_err_t dali_query_fade_time(dali_transceiver_handle_t handle,
 
 esp_err_t dali_set_fade_time(dali_transceiver_handle_t handle,
                              uint8_t short_address, uint8_t fade_time);
+
+esp_err_t dali_set_group(dali_transceiver_handle_t handle, uint8_t short_address, uint8_t group);
+
+esp_err_t dali_reset_device(dali_transceiver_handle_t handle, uint8_t short_address);
 
 esp_err_t dali_get_power_on_level(dali_transceiver_handle_t handle, uint8_t short_address, uint8_t *level);
 

@@ -9,7 +9,7 @@
 #include "nvs.h"
 
 // #ifndef min
-    // #define min(a,b) ((a) < (b) ? (a) : (b))
+// #define min(a,b) ((a) < (b) ? (a) : (b))
 // #endif
 
 #define RESISTOR_CHANGE_NOTIFY_INDEX 2
@@ -31,7 +31,6 @@
 #define SETPOINT_SOURCE_INIT 6
 
 #define GET_SETTING_NOT_FOUND 0x80000000
-
 
 #define CONFIGBIT_USE_RELAY1 0x1
 #define CONFIGBIT_USE_RELAY2 0x2
@@ -57,7 +56,8 @@ extern char logbuffer[LOGBUFFER_SIZE + 16];
 
 extern int logbufferpos;
 
-typedef struct {
+typedef struct
+{
     uint8_t zeroten1_lvl;
     uint8_t zeroten2_lvl;
     uint8_t dali_lvl[6];
@@ -69,20 +69,23 @@ typedef struct {
     uint8_t b;
 } level_t;
 
-typedef struct {
+typedef struct
+{
     uint8_t fadetime_float; // Fadetime == ((x & 0xF) * (1 << ((x >> 4) & 0xF)) ) ms
     uint8_t setpoint_source;
     uint8_t setpoint;
 } setpoint_notify_t;
 
-typedef struct {
+typedef struct
+{
     int16_t dali[6];
     int16_t zeroten1;
     int16_t zeroten2;
     int16_t espnow;
 } level_overrides_t;
 
-typedef struct {
+typedef struct
+{
     uint8_t setpoint;
     uint8_t setpoint_source;
     uint8_t power_on;
@@ -97,7 +100,6 @@ typedef struct {
 
 // extern volatile level_t levellut[255];
 
-
 #define DALI_COMMAND_COMMISSION 1
 #define DALI_COMMAND_FIND_NEW_DEVICES 4
 #define DALI_COMMAND_SET_FAILSAFE_LEVEL 2
@@ -105,19 +107,23 @@ typedef struct {
 #define DALI_COMMAND_GET_POWER_ON_LEVEL 0x43
 #define DALI_COMMAND_SET_FADE_TIME 5
 #define DALI_COMMAND_GET_FADE_TIME 0x45
+#define DALI_COMMAND_ADD_TO_GROUP 6
+#define DALI_COMMAND_RESET_DEVICE 7
 
-typedef struct {
+typedef struct
+{
     uint16_t time;
     int8_t edgetype;
 } edge_t;
 
-typedef struct {
+typedef struct
+{
     edge_t edges[64];
     uint8_t length;
-}
-edgeframe;
+} edgeframe;
 
-typedef struct {
+typedef struct
+{
     QueueHandle_t queue;
     uint8_t gpio_pin;
     gptimer_handle_t timer;
@@ -131,7 +137,8 @@ typedef struct {
     // uint64_t edgeframe_startcount;
 } edgeframe_isr_ctx_t;
 
-typedef struct {
+typedef struct
+{
     uint8_t gpio_pin;
     uint8_t state;
     uint16_t data;
@@ -147,7 +154,8 @@ typedef struct {
     BaseType_t taskawoken;
 } dali_transmit_isr_ctx;
 
-typedef struct {
+typedef struct
+{
     uint8_t number;
     gptimer_handle_t timer;
     dali_transmit_isr_ctx *ctx;
@@ -155,27 +163,28 @@ typedef struct {
     uint16_t frameidcounter;
 } dali_transmitter_handle_t;
 
-
-typedef struct {
+typedef struct
+{
     QueueHandle_t dali_received_frame_queue;
     QueueHandle_t dali_command_queue;
     dali_transmitter_handle_t transmitter;
     uint32_t frameidpass;
-    edgeframe_isr_ctx_t* edgeframe_isr_ctx;
+    edgeframe_isr_ctx_t *edgeframe_isr_ctx;
     TaskHandle_t mainloop_task;
     SemaphoreHandle_t bus_mutex;
 } dali_transceiver_t;
 
 typedef struct dali_transceiver_t *dali_transceiver_handle_t;
 
-typedef struct {
+typedef struct
+{
     TaskHandle_t mainloop_task;
     level_overrides_t *level_overrides;
     QueueHandle_t dali_command_queue;
     device_status_t *status;
 } networking_ctx_t;
 
-void build_nvs_key_for_gpio_gain(int gpio, char* keybuf);
+void build_nvs_key_for_gpio_gain(int gpio, char *keybuf);
 
 int32_t _MAX(int32_t a, int32_t b);
 
@@ -201,10 +210,10 @@ void initialise_logbuffer();
 
 int log_string(const char *logstring, int bytes_to_log, bool addtime);
 
-typedef struct {
+typedef struct
+{
     const char name[24];
-    const int* array;
+    const int *array;
 } api_endpoint_t;
 
 #endif // base_H
-

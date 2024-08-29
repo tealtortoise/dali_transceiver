@@ -52,7 +52,6 @@ static const char *TAG = "http server";
 
 #define NO_DIGITS_FOUND -98765413
 
-
 static device_status_t *status;
 
 static char uri[64];
@@ -806,13 +805,51 @@ static esp_err_t dali_commands_handler(httpd_req_t *req)
     }
     else if (strcmp(substrings[1], "commission") == 0)
     {
-        command.command = DALI_COMMAND_COMMISSION;
-        ESP_LOGI(TAG, "Commissioning all devices assigning short address from %d", command.value);
+        if (get)
+        {
+            not_allowed = true;
+        }
+        else
+        {
+            command.command = DALI_COMMAND_COMMISSION;
+            ESP_LOGI(TAG, "Commissioning all devices assigning short address from %d", command.value);
+        }
     }
     else if (strcmp(substrings[1], "find-new-devices") == 0)
     {
-        command.command = DALI_COMMAND_FIND_NEW_DEVICES;
-        ESP_LOGI(TAG, "Finding new devices - assigning short addresses from %d", command.value);
+        if (get)
+        {
+            not_allowed = true;
+        }
+        else
+        {
+            command.command = DALI_COMMAND_FIND_NEW_DEVICES;
+            ESP_LOGI(TAG, "Finding new devices - assigning short addresses from %d", command.value);
+        }
+    }
+    else if (strcmp(substrings[1], "add-to-group") == 0)
+    {
+        if (get)
+        {
+            not_allowed = true;
+        }
+        else
+        {
+            command.command = DALI_COMMAND_ADD_TO_GROUP;
+            ESP_LOGI(TAG, "Adding short addr %d to group %d", command.address, command.value);
+        }
+    }
+    else if (strcmp(substrings[1], "reset-device") == 0)
+    {
+        if (get)
+        {
+            not_allowed = true;
+        }
+        else
+        {
+            command.command = DALI_COMMAND_RESET_DEVICE;
+            ESP_LOGI(TAG, "Resetting device addr %d to default settings", command.address);
+        }
     }
     else
     {
@@ -931,9 +968,9 @@ static const httpd_uri_t post_ota = {
     .handler = otaupdate,
     .user_ctx = NULL};
 
-
-static void nullfree(void* c)
-{}
+static void nullfree(void *c)
+{
+}
 static httpd_handle_t start_webserver(networking_ctx_t *ctx)
 {
     httpd_handle_t server = NULL;
@@ -988,7 +1025,7 @@ static esp_err_t stop_webserver(httpd_handle_t server)
 static void disconnect_handler(void *arg, esp_event_base_t event_base,
                                int32_t event_id, void *event_data)
 {
-    handler_ctx_t *ctx = (handler_ctx_t*) arg;
+    handler_ctx_t *ctx = (handler_ctx_t *)arg;
     if (ctx->server)
     {
         ESP_LOGI(TAG, "Stopping webserver");

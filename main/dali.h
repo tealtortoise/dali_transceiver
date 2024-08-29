@@ -25,7 +25,8 @@
 
 #define DALI_COMMAND_RETURN_INDEX 2
 
-typedef struct {
+typedef struct
+{
     uint8_t firstbyte;
     uint8_t secondbyte;
     uint8_t type;
@@ -34,25 +35,23 @@ typedef struct {
 static const dali_frame_t DALI_NO_FRAME = {
     .firstbyte = 0,
     .secondbyte = 0,
-    .type = DALI_NO_FRAME_TYPE
-};
+    .type = DALI_NO_FRAME_TYPE};
 
-typedef struct {
+typedef struct
+{
     dali_frame_t frame;
     TaskHandle_t notify_task;
     int32_t frameid;
 } dali_transmit_job;
 
-typedef struct {
+typedef struct
+{
     // const rmt_rx_done_event_data_t *event_data;
     rmt_symbol_word_t received_symbols[RMT_RECEIVE_BUFFER_SIZE_SYMBOLS];
     size_t num_symbols;
     // dali_frame_t outgoing;
     // uint32_t num;
 } dali_rmt_received_frame_t;
-
-
-
 
 #define EDGETYPE_RISING 1
 #define EDGETYPE_FALLING 0
@@ -72,7 +71,6 @@ typedef struct {
 #define DALI_FIRSTBYTE_VERIFY_SHORT_ADDRESS 0b10111001
 #define DALI_FIRSTBYTE_SET_DTR 0b10100011
 #define DALI_FIRSTBYTE_WITHDRAW 0b10101011
-
 
 #define DALI_SECONDBYTE_COMMAND_RESET 0x20
 #define DALI_SECONDBYTE_COMMAND_OFF 0x00
@@ -113,7 +111,7 @@ void log_dali_frame_prefix(dali_frame_t frame, char *prefix);
 
 #pragma once
 
-#endif 
+#endif
 
 /*
 // Type of Addresses Byte Description
@@ -244,10 +242,10 @@ void log_dali_frame_prefix(dali_frame_t frame, char *prefix);
 // 255 YAAA AAA1 1111 1111 QUERY EXTENDED VERSION NUMBER
 // 272 1100 0001 0000 0110 ENABLE DEVICE TYPE 6
 
-// Note Repeat of DALI commands 
+// Note Repeat of DALI commands
 // ----------------------------
 
-// According to IEC 60929, a DALI Master has to repeat several commands within 100 ms, so that DALI-Slaves will execute them. 
+// According to IEC 60929, a DALI Master has to repeat several commands within 100 ms, so that DALI-Slaves will execute them.
 
 // The DALI Master Terminal KL6811 repeats the commands 32dez to 128dez, 258dez and 259dez (bold marked) automatically to make the the double call from the user program unnecessary.
 
@@ -259,7 +257,7 @@ void log_dali_frame_prefix(dali_frame_t frame, char *prefix);
 // Type DEC Type HEX Name Comments
 // 128 0x80 Unknown Device. If one of the devices below don�t apply
 // 129 0x81 Switch Device A Wall-Switch based Controller including, but not limited to ON/OFF devices, Scene switches, dimming device.
-// 130 0x82 Slide Dimmer An analog/positional dimming controller 
+// 130 0x82 Slide Dimmer An analog/positional dimming controller
 // 131 0x83 Motion/Occupancy Sensor. A device that indicates the presence of people within a control area.
 // 132 0x84 Open-loop daylight Controller. A device that outputs current light level and/or sends control messages to actuators based on light passing a threshold.
 // 133 0x85 Closed-loop daylight controller. A device that outputs current light level and/or sends control messages to actuators based on a change in light level.

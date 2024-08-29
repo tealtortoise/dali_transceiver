@@ -334,7 +334,7 @@ dali_transceiver_handle_t setup_dali(networking_ctx_t *networking_ctx)
     transceiver_config.invert_output = DALI_DONT_INVERT;
     transceiver_config.transmit_queue_size_frames = 1;
     transceiver_config.receive_queue_size_frames = 16;
-    transceiver_config.enable_receiving = false;
+    transceiver_config.enable_receiving = true;
     transceiver_config.receive_gpio_pin = RX_GPIO;
     transceiver_config.transmit_gpio_pin = TX_GPIO;
     transceiver_config.parser_config.forward_frame_action = DALI_PARSER_ACTION_LOG;
@@ -395,7 +395,8 @@ void check_partitions()
     }
 }
 
-level_t get_level_el(uint8_t level, device_status_t status, uint16_t full_power){
+level_t get_level_el(uint8_t level, device_status_t status, uint16_t full_power)
+{
     if (status.actual_level == 0)
     {
         // we need to always ensure zero is off regardless of full_power setting
@@ -567,7 +568,7 @@ void app_main(void)
     int idle_sends = 0;
     uint32_t idle_start_time = reftime;
     int future_level;
-    uint8_t min_level_array[sizeof(level_t)] = { 0 };
+    uint8_t min_level_array[sizeof(level_t)] = {0};
     uint8_t start_of_fade_level = 0;
     int looptime_outside_tolerance_count = 0;
 
@@ -594,8 +595,8 @@ void app_main(void)
         }
         while (1)
         {
-            //s
-            // spin until next tick or new setpoint received 
+            // s
+            //  spin until next tick or new setpoint received
             //
 
             received = xTaskNotifyWaitIndexed(NEW_SETPOINT_NOTIFY_IDX, 0, 0, &recv_value, 1);
@@ -617,17 +618,18 @@ void app_main(void)
                 random_looptime = (rand() & 127);
                 tick_inc = 1;
                 configbits = get_setting("configbits");
-                switch (status.fadetime_ms){
-                    case USE_DEFAULT_FADETIME:
-                        fadetime = get_setting("default_fade");
-                        break;
-                    case USE_SLOW_FADETIME:
-                        fadetime = get_setting("slow_fade");
-                        break;
-                    default:
-                        fadetime = status.fadetime_ms;
+                switch (status.fadetime_ms)
+                {
+                case USE_DEFAULT_FADETIME:
+                    fadetime = get_setting("default_fade");
+                    break;
+                case USE_SLOW_FADETIME:
+                    fadetime = get_setting("slow_fade");
+                    break;
+                default:
+                    fadetime = status.fadetime_ms;
                 }
-                if (fadetime < 8) 
+                if (fadetime < 8)
                     // it's basically no fade lets avoid any divide by zeros
                     fadetime = 8;
 
@@ -676,11 +678,11 @@ void app_main(void)
 
                 // check to see if we've gone far enough ahead
                 time_acc += tlt_array[lvl];
-                if (time_acc > BALLAST_WAKE_LOOKAHEAD_MS) break;
+                if (time_acc > BALLAST_WAKE_LOOKAHEAD_MS)
+                    break;
                 // get test level
                 int next_lvl_unclamped = lvl + sign * (int)tick_inc_array[lvl];
-                lvl =  flexclamp(next_lvl_unclamped, status.actual_level, status.setpoint);
-                
+                lvl = flexclamp(next_lvl_unclamped, status.actual_level, status.setpoint);
 
                 // get iterable copy so we avoid type punning shenanigans
                 uint8_t future_level_array[sizeof(level_t)];
@@ -695,7 +697,7 @@ void app_main(void)
                         min_level_array[ch] = 1;
                 }
             }
-            
+
             // prepare next loop
             reawake_time = reftime + tlt_array[status.actual_level];
             idle_sends = 0;
@@ -797,7 +799,7 @@ void app_main(void)
                 zeroten1_lvl_to_send = 0;
             }
             set_0_10v_level(pwm1, zeroten1_lvl_to_send);
-            
+
             if (configbits & CONFIGBIT_USE_0_10v2)
             {
                 int16_t override = status.level_overrides.zeroten2;
@@ -819,7 +821,6 @@ void app_main(void)
             set_zero_duty_pwm_channel(pwm1);
             set_zero_duty_pwm_channel(pwm2);
         }
-
 
         // DALI
 
