@@ -22,30 +22,37 @@
     </header>
     <main class="loading">
     <div id="offbutton-box">
-        <button class="levelbutton grey" id="buttonoff">All Power Off<span></span></button>
-        <button class="levelbutton grey slow" id="sbuttonoff">2 Min Delay</button>
+        <button class="base levelbutton grey" id="buttonoff">All Power Off<span></span></button>
+        <button class="base levelbutton grey slow" id="sbuttonoff">2 Min Delay</button>
     </div>
     <div id="onbutton-box">
-        <button class="levelbutton lightgrey" id="buttonon">Turn Power On...<span id="poweron-level">--</span></button>
-        <button class="levelbutton lightgrey slow" id="sbuttonon"> </button>
+        <button class="base levelbutton lightgrey" id="buttonon">Turn Power On...<span id="poweron-level">--</span></button>
+        <button class="base levelbutton lightgrey slow" id="sbuttonon"> </button>
         <div id="offmessage">
         </div>
     </div>
     <div class="levelbutton-box" id="levelbutton-box">
-        <button class="levelbutton magenta" level="254">%s<span>100%</span></button>
-        <button class="levelbutton magenta slow" level="254">Slow</button>
-        <button class="levelbutton purple" level="240" id="preset5">%s<span></span></button>
-        <button class="levelbutton purple slow" level="240" id="spreset5">Slow</button>
-        <button class="levelbutton teal" level="220" id="preset4">%s<span></span></button>
-        <button class="levelbutton teal slow" level="220" id="spreset4">Slow</button>
-        <button class="levelbutton green" level="180" id="preset3">%s<span></span></button>
-        <button class="levelbutton green slow" level="180" id="spreset3">Slow</button>
-        <button class="levelbutton yellow" level="30" id="preset2">%s<span></span></button>
-        <button class="levelbutton yellow slow" level="30" id="spreset2">Slow</button>
-        <button class="levelbutton orange" level="10" id="preset1">%s<span></span></button>
-        <button class="levelbutton orange slow " level="10" id="spreset1">Slow</button>
-        <button class="levelbutton red" level="0" id="preset0">%s<span>0%</span></button>
-        <button class="levelbutton red slow" level="0" id="spreset0">Slow</button>
+        <button class="base levelbutton magenta" level="254">%s<span>100%</span></button>
+        <button class="base levelbutton magenta slow" level="254">Slow</button>
+        <button class="base levelbutton purple" level="240" id="preset5">%s<span></span></button>
+        <button class="base levelbutton purple slow" level="240" id="spreset5">Slow</button>
+        <button class="base levelbutton teal" level="220" id="preset4">%s<span></span></button>
+        <button class="base levelbutton teal slow" level="220" id="spreset4">Slow</button>
+        <button class="base levelbutton green" level="180" id="preset3">%s<span></span></button>
+        <button class="base levelbutton green slow" level="180" id="spreset3">Slow</button>
+        <button class="base levelbutton yellow" level="30" id="preset2">%s<span></span></button>
+        <button class="base levelbutton yellow slow" level="30" id="spreset2">Slow</button>
+        <button class="base levelbutton orange" level="10" id="preset1">%s<span></span></button>
+        <button class="base levelbutton orange slow " level="10" id="spreset1">Slow</button>
+        <button class="base levelbutton red" level="0" id="preset0">%s<span>0%</span></button>
+        <button class="base levelbutton red slow" level="0" id="spreset0">Slow</button>
+    </div>
+    <div class="fadespeed-box">
+        <h2 id="fadetitle">Slow fade speed <span id="currentfade">(<span id="currentfadeinner"></span>s)</span></h2>
+        <button class="base fadebutton fastfade" speed="10" id="fastfade">10sec</button>
+        <button class="base fadebutton medfade" speed="30" id="medfade">30s</button>
+        <button class="base fadebutton slowfade" speed="180" id="slowfade">3min</button>
+        <button class="base fadebutton vslowfade" speed="900" id="vslowfade">15min</button>
     </div>
     <div class="slidecontainer">
         <span id="ajaxlevel">--</span><input type="range" min="0" max="254" value="50" class="slider" id="levelslider">

@@ -368,6 +368,7 @@ static esp_err_t otaupdate(httpd_req_t *req)
             {
                 ESP_LOGI(TAG, "Setting stale flag");
                 status->stale_flag = STATUS_STALE_FLAG;
+                // esp_system_abort("Just wanted to restart properly");
             }
             esp_restart();
             return ESP_OK;
@@ -580,7 +581,7 @@ static esp_err_t rest_channel_override_handler(httpd_req_t *req)
 static esp_err_t view_luts(httpd_req_t *req)
 {
     httpd_resp_set_type(req, "text/plain");
-    sprintf(httpd_temp_buffer, "Lvl 0-10v1 0-10v2 DALIA DALIB DALIC DALID DALIE DALIF ESPNOW Rly1 Rly2   R   G   B\n");
+    sprintf(httpd_temp_buffer, "Lvl 0-10v1 0-10v2 DALIA DALIB DALIC DALID DALIE DALIF DALIG DALIH ESPNOW Rly1 Rly2   R   G   B\n");
     httpd_resp_sendstr_chunk(req, httpd_temp_buffer);
     networking_ctx_t *ctx = httpd_get_global_user_ctx(req->handle);
     static_assert(DALI_CHANNELS == 8, "DALI Channels != 8");

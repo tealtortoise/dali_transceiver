@@ -10,7 +10,9 @@ function all(){
     let poweronind = document.getElementById("poweron-level");
     let offmessage_el = document.getElementById("offmessage");
     let presetbuttons = Array.from(document.getElementsByClassName("levelbutton"));
+    let fadebuttons = Array.from(document.getElementsByClassName("fadebutton"));
 
+    let currentfade_el = document.getElementById("currentfadeinner");
     let levelbox = document.getElementById("levelbutton-box");
     let offbox = document.getElementById("offbutton-box");
     let onbox = document.getElementById("onbutton-box");
@@ -22,15 +24,38 @@ function all(){
         return Math.floor(Math.pow(10, (byte-1) * 3.0 / 253.0) * 10 + 0.5) / 100;
     }
 
-    function stylePresets(level) {
-        presetbuttons.forEach(el => {
-            if (el.classList.contains("slow")) return;
-            if (el.getAttribute("level") == level) {
+    function stylePresets(level, fade) {
+        if (level !== undefined){
+            presetbuttons.forEach(el => {
+                let bl = parseInt(el.getAttribute("level"));
+                level = parseInt(level);
+                let isinrange = (bl >= (level - 2)) && (bl <= (level + 2));
+                if (el.classList.contains("slow")) {
+                    if (isinrange) {
+                        el.innerHTML = "";
+                        el.style.opacity = "0.4";
+                    } else {
+                        el.innerHTML = "Slow";
+                        el.style.opacity = "1.0";
+                    }
+                } else {
+                    if (isinrange) {
+                        el.classList.add("selected");
+                    } else {
+                        el.classList.remove("selected");
+                    }
+                }
+            });
+        }
+        if (fade === undefined) return;
+        fadebuttons.forEach(el => {
+            if (el.getAttribute("speed") == fade) {
                 el.classList.add("selected");
             } else {
                 el.classList.remove("selected");
             }
         });
+        currentfade_el.innerHTML = `${fade}`;
     }
 
     function get(uri, el) {
@@ -119,7 +144,7 @@ function all(){
         if (event.cancelable == true){
             return;
         }
-        // send(sliderval, undefined, undefined, "slider");
+        send(sliderval, undefined, undefined, "slider");
         if (!ontimeout){
             debug.innerHTML = "slider.e " + sliderval + " " + event.cancelable;
             ontimeout = 1;
@@ -170,6 +195,13 @@ function all(){
             level = 1;
         }
         return send(level, false, uri, "sendpoweron");
+    }
+
+    function fadeButtonFn(event) {
+        let element = event.srcElement;
+        let speed = element.getAttribute("speed");
+        send(speed * 1000, undefined, "/nvs/slow_fade");
+        stylePresets(undefined, speed);
     }
 
     function buttonPressFn(event, v2) {
@@ -230,6 +262,10 @@ function all(){
         element.onclick = buttonPressFn;
     });
 
+    Array.from(document.getElementsByClassName("fadebutton")).forEach(element => {
+        element.onclick = fadeButtonFn;
+    });
+
     document.getElementById("go").onclick = sliderSendFn;
     slider.addEventListener("input", sliderChangeFn);
 
@@ -262,8 +298,12 @@ function all(){
                 }
             }
         });
+        let fadetime_promise = get("/nvs/slow_fade").then((st) => 
+        {
+            stylePresets(undefined, st / 1000);
+        });
         window.setTimeout(get_state, 20000);
-        return setpoint_promise;
+        return Promise.all([fadetime_promise, setpoint_promise]);
     }
     preset_promises.push(get_state(true));
     
