@@ -57,6 +57,8 @@ dalic_address,-1
 dalid_address,-1
 dalie_address,-1
 dalif_address,-1
+dalig_address,-1
+dalih_address,-1
 startup_level,0
 idle_intvl_ms,180000
 idle_cooldown,45000

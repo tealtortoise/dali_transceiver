@@ -44,6 +44,10 @@
 #define ALARM_TYPE_UP_ONLY 1
 #define ALARM_TYPE_DOWN_ONLY 2
 
+
+
+#define DALI_CHANNELS 8
+
 #define STATUS_STALE_FLAG 0x12345678
 
 extern nvs_handle_t nvs_handle_;
@@ -60,7 +64,7 @@ typedef struct
 {
     uint8_t zeroten1_lvl;
     uint8_t zeroten2_lvl;
-    uint8_t dali_lvl[6];
+    uint8_t dali_lvl[DALI_CHANNELS];
     uint8_t espnow_lvl;
     uint8_t relay1;
     uint8_t relay2;
@@ -78,7 +82,7 @@ typedef struct
 
 typedef struct
 {
-    int16_t dali[6];
+    int16_t dali[DALI_CHANNELS];
     int16_t zeroten1;
     int16_t zeroten2;
     int16_t espnow;

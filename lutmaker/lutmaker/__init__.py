@@ -53,15 +53,17 @@ class Channel(object):
 
 COLUMNS = [
     "level",
-    "zeroten1",  # F90s
+    "zeroten1",
     "zeroten2",
-    "dalia",  # hexagons 3
-    "dalib",  # tv5000 1
-    "dalic",  # tv6500 0
-    "dalid",  # back 6500 2
+    "dalia",
+    "dalib",
+    "dalic",
+    "dalid",
     "dalie",
     "dalif",
-    "espnow",  # piano
+    "dalig",
+    "dalih",
+    "espnow",
     "relay1",
     "relay2",
     "r",

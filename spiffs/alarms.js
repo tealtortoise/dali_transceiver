@@ -1,6 +1,7 @@
 
 "use strict";
-const NUM_ALARMS = 6;
+const NUM_DALI_CHANNELS = 8;
+const NUM_ALARMS = 7;
 function all() {
     let getEl = (st) => document.getElementById(st);
     let modified = false;
@@ -175,7 +176,7 @@ function all() {
         promises.push(pushhelper("idle_cooldown",  _ => {return Math.max(0, _) * 1000}));
         promises.push(pushhelper("startup_level",  _ => {return Math.max(0, _)}));
 
-        for (let i = 0; i < NUM_ALARMS; i++) {
+        for (let i = 0; i < NUM_DALI_CHANNELS; i++) {
             let channel_el = getEl("dali" + String.fromCharCode(97 + i) + "_address");
             let channel = channel_el.value;
             send("/nvs/" + channel_el.id + "/", channel, channel_el);
@@ -270,7 +271,7 @@ function all() {
         return "";
     });
 
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < NUM_DALI_CHANNELS; i++) {
         let channel_el = getEl("dali" + String.fromCharCode(97 + i) + "_address");
         get("/nvs/" + channel_el.id + "/", channel_el);
     }

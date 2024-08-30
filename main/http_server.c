@@ -526,7 +526,7 @@ static esp_err_t rest_channel_override_handler(httpd_req_t *req)
     if (strncmp(channelname, "dali", 4) == 0)
     {
         int8_t channel_num = channelname[4] - 'a';
-        if (channel_num >= 0 && channel_num < 6)
+        if (channel_num >= 0 && channel_num < DALI_CHANNELS)
         {
             ESP_LOGI(TAG, "Getting override pointer for DALI %i", channel_num);
             override_ptr = &ctx->status->level_overrides.dali[channel_num];
@@ -536,7 +536,7 @@ static esp_err_t rest_channel_override_handler(httpd_req_t *req)
         }
         else
         {
-            ESP_LOGI(TAG, "Didn't recognise DALI channel %s must be A-F", channelname);
+            ESP_LOGI(TAG, "Didn't recognise DALI channel %s", channelname);
             return httpd_resp_send_404(req);
         }
     }
@@ -583,10 +583,11 @@ static esp_err_t view_luts(httpd_req_t *req)
     sprintf(httpd_temp_buffer, "Lvl 0-10v1 0-10v2 DALIA DALIB DALIC DALID DALIE DALIF ESPNOW Rly1 Rly2   R   G   B\n");
     httpd_resp_sendstr_chunk(req, httpd_temp_buffer);
     networking_ctx_t *ctx = httpd_get_global_user_ctx(req->handle);
+    static_assert(DALI_CHANNELS == 8, "DALI Channels != 8");
     for (int i = 0; i <= 254; i++)
     {
         level_t lev = ctx->status->lut[i];
-        sprintf(httpd_temp_buffer, "%3.1i    %3.1d    %3.1d   %3.1d   %3.1d   %3.1d   %3.1d   %3.1d   %3.1d    %3.1d  %3.1d  %3.1d %3.1d %3.1d %3.1d\n",
+        sprintf(httpd_temp_buffer, "%3.1i    %3.1d    %3.1d   %3.1d   %3.1d   %3.1d   %3.1d   %3.1d   %3.1d   %3.1d   %3.1d    %3.1d  %3.1d  %3.1d %3.1d %3.1d %3.1d\n",
                 i,
                 lev.zeroten1_lvl,
                 lev.zeroten2_lvl,
@@ -596,6 +597,8 @@ static esp_err_t view_luts(httpd_req_t *req)
                 lev.dali_lvl[3],
                 lev.dali_lvl[4],
                 lev.dali_lvl[5],
+                lev.dali_lvl[6],
+                lev.dali_lvl[7],
                 lev.espnow_lvl,
                 lev.relay1,
                 lev.relay2,
