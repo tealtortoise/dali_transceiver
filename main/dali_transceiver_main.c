@@ -100,46 +100,6 @@ int fadetime;
 
 uint32_t get_time_ms() { return (uint32_t)(esp_timer_get_time() >> 10); }
 
-// void ___calc_tickinc_and_looptime(uint64_t looptime, int dif)
-// {
-//     if (fadetime <= 50)
-//     {
-//         tick_inc = 254;
-//         target_looptime = 0;
-//         return;
-//     }
-//     calcreftime = esp_timer_get_time();
-//     ideal_time_between_levels_us = ((uint64_t)fadetime) << 10;
-//     tick_inc = 0;
-//     uint64_t intermediate = ideal_time_between_levels_us / abs(dif);
-//     if (intermediate > 180000000LL)
-//         intermediate = 180000000LL;
-//     while (tick_inc < 254)
-//     {
-//         tick_inc += 1;
-//         target_looptime = intermediate * (uint64_t)tick_inc;
-//         // fudge the numbers a bit for smoother fades at expense of accuracy
-//         if (target_looptime < MINIMUM_TARGET_LOOPTIME)
-//         {
-//             continue;
-//         }
-//         if (tick_inc == 1 && (target_looptime * 1.5) >= looptime)
-//             break;
-//         if (tick_inc == 2 && (target_looptime * 1.3) >= looptime)
-//             break;
-//         if (tick_inc == 3 && (target_looptime * 1.15) >= looptime)
-//             break;
-
-//         if (target_looptime >= looptime)
-//             break;
-//     }
-//     // ESP_LOGI(TAG, "calc: looptime %llu, tick_inc %i, %i ()", looptime,
-//     tick_inc, dif); ESP_LOGD(TAG, "Calc time %llu us", esp_timer_get_time() -
-//     calcreftime);
-// }
-
-// #define CURVE(inp) (inp * inp - (inp << 9) + 108000UL)
-
 uint32_t curve(const uint32_t input) {
     return input * input - (input << 9) + 108000UL;
 }
@@ -313,7 +273,7 @@ dali_transceiver_handle_t setup_dali(networking_ctx_t *networking_ctx) {
     transceiver_config.invert_output = DALI_DONT_INVERT;
     transceiver_config.transmit_queue_size_frames = 1;
     transceiver_config.receive_queue_size_frames = 16;
-    transceiver_config.enable_receiving = true;
+    transceiver_config.enable_receiving = false;
     transceiver_config.receive_gpio_pin = RX_GPIO;
     transceiver_config.transmit_gpio_pin = TX_GPIO;
     transceiver_config.parser_config.forward_frame_action =
@@ -844,7 +804,7 @@ void app_main(void) {
         }
         for (int i = 0; i < DALI_CHANNELS; i++) {
             if ((configbits & CONFIGBIT_USE_DALI) && dali_addresses[i] != -1) {
-                snprintf(looplog_template, 8, "   %3.1i", zeroten1_lvl_to_send);
+                snprintf(looplog_template, 8, "   %3.1i", dali_levels_to_send[i]);
                 strcat(looplog, looplog_template);
                 strcpy(looplog_template, " DALIX");
                 looplog_template[5] = 'A' + i;

@@ -1,7 +1,7 @@
 "use strict";
 
-function all(){
-    
+function all() {
+
     let debug = document.getElementById("debug");
     let slider = document.getElementById("levelslider");
     let levelind = document.getElementById('ajaxlevel');
@@ -20,16 +20,16 @@ function all(){
     const offmessage = "Alarms will NOT wake";
 
     let powerStatus = true;
-    function levelbyte_to_linear(byte){
-        return Math.floor(Math.pow(10, (byte-1) * 3.0 / 253.0) * 10 + 0.5) / 100;
+    function levelbyte_to_linear(byte) {
+        return Math.floor(Math.pow(10, (byte - 1) * 3.0 / 253.0) * 10 + 0.5) / 100;
     }
 
     function stylePresets(level, fade) {
-        if (level !== undefined){
+        if (level !== undefined) {
             presetbuttons.forEach(el => {
-                let bl = parseInt(el.getAttribute("level"));
-                level = parseInt(level);
-                let isinrange = (bl >= (level - 2)) && (bl <= (level + 2));
+                let preset_level = parseInt(el.getAttribute("level"));
+                let setpoint_level_int = parseInt(level);
+                let isinrange = (preset_level >= (setpoint_level_int - 2)) && (preset_level <= (setpoint_level_int + 2));
                 if (el.classList.contains("slow")) {
                     if (isinrange) {
                         el.innerHTML = "";
@@ -60,7 +60,7 @@ function all(){
 
     function get(uri, el) {
         const options = {
-        method: 'GET',
+            method: 'GET',
         };
         return fetch(uri, options)
             .then(response => {
@@ -82,7 +82,7 @@ function all(){
         preset_promises.push(get(uri).then((st) => {
             let button_el = document.getElementById("preset" + i);
             let slutton_el = button_el.nextElementSibling;
-            if (st >= 0){
+            if (st >= 0) {
                 button_el.setAttribute("level", st);
                 slutton_el.setAttribute("level", st);
                 button_el.childNodes[1].innerHTML = levelToPercent(st);
@@ -106,7 +106,7 @@ function all(){
         };
         let use_uri;
         // Make the PUT request using the fetch API
-        if (uri == undefined){
+        if (uri == undefined) {
             if (slow) {
                 use_uri = "/setpoint/slow";
             } else {
@@ -140,17 +140,17 @@ function all(){
         poweronind.innerHTML = percentstr;
         levelind.classList.add("updating");
         debug.innerHTML = "slider.e " + sliderval + " Cancellable: " + event.cancelable;
-        
-        if (event.cancelable == true){
+
+        if (event.cancelable == true) {
             return;
         }
         send(sliderval, undefined, undefined, "slider");
-        if (!ontimeout){
+        if (!ontimeout) {
             debug.innerHTML = "slider.e " + sliderval + " " + event.cancelable;
             ontimeout = 1;
-            setTimeout(function() {
+            setTimeout(function () {
                 ontimeout = 0;
-                if (waiting){
+                if (waiting) {
                     sliderval = slider.value;
                     // debug.innerHTML = "slider.e " + sliderval;
                     send(sliderval, undefined, undefined, "slidertimeout");
@@ -188,7 +188,7 @@ function all(){
     }
     function sendPowerOn(level) {
         let uri;
-        if (level != undefined){
+        if (level != undefined) {
             uri = "api/power/setlevel";
         } else {
             uri = "api/power";
@@ -208,8 +208,7 @@ function all(){
         console.log(event);
         let element;
         let slow;
-        if (event.srcElement.type == "submit")
-        {
+        if (event.srcElement.type == "submit") {
             element = event.srcElement;
             slow = event.srcElement.classList.contains("slow");
         } else {
@@ -239,7 +238,7 @@ function all(){
             });
             return;
         }
-        
+
         console.log(element);
         let level = element.getAttribute("level");
         slider.value = level;
@@ -269,10 +268,13 @@ function all(){
     document.getElementById("go").onclick = sliderSendFn;
     slider.addEventListener("input", sliderChangeFn);
 
-    function get_state(skip_styling){
+    function get_state(skip_styling) {
         let setpoint_promise = get("/setpoint").then((sp) => {
+            let return_value = true;
             if (!(sp >= 0)) {
                 sp = "0"
+                return_value = false;
+
             }
             if (!skip_styling) stylePresets(sp);
             let percentstr = levelToPercent(sp);
@@ -281,6 +283,7 @@ function all(){
             poweronind.innerHTML = percentstr;
             levelbyteind.innerHTML = sp;
             slider.value = sp;
+            return return_value;
         });
         get("/api/power").then((sp) => {
             powerStatus = sp == "1";
@@ -289,24 +292,42 @@ function all(){
                 setUIPowerOn();
             } else {
                 setUIPowerOff();
-                if (sp == "Timer on"){
+                if (sp == "Timer on") {
 
                     offmessage_el.innerHTML = timermessage;
                     window.setTimeout(() => {
                         offmessage_el.innerHTML = offmessage;
                     }, 60 * 1000 * 2);
                 }
+            };
+            return true;
+        });
+        let fadetime_promise = get("/nvs/slow_fade").then((st) => {
+            if (st > 0){
+                stylePresets(undefined, st / 1000);
+                return true;
             }
         });
-        let fadetime_promise = get("/nvs/slow_fade").then((st) => 
-        {
-            stylePresets(undefined, st / 1000);
+        let all = Promise.all([fadetime_promise, setpoint_promise]);
+        all.catch(() => {
+            console.log("catch");
+            document.getElementsByTagName("main")[0].classList.add("loading");
         });
-        window.setTimeout(get_state, 20000);
-        return Promise.all([fadetime_promise, setpoint_promise]);
+        all.then((r) => {
+            console.log("then", r);
+            if (r[0] && r[1]){
+                document.getElementsByTagName("main")[0].classList.remove("loading");
+                return true;
+            }
+            document.getElementsByTagName("main")[0].classList.add("loading");
+            return false;
+        });
+
+        window.setTimeout(get_state, 10000);
+        return all;
     }
     preset_promises.push(get_state(true));
-    
+
     Promise.all(preset_promises).then(() => {
         console.log("All promises resolved!");
         stylePresets(levelbyteind.innerHTML);
