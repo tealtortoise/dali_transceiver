@@ -29,7 +29,8 @@ function all() {
             presetbuttons.forEach(el => {
                 let preset_level = parseInt(el.getAttribute("level"));
                 let setpoint_level_int = parseInt(level);
-                let isinrange = (preset_level >= (setpoint_level_int - 2)) && (preset_level <= (setpoint_level_int + 2));
+                let tolerance = preset_level > 2 ? 2 : 0;
+                let isinrange = (preset_level >= (setpoint_level_int - tolerance)) && (preset_level <= (setpoint_level_int + tolerance));
                 if (el.classList.contains("slow")) {
                     if (isinrange) {
                         el.innerHTML = "";

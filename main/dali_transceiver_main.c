@@ -786,22 +786,23 @@ void app_main(void) {
         looplog[0] = 0;
         looplog_headers[0] = 0;
         strcat(looplog_headers, "Lvl-> SP PWR | SRCE N |");
-        sprintf(looplog, "%3.1u->%3.1d %s | %s %1.i | ", status.actual_level,
+        sprintf(looplog, "%3.1u->%3.1d %s | %s %1.i |", status.actual_level,
                 status.setpoint, (status.power_on) ? " ON" : "OFF",
                 source_str[status.setpoint_source & 0xF], (int)new_setpoint);
 
         if (configbits & CONFIGBIT_USE_0_10v1)
         {
-            snprintf(looplog_template, 8, "   %3.1i", zeroten1_lvl_to_send);
+            snprintf(looplog_template, 8, "    %3.1i", zeroten1_lvl_to_send);
             strcat(looplog, looplog_template);
             strcat(looplog_headers, " 0-10v1");
             if (configbits & CONFIGBIT_USE_0_10v2)
             {
-                snprintf(looplog_template, 8, "   %3.1i", zeroten2_lvl_to_send);
+                snprintf(looplog_template, 8, "    %3.1i", zeroten2_lvl_to_send);
                 strcat(looplog, looplog_template);
                 strcat(looplog_headers, " 0-10v2");
             }
         }
+        int used = 0;
         for (int i = 0; i < DALI_CHANNELS; i++) {
             if ((configbits & CONFIGBIT_USE_DALI) && dali_addresses[i] != -1) {
                 snprintf(looplog_template, 8, "   %3.1i", dali_levels_to_send[i]);
