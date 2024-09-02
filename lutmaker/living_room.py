@@ -26,7 +26,7 @@ LIVING_ROOM_CHANNELS = {
     "espnow": Channel(
         friendly_name="piano",
         type=ChannelType.INDEPENDENT,
-        points=[(0.0, 1.3), (0.05, 1.1), (0.16, 0.9), (1.0, 0.5)],
+        points=[(0.0, 4.3), (0.015, 2.8), (0.05, 2.4), (0.16, 1.5), (1.0, 0.5)],
         led=LED(vf=46, imax=650, eff=135),
         group=2,
     ),
@@ -36,7 +36,7 @@ LIVING_ROOM_CHANNELS = {
         points=[
             (0.0, 0.0),
             (0.02, 0.0),
-            (0.16, 0.8),
+            (0.16, 1.0),
             (0.23, 0.7),
             (0.45, 0.55),
             (0.6, 0.46),
@@ -48,7 +48,7 @@ LIVING_ROOM_CHANNELS = {
     "dalic": Channel(
         friendly_name="tv 6500k",
         type=ChannelType.INDEPENDENT,
-        points=[(0.0, 1.2), (0.01, 1.0), (0.02, 0.8), (0.16, 0.0), (1.0, 0.0)],
+        points=[(0.0, 2.2), (0.01, 2.0), (0.04, 1.2), (0.16, 0.0), (1.0, 0.0)],
         led=LED(imax=650, vf=33, eff=130),
         group=1,
         night_only=True,
