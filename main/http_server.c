@@ -581,14 +581,14 @@ static esp_err_t rest_channel_override_handler(httpd_req_t *req)
 static esp_err_t view_luts(httpd_req_t *req)
 {
     httpd_resp_set_type(req, "text/plain");
-    sprintf(httpd_temp_buffer, "Lvl 0-10v1 0-10v2 DALIA DALIB DALIC DALID DALIE DALIF DALIG DALIH ESPNOW Rly1 Rly2   R   G   B\n");
+    sprintf(httpd_temp_buffer, "Lvl 0-10v1 0-10v2 DALIA DALIB DALIC DALID DALIE DALIF DALIG DALIH ESPNOW Rly1 Rly2   R   G   B Pwr\n");
     httpd_resp_sendstr_chunk(req, httpd_temp_buffer);
     networking_ctx_t *ctx = httpd_get_global_user_ctx(req->handle);
     static_assert(DALI_CHANNELS == 8, "DALI Channels != 8");
     for (int i = 0; i <= 254; i++)
     {
         level_t lev = ctx->status->lut[i];
-        sprintf(httpd_temp_buffer, "%3.1i    %3.1d    %3.1d   %3.1d   %3.1d   %3.1d   %3.1d   %3.1d   %3.1d   %3.1d   %3.1d    %3.1d  %3.1d  %3.1d %3.1d %3.1d %3.1d\n",
+        sprintf(httpd_temp_buffer, "%3.1i    %3.1d    %3.1d   %3.1d   %3.1d   %3.1d   %3.1d   %3.1d   %3.1d   %3.1d   %3.1d    %3.1d  %3.1d  %3.1d %3.1d %3.1d %3.1d %5.3g\n",
                 i,
                 lev.zeroten1_lvl,
                 lev.zeroten2_lvl,
@@ -605,7 +605,8 @@ static esp_err_t view_luts(httpd_req_t *req)
                 lev.relay2,
                 lev.r,
                 lev.g,
-                lev.b);
+                lev.b,
+                lev.power);
         httpd_resp_sendstr_chunk(req, httpd_temp_buffer);
     }
     httpd_resp_send_chunk(req, httpd_temp_buffer, 0);

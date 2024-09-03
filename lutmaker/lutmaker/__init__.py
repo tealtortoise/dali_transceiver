@@ -25,14 +25,19 @@ class LED(object):
     imax: float
     vf: float
     eff: float
+    scale_max: float = 1.0
 
     @property
-    def lumens(self):
+    def usable_lumens(self):
         return self.power * self.eff
+    
+    @property
+    def lumens_at_254(self):
+        return self.power * self.eff / self.scale_max
 
     @property
     def power(self):
-        return self.imax * 0.001 * self.vf
+        return self.imax * 0.001 * self.vf * self.scale_max
 
 
 @dataclass
@@ -50,6 +55,7 @@ class Channel(object):
     @property
     def is_proportioned(self):
         return self.type == ChannelType.DIRECTED or self.type == ChannelType.RESIDUAL
+
 
 COLUMNS = [
     "level",
@@ -69,6 +75,7 @@ COLUMNS = [
     "r",
     "g",
     "b",
+    "power",
 ]
 
 # Create colour LUTs
@@ -134,26 +141,31 @@ def to_linear_with_minimum(inp: np.ndarray, minimum: float) -> np.ndarray:
     return lin
 
 
-def to_log(inp: np.ndarray) -> np.ndarray:
+def to_log(inp: np.ndarray | float) -> np.ndarray:
     # return to_log_custom(inp)
     return np.maximum(np.log10(inp * 1000) * 253.0 / 3.0 + 1.0, 0.0)
 
-def process(channels: typing.Dict[str, Channel] = {},
-            minimum_dim: float = 0.001,
-            rgb_nightlight: bool = False,
-            rgb_nightlight_colour: typing.Tuple[float, float, float] = (254, 254, 254),
-            reverse_priority: bool = False,
-            filename: str|None = None,
-            rgb_led_points: typing.List[typing.Tuple[int, typing.Tuple[int, int, int]]] = DEFAULT_COLOUR_POINTS,
-            refine_groups: typing.List[int] = [],
-            iterations: int = 400):
+
+def process(
+    channels: typing.Dict[str, Channel] = {},
+    minimum_dim: float = 0.001,
+    rgb_nightlight: bool = False,
+    rgb_nightlight_colour: typing.Tuple[float, float, float] = (254, 254, 254),
+    reverse_priority: bool = False,
+    filename: str | None = None,
+    rgb_led_points: typing.List[
+        typing.Tuple[int, typing.Tuple[int, int, int]]
+    ] = DEFAULT_COLOUR_POINTS,
+    refine_groups: typing.List[int] = [],
+    iterations: int = 400,
+):
     warnings = []
     dalivals_float = {}
     lin_flux_target = to_linear_custom(INRANGE, minimum_dim)
     lin_flux_target[0] = 0.0
-    
+
     if channels:
-        highest_flux = max((curve.led.lumens for curve in channels.values()))
+        highest_flux = max((curve.led.usable_lumens for curve in channels.values()))
         max_group = max((channel.group for channel in channels.values()))
         max_priority = max(channel.priority for channel in channels.values())
     else:
@@ -163,19 +175,28 @@ def process(channels: typing.Dict[str, Channel] = {},
 
     total_prop = [0.0] * (max_group + 1)
     print(total_prop)
+    total_power = 0.0
     if 1 and "print proportions":
         for key, channel in channels.items():
-            print(
-                f"Channel {key}: '{channel.friendly_name}': {channel.led.power}W {channel.led.lumens} ({(channel.led.lumens / highest_flux)})"
-            )
+            total_power += channel.led.power
+            if channel.led.scale_max == 1.0:
+                print(
+                    f"Channel {key}: '{channel.friendly_name}': {channel.led.power}W {channel.led.usable_lumens} ({(channel.led.usable_lumens / highest_flux)})"
+                )
+            else:
+                dali_max = int(to_log(channel.led.scale_max))
+                print(
+                    f"Channel {key}: '{channel.friendly_name}': {channel.led.power}W {channel.led.usable_lumens} at DALI {dali_max} ({(channel.led.usable_lumens / highest_flux)})"
+                )
             if not channel.night_only:
-                total_prop[channel.group] += channel.led.lumens / highest_flux
+                total_prop[channel.group] += channel.led.usable_lumens / highest_flux
 
     for group in range(max_group):
         print(f"Total group {group} daytime proportion {total_prop[group]}")
 
+    print(f"Total Available Power {total_power}W")
     lumens = [{} for _ in range(max_group + 1)]
-
+    # exit()
     groupcolumns = [[], [], [], [], []]
 
     group_offsets = [np.zeros(INRANGE.size) for _ in range(max_group + 1)]
@@ -186,6 +207,7 @@ def process(channels: typing.Dict[str, Channel] = {},
         lumensum = [np.zeros(INRANGE.size) for _ in range(max_group + 1)]
         lumensum_quantised = [np.zeros(INRANGE.size) for _ in range(max_group + 1)]
         powersum = [np.zeros(INRANGE.size) for _ in range(max_group + 1)]
+        total_powersum = np.zeros(INRANGE.size)
 
         for key in COLUMNS:
             if key not in channels:
@@ -194,31 +216,39 @@ def process(channels: typing.Dict[str, Channel] = {},
 
             # interpolate curves
             channel = channels[key]
+            ch_dali_max = int(to_log(channel.led.scale_max))
+            # if channel.led.scale_max != 1.0:
+                # ch_dali_max = 254;
             x, y = zip(*channel.points)
             # print("Processing curve ", key, x, y)
             flux_points = np.array(x, dtype=float)
             prop_points = np.array(y, dtype=float)
-            lamp_lumen_ratio = highest_flux / channel.led.lumens
+            lamp_lumen_ratio = highest_flux / channel.led.usable_lumens
             interpolated_curve = np.interp(
                 lin_flux_target, flux_points, prop_points * lamp_lumen_ratio
             )
-            raw_dali = to_log(interpolated_curve * lin_flux_target)
+            raw_dali = to_log(np.clip(interpolated_curve * lin_flux_target, 0, channel.led.scale_max))
+                # 0.0,
+                # to_log(channel.scale_max_power),
+            # )
 
-            dalivals_float[key] = np.clip(raw_dali + channel_offsets[key], 0, 254)
+            dalivals_float[key] = np.clip(raw_dali + channel_offsets[key], 0, ch_dali_max)
             channel_lumens = (
                 to_linear_with_minimum(dalivals_float[key], minimum=channel.driver_min)
-                * channel.led.lumens
+                * channel.led.lumens_at_254
             )
             channel_lumens_quantised = (
                 to_linear_with_minimum(
                     (dalivals_float[key]).astype(int), minimum=channel.driver_min
                 )
-                * channel.led.lumens
+                * channel.led.lumens_at_254
             )
             lumens[channel.group][channel.friendly_name] = channel_lumens
             lumensum[channel.group] += channel_lumens
             lumensum_quantised[channel.group] += channel_lumens_quantised
-            powersum[channel.group] += channel_lumens / channel.led.eff
+            power = channel_lumens_quantised / channel.led.eff
+            powersum[channel.group] += power
+            total_powersum += power
             if iteration == 0:
                 groupcolumns[channel.group].append(channel.friendly_name)
 
@@ -227,14 +257,14 @@ def process(channels: typing.Dict[str, Channel] = {},
                 dalivals_float[key] = INRANGE
                 continue
             saturated[key] = np.any(
-                (dalivals_float[key] == 254, dalivals_float[key] == 0), 0
+                (dalivals_float[key] == ch_dali_max, dalivals_float[key] == 0), 0
             )
 
         for group in refine_groups:
             if len(lumens[group]) == 0:
                 continue
             group_lumens = lumensum[group]
-            target_lumens = lin_flux_target * highest_flux * total_prop[group]
+            target_lumens = lin_flux_target * highest_flux * total_prop[group] * 1.015
             inc_needed = group_lumens < target_lumens
             dec_needed = group_lumens > target_lumens
             change_inc = (
@@ -267,14 +297,15 @@ def process(channels: typing.Dict[str, Channel] = {},
                 prio_change = np.zeros(INRANGE.size)
                 for ch_key in channels_in_priority:
                     # not_sat = np.logical_not(saturated[ch_key])
+                    prio_ch_max = int(to_log(channels[ch_key].led.scale_max))
                     not_sat = dalivals_float[ch_key] > 1
                     old_vals = np.clip(
-                        dalivals_float[ch_key] + channel_offsets[ch_key], 0, 254
+                        dalivals_float[ch_key] + channel_offsets[ch_key], 0, prio_ch_max
                     )
                     channel_offsets[ch_key][not_sat] += (change / num_channels)[not_sat]
                     diff = (
                         np.clip(
-                            dalivals_float[ch_key] + channel_offsets[ch_key], 0, 254
+                            dalivals_float[ch_key] + channel_offsets[ch_key], 0, prio_ch_max
                         )
                         - old_vals
                     )
@@ -422,10 +453,18 @@ def process(channels: typing.Dict[str, Channel] = {},
     dalivals_float["relay1"] = relay1_needed
     dalivals_float["relay2"] = relay2_needed
 
-    df = pd.DataFrame(dalivals_float, columns=name_columns).astype(int)
+    dalivals_float["power"] = total_powersum
+
+    dalivals_final_dtype = {}
+    for name, ary in dalivals_float.items():
+        if name in ("power",):
+            dalivals_final_dtype[name] = ary
+        else:
+            dalivals_final_dtype[name] = ary.astype(int)
+
+    df = pd.DataFrame(dalivals_final_dtype, columns=name_columns)
     df.plot(title="DALI Values")
     plt.show()
     print(df)
     if filename:
-        df.to_csv(filename, index=False)
-
+        df.to_csv(filename, index=False, float_format="%.8g")

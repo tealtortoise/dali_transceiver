@@ -7,9 +7,11 @@
 #include "driver/ledc.h"
 
 #define CALIBRATION_LINEAR 1 // simple linear 0-10v ( not implemented )
-#define CALIBRATION_GENERIC_LOG_ELDOLED 2 // 0-10v output designed for eldoled driver programmed with log curve
+#define CALIBRATION_GENERIC_LOG_ELDOLED_ECO 2 // 0-10v output designed for eldoled 1% driver programmed with log curve
+#define CALIBRATION_GENERIC_LOG_ELDOLED_SOLO 5 // 0-10v output designed for eldoled 0.1% driver programmed with log curve
 #define CALIBRATION_PWM_LOG 3 // logarithmic output designed for directly modulating LED down to 0.1%
 #define CALIBRATION_LOOKUP_NVS 4 // As generic eldoled but with gain calibration if stored in flash
+#define CALIBRATION_LOOKUP_NVS_ECODRIVE 6 // As generic eldoled but with gain calibration if stored in flash
 
 typedef struct {
     uint16_t lut[255];

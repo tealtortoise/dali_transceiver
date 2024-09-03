@@ -78,13 +78,15 @@ FULLTHRIVE_CHANNELS = {
 
 F90_PROP = 3.0
 FADE = 0.04
+F90_PRIORITY = 0
 
 LESSTHRIVE_CHANNELS = {
     "dalia": Channel(
         friendly_name="5700k Thrive",
         type=ChannelType.INDEPENDENT,
         points=[(0.0, 4), (1.0, 4)],
-        led=LED(vf=34, imax=2800, eff=125),
+        # led=LED(vf=34, imax=2800, eff=125, scale_max=1),
+        led=LED(vf=34, imax=3750, eff=125, scale_max=0.78),
         group=0,
         driver_min=0.001,
         requires_relay=Relay.RELAY1,
@@ -103,7 +105,7 @@ LESSTHRIVE_CHANNELS = {
         group=0,
         driver_min=0.01,
         requires_relay=Relay.RELAY2,
-        priority=1,
+        priority=F90_PRIORITY,
     ),
     "dalic": Channel(
         friendly_name="5000k F90 2",
@@ -118,7 +120,7 @@ LESSTHRIVE_CHANNELS = {
         group=0,
         driver_min=0.01,
         requires_relay=Relay.RELAY2,
-        priority=1,
+        priority=F90_PRIORITY,
     ),
     "dalid": Channel(
         friendly_name="5000k F90 3",
@@ -133,7 +135,7 @@ LESSTHRIVE_CHANNELS = {
         group=0,
         driver_min=0.01,
         requires_relay=Relay.RELAY2,
-        priority=1,
+        priority=F90_PRIORITY,
     ),
     "dalie": Channel(
         friendly_name="5000k F90 4",
@@ -148,11 +150,11 @@ LESSTHRIVE_CHANNELS = {
         group=0,
         driver_min=0.01,
         requires_relay=Relay.RELAY2,
-        priority=1,
+        priority=F90_PRIORITY,
     ),
 }
 
-process(channels=FULLTHRIVE_CHANNELS,
-        minimum_dim = 0.0003,
+process(channels=LESSTHRIVE_CHANNELS,
+        minimum_dim = 0.0004,
         filename = "../spiffs/levelluts4.csv",
         refine_groups=[0])

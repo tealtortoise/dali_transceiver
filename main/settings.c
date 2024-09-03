@@ -299,6 +299,14 @@ esp_err_t read_level_luts(level_t lut[]){
                 celllen = i - lastcommapos - 1;
                 if (celllen == 0) break;
                 memcpy(cellbuffer, linebuffer + lastcommapos + 1, celllen);
+                if (column_idx == 17)
+                {
+                    float power;
+                    sscanf(cellbuffer, "%f", &power);
+                    // ESP_LOGI(TAG, "Found power %f in row %i", power, row_idx);
+                    lut[row_idx].power = power;
+                    break;
+                }
                 cellbuffer[celllen] = 0;
                 sscanf(cellbuffer, "%i", &cell_int);
                 if (column_idx == 0)
@@ -316,11 +324,9 @@ esp_err_t read_level_luts(level_t lut[]){
                 }
                 else
                 {
-                    // uint8_t * byt = (size_t) lut + levet_t_size * row_idx + column_idx - 1;
-                    // *byt = (uint8_t) cell_int;
                     if (column_idx >= (sizeof(level_t) + 1)) // column_idx is 1 indexed, array is zero indexed
                     {
-                        ESP_LOGE(TAG, "Invalid column_idx is CSV LUT (%i)", column_idx);
+                        ESP_LOGE(TAG, "Invalid column_idx in CSV LUT (%i)", column_idx);
                         break;
                     }
                     local_array[column_idx - 1] = cell_int;
@@ -346,8 +352,9 @@ esp_err_t read_level_luts(level_t lut[]){
             fill_luts_fallback(lut);
             return ESP_ERR_NOT_FOUND;
         }
-        if (column_idx != (sizeof(level_t) + 1)){
-            ESP_LOGE(TAG, "Didn't find all columns in CSV file! Filled luts with fallback");
+        if (column_idx != (sizeof(level_t) -3)){
+            ESP_LOGE(TAG, "Didn't find all columns in CSV file! Filled luts with fallback %i != %i",
+                column_idx, sizeof(level_t) - 3);
             fclose(lutfile);
             
             fill_luts_fallback(lut);
@@ -355,8 +362,8 @@ esp_err_t read_level_luts(level_t lut[]){
 
         }
         
-        // finally copy local_array to status struct lut array element
-        memcpy(&lut[row_idx], local_array, sizeof(local_array));
+        // finally copy local_array to status struct lut array element ignoring last float element
+        memcpy(&lut[row_idx], local_array, sizeof(local_array) - 4);
     }
     ESP_LOGI(TAG, "Finished loading LUTS (found %i)", total_rows);
     fclose(lutfile);

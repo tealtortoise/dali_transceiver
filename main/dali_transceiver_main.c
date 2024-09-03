@@ -427,9 +427,9 @@ void app_main(void) {
     zeroten_handle_t pwm1;
     zeroten_handle_t pwm2;
     ESP_ERROR_CHECK(
-        setup_0_10v_channel(PWM_010v_GPIO, CALIBRATION_LOOKUP_NVS, &pwm1));
+        setup_0_10v_channel(PWM_010v_GPIO, CALIBRATION_GENERIC_LOG_ELDOLED_ECO, &pwm1));
     ESP_ERROR_CHECK(
-        setup_0_10v_channel(PWM_010v2_GPIO, CALIBRATION_LOOKUP_NVS, &pwm2));
+        setup_0_10v_channel(PWM_010v2_GPIO, CALIBRATION_GENERIC_LOG_ELDOLED_ECO, &pwm2));
 
     setup_button_interrupts(&status, pwm1, pwm2);
 
@@ -831,13 +831,14 @@ void app_main(void) {
             snprintf(looplog_template, 8, "  %3.1i", relay2_lvl_to_send);
             strcat(looplog, looplog_template);
         }
-        snprintf(looplog_template, 255, "  %7.1i %6.1lu %4.1i  %3.1lu",
-                     fadetime,
-                     tlt_array[status.actual_level],
-                     ((int)actual_looptime),
-                     idle_reawake_interval >> 10);
+        snprintf(looplog_template, 255, "  %5.3g %7.1i %6.1lu %4.1i  %3.1lu",
+                    level_el.power,
+                    fadetime,
+                    tlt_array[status.actual_level],
+                    ((int)actual_looptime),
+                    idle_reawake_interval >> 10);
         strcat(looplog, looplog_template);
-        strcat(looplog_headers, "     Fade    TLT   LT Wake");
+        strcat(looplog_headers, "    Pwr    Fade    TLT   LT Wake");
 
         if (!(levellog_count & 7))
         {

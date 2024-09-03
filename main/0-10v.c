@@ -58,14 +58,17 @@ void built_lut(uint16_t lut[], int calibration, double gain){
             }
             break;
         case CALIBRATION_LOOKUP_NVS:
-        case CALIBRATION_GENERIC_LOG_ELDOLED:
+        case CALIBRATION_LOOKUP_NVS_ECODRIVE:
+        case CALIBRATION_GENERIC_LOG_ELDOLED_ECO:
+        case CALIBRATION_GENERIC_LOG_ELDOLED_SOLO:
             ESP_LOGI(TAG, "Using gain %f for LUT", gain);
             double x;
             double diff = GENERIC_CAL_FINISH_VOLTAGE - GENERIC_CAL_START_VOLTAGE;
             double voltage;
             double dutydouble;
             for (int i=0; i < 255; i++){
-                if (i == 0){
+                if (i == 0)
+                {
                     voltage = GENERIC_CAL_OFF_VOLTAGE;
                 }
                 else if (i == 254)
@@ -74,12 +77,21 @@ void built_lut(uint16_t lut[], int calibration, double gain){
                 }
                 else
                 {
-                    x = ((double) i - 1.0) / 253.0;
+                    if (calibration == CALIBRATION_GENERIC_LOG_ELDOLED_ECO || calibration == CALIBRATION_LOOKUP_NVS_ECODRIVE)
+                    {
+                        // Less than 86 give min voltage to emulate DALI 1% curve
+                        x = ((double) _MAX(i, 85) - 85.0) / (254.0 - 85.0);
+                    }
+                    else
+                    {
+                        // we can go all the way to 0.1%
+                        x = ((double) i - 1.0) / 253.0;
+                    }
                     voltage = x * diff + GENERIC_CAL_START_VOLTAGE;
                 }
                 dutydouble = voltage / 10.0 * gain;
                 lut[i] = clamp(dutydouble * max_value, 0, 0xffff);
-                if (i < 3 || i > 251) {
+                if (1 || i < 3 || i > 251) {
                     ESP_LOGI(TAG, "0-10v Cal Input %d -> voltage %f, doubleduty %f, lut %u", i, voltage, dutydouble, lut[i]);
                 }
             }
