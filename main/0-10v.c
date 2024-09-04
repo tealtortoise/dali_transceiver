@@ -1,5 +1,6 @@
 
 #include <math.h>
+#include <string.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include <esp_clk_tree.h>
@@ -15,9 +16,9 @@
 #define MAX_LEDC_CHANNELS 6
 
 #define GENERIC_CAL_GAIN 0.8541
-#define GENERIC_CAL_OFF_VOLTAGE 0.27
-#define GENERIC_CAL_START_VOLTAGE 1.5
-#define GENERIC_CAL_FINISH_VOLTAGE 8.5
+#define GENERIC_CAL_OFF_VOLTAGE 0.35
+#define GENERIC_CAL_START_VOLTAGE 1.6
+#define GENERIC_CAL_FINISH_VOLTAGE 8.9
 #define GENERIC_CAL_FULL_VOLTAGE 10.0
 
 static const char *TAG = "0-10v driver";
@@ -91,7 +92,10 @@ void built_lut(uint16_t lut[], int calibration, double gain){
                 }
                 dutydouble = voltage / 10.0 * gain;
                 lut[i] = clamp(dutydouble * max_value, 0, 0xffff);
-                if (1 || i < 3 || i > 251) {
+                if (i < 3 || i > 251) {
+                    ESP_LOGI(TAG, "0-10v Cal Input %d -> voltage %f, doubleduty %f, lut %u", i, voltage, dutydouble, lut[i]);
+                }
+                if (i < 90 && i > 82) {
                     ESP_LOGI(TAG, "0-10v Cal Input %d -> voltage %f, doubleduty %f, lut %u", i, voltage, dutydouble, lut[i]);
                 }
             }
@@ -150,7 +154,8 @@ esp_err_t setup_0_10v_channel(uint8_t gpio_pin, int calibration, zeroten_handle_
         double channelgain;
         esp_err_t err = nvs_get_i64(nvs_handle_, key, &channelgain_intrep);
         if (err == ESP_OK) {
-            channelgain = *(double*) &channelgain_intrep;
+            memcpy(&channelgain, &channelgain_intrep, sizeof(double));
+            // channelgain = *(double*) &channelgain_intrep;
             ESP_LOGI(TAG, "Found gain %f in NVS for GPIO %d", channelgain, gpio_pin);
             gain = channelgain;
         }

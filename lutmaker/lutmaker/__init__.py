@@ -53,9 +53,14 @@ class Channel(object):
     priority: int = 0
 
     @property
-    def is_proportioned(self):
+    def is_proportioned(self) -> bool:
         return self.type == ChannelType.DIRECTED or self.type == ChannelType.RESIDUAL
 
+    @property
+    def contributes_to_full(self) -> bool:
+        if not self.points:
+            return True
+        return self.points[-1][1] > 0
 
 COLUMNS = [
     "level",
@@ -362,9 +367,9 @@ def process(
         plt.show()
         lumen_df.plot(loglog=False, title=f"Lumens Group {group}")
         plt.show()
-        print(group_offsets[group])
-        plt.plot(INRANGE, group_offsets[group])
-        plt.show()
+        # print(group_offsets[group])
+        # plt.plot(INRANGE, group_offsets[group])
+        # plt.show()
     # exit()
 
     # df_plot_only = pd.DataFrame({key: value for key, value in dalivals.items() if value is not inrange}, columns=name_columns)
