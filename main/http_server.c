@@ -203,7 +203,18 @@ static esp_err_t current_setpoint_handler(httpd_req_t *req)
     if (req->method == HTTP_GET)
     {
         networking_ctx_t *ctx = httpd_get_global_user_ctx(req->handle);
-        sprintf(httpd_temp_buffer, "%i", ctx->status->setpoint);
+        if (strcmp(substrings[1], "all-json") == 0)
+        {
+            sprintf(httpd_temp_buffer, "{\"setpoint\":%d,\"actual_level\":%d,\"actual_power\":%f,\"setpoint_power\":%f}",
+                ctx->status->setpoint,
+                ctx->status->actual_level,
+                ctx->status->lut[ctx->status->actual_level].power,
+                ctx->status->lut[ctx->status->setpoint].power);
+        }
+        else
+        {
+            sprintf(httpd_temp_buffer, "%i", ctx->status->setpoint);
+        }
     }
     else if (req->method == HTTP_PUT)
     {
@@ -231,7 +242,12 @@ static esp_err_t current_setpoint_handler(httpd_req_t *req)
             // uint32_t setpoint_struct_as_int = *((uint32_t*) &setp);
             xTaskNotifyIndexed(ctx->mainloop_task, NEW_SETPOINT_NOTIFY_IDX, SETPOINT_SOURCE_REST, eSetValueWithOverwrite);
             ESP_LOGI(TAG, "Set new setpoint %i", data);
-            sprintf(httpd_temp_buffer, "OK");
+            
+            sprintf(httpd_temp_buffer, "{\"setpoint\":%d,\"actual_level\":%d,\"actual_power\":%f,\"setpoint_power\":%f}",
+                ctx->status->setpoint,
+                ctx->status->actual_level,
+                ctx->status->lut[ctx->status->actual_level].power,
+                ctx->status->lut[ctx->status->setpoint].power);
         }
         else
         {

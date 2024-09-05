@@ -86,16 +86,15 @@ COLUMNS = [
 # Create colour LUTs
 DEFAULT_COLOUR_POINTS = [
     (0, (194, 45, 23)),
-    (25, (203, 118, 33)),
-    (48, (150, 160, 00)),
-    (86, (41, 172, 61)),
-    (207, (23, 143, 202)),
-    (239, (149, 110, 201)),
+    (10, (203, 118, 33)),
+    (30, (150, 160, 00)),
+    (64, (41, 172, 61)),
+    (181, (23, 143, 202)),
+    (206, (149, 110, 201)),
     (254, (186, 57, 149)),
 ]
 
 INRANGE = np.arange(0, 255, 1)
-
 
 if "fadetest" and 0:
     channels = {
@@ -151,6 +150,20 @@ def to_log(inp: np.ndarray | float) -> np.ndarray:
     return np.maximum(np.log10(inp * 1000) * 253.0 / 3.0 + 1.0, 0.0)
 
 
+def modify_dali_curve(inrange) -> np.ndarray:
+    high_range = (INRANGE / 254) ** 0.2 * 254
+    low_range = (INRANGE / 254) ** 1.0 * 254
+    split = np.linspace(0.0, 1.0, inrange.size)
+    return low_range * (1.0 - split) + high_range * split
+
+
+def get_target_illuminances(inrange, minimum_dim: float, passthrough_nocurve: bool) -> np.ndarray:
+    if passthrough_nocurve:
+        return to_linear_custom(INRANGE, minimum_dim)
+    mod_dali = modify_dali_curve(inrange)
+    return to_linear_custom(mod_dali, minimum_dim)
+
+
 def process(
     channels: typing.Dict[str, Channel] = {},
     minimum_dim: float = 0.001,
@@ -163,10 +176,14 @@ def process(
     ] = DEFAULT_COLOUR_POINTS,
     refine_groups: typing.List[int] = [],
     iterations: int = 400,
+    passthrough_nocurve: bool = False,
+    default_max_power: float = 1.0,
 ):
     warnings = []
+    
+    mod_dali = INRANGE if passthrough_nocurve else modify_dali_curve(INRANGE)
     dalivals_float = {}
-    lin_flux_target = to_linear_custom(INRANGE, minimum_dim)
+    lin_flux_target = get_target_illuminances(INRANGE, minimum_dim, passthrough_nocurve)
     lin_flux_target[0] = 0.0
 
     if channels:
@@ -259,7 +276,7 @@ def process(
 
         for key in COLUMNS:
             if key not in channels:
-                dalivals_float[key] = INRANGE
+                dalivals_float[key] = mod_dali
                 continue
             saturated[key] = np.any(
                 (dalivals_float[key] == ch_dali_max, dalivals_float[key] == 0), 0
@@ -325,7 +342,7 @@ def process(
                 #     diff = np.clip(dalivals_float[ch_key] + channel_offsets[ch_key], 0, 254) - old_vals
                 #     change -= diff
 
-            if iteration == 0:
+            if 0 and iteration == 0:
                 lumens[group]["sum"] = group_lumens
                 lumens[group]["ideal"] = target_lumens
                 lumen_df = pd.DataFrame(
@@ -445,7 +462,8 @@ def process(
             if channels[name].requires_relay == Relay.RELAY1:
                 relay1_needed[selector] = 1
             if channels[name].requires_relay == Relay.RELAY2:
-                relay2_needed[selector] = 1
+                relay2_needed[selector] = 1        
+        dalivals_float["power"] = total_powersum
     else:
         relay1_needed = np.ones(INRANGE.size, dtype=int)
         relay2_needed = np.ones(INRANGE.size, dtype=int)
@@ -454,11 +472,12 @@ def process(
         if rgb_nightlight:
             relay1_needed[1] = 0
             relay2_needed[1] = 0
+        dalivals_float["power"] = lin_flux_target * default_max_power
+        
 
     dalivals_float["relay1"] = relay1_needed
     dalivals_float["relay2"] = relay2_needed
 
-    dalivals_float["power"] = total_powersum
 
     dalivals_final_dtype = {}
     for name, ary in dalivals_float.items():
@@ -466,6 +485,8 @@ def process(
             dalivals_final_dtype[name] = ary
         else:
             dalivals_final_dtype[name] = ary.astype(int)
+
+    dalivals_final_dtype['level'] = INRANGE
 
     df = pd.DataFrame(dalivals_final_dtype, columns=name_columns)
     df.plot(title="DALI Values")

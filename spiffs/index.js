@@ -5,8 +5,10 @@ function all() {
     let debug = document.getElementById("debug");
     let slider = document.getElementById("levelslider");
     let levelind = document.getElementById('ajaxlevel');
-    let currentind = document.getElementById('ledcurrent');
-    let levelbyteind = document.getElementById('levelbyte');
+    let sppowerind = document.getElementById('sppower');
+    let currentpowerind = document.getElementById('currentpower');
+    let spbyteind = document.getElementById('spbyte');
+    let currentbyteind = document.getElementById('currentbyte');
     let poweronind = document.getElementById("poweron-level");
     let offmessage_el = document.getElementById("offmessage");
     let presetbuttons = Array.from(document.getElementsByClassName("levelbutton"));
@@ -24,14 +26,31 @@ function all() {
         return Math.floor(Math.pow(10, (byte - 1) * 3.0 / 253.0) * 10 + 0.5) / 100;
     }
 
-    function stylePresets(level, fade) {
+    function stylePresets(status_ob, fade) {
+        let level;
+        if (status_ob) {
+            level = status_ob.setpoint;
+            currentbyteind.innerHTML = status_ob.actual_level;
+            spbyteind.innerHTML = status_ob.setpoint;
+            sppowerind.innerHTML = `${status_ob.setpoint_power.toLocaleString(undefined,
+                { minimumFractionDigits: 3 })}` + "W";
+            currentpowerind.innerHTML = `${status_ob.actual_power.toLocaleString(undefined,
+                { minimumFractionDigits: 3 })}` + "W";
+        
+            let percentstr = levelToPercent(status_ob.setpoint);
+            levelind.innerHTML = percentstr;
+            poweronind.innerHTML = percentstr;
+        } else {
+            level = undefined;
+        }
+
         if (level !== undefined) {
             presetbuttons.forEach(el => {
                 let preset_level = parseInt(el.getAttribute("level"));
                 let setpoint_level_int = parseInt(level);
                 let tolerance = preset_level > 2 ? 2 : 0;
                 let isinrange = (preset_level >= (setpoint_level_int - tolerance)) && (preset_level <= (setpoint_level_int + tolerance));
-                if (el.classList.contains("slow")) {
+                if (el.classList.contains("slow") && el.id != "sbuttonoff") {
                     if (isinrange) {
                         el.innerHTML = "";
                         el.style.opacity = "0.4";
@@ -122,10 +141,10 @@ function all() {
                     throw new Error('Network response was not ok');
                 }
                 levelind.classList.remove("updating");
-                if (!uri) {
-                    stylePresets(data);
-                }
-                return response;
+                return response.json();
+            })
+            .then(json_ob => {
+                stylePresets(json_ob);
             })
             .catch(error => {
                 console.error('There was a problem with your fetch operation:', error);
@@ -136,11 +155,11 @@ function all() {
         let sliderval = slider.value;
         let percentstr = levelToPercent(sliderval);
         levelind.innerHTML = percentstr;
-        levelbyteind.innerHTML = sliderval;
-        currentind.innerHTML = levelbyte_to_linear(sliderval) + "%";
+        spbyteind.innerHTML = sliderval;
+        // currentind.innerHTML = levelbyte_to_linear(sliderval) + "%";
         poweronind.innerHTML = percentstr;
         levelind.classList.add("updating");
-        debug.innerHTML = "slider.e " + sliderval + " Cancellable: " + event.cancelable;
+        // debug.innerHTML = "slider.e " + sliderval + " Cancellable: " + event.cancelable;
 
         if (event.cancelable == true) {
             return;
@@ -235,7 +254,7 @@ function all() {
         if (element.id == "buttonon") {
             sendPowerOn().then(() => {
                 setUIPowerOn();
-                stylePresets(levelbyteind.innerHTML);
+                stylePresets({"setpoint":spbyteind.innerHTML});
             });
             return;
         }
@@ -245,9 +264,9 @@ function all() {
         slider.value = level;
         let percentstr = levelToPercent(level);
         levelind.innerHTML = percentstr;
-        currentind.innerHTML = levelbyte_to_linear(level) + "%";
+        // currentind.innerHTML = levelbyte_to_linear(level) + "%";
         poweronind.innerHTML = percentstr;
-        levelbyteind.innerHTML = level;
+        // levelbyteind.innerHTML = level;
         levelind.classList.add("updating");
         if (powerStatus) {
             send(level, slow, undefined, `main buttonev ${slow}`);
@@ -270,21 +289,17 @@ function all() {
     slider.addEventListener("input", sliderChangeFn);
 
     function get_state(skip_styling) {
-        let setpoint_promise = get("/setpoint").then((sp) => {
+        let setpoint_promise = get("/setpoint/all-json").then(text => {
+            let status_ob = JSON.parse(text);
+            let sp = status_ob.setpoint;
             let return_value = true;
             if (!(sp >= 0)) {
                 sp = "0"
                 return_value = false;
-
             }
-            if (!skip_styling) stylePresets(sp);
-            let percentstr = levelToPercent(sp);
-            levelind.innerHTML = percentstr;
-            currentind.innerHTML = levelbyte_to_linear(sp) + "%";
-            poweronind.innerHTML = percentstr;
-            levelbyteind.innerHTML = sp;
+            if (!skip_styling) stylePresets(status_ob);
             slider.value = sp;
-            return return_value;
+            return status_ob;
         });
         get("/api/power").then((sp) => {
             powerStatus = sp == "1";
@@ -324,14 +339,14 @@ function all() {
             return false;
         });
 
-        window.setTimeout(get_state, 10000);
+        window.setTimeout(get_state, 3000);
         return all;
     }
-    preset_promises.push(get_state(true));
+    let state_promise = get_state(true);
+    preset_promises.push(state_promise);
 
-    Promise.all(preset_promises).then(() => {
-        console.log("All promises resolved!");
-        stylePresets(levelbyteind.innerHTML);
+    Promise.all(preset_promises).then((p) => {
+        stylePresets(p[5][1]);
         document.getElementsByTagName("main")[0].classList.remove("loading");
     });
 }

@@ -88,7 +88,7 @@ void setup_networking(void *params) {
 void list_tasks() {
     char buffer[4096];
     vTaskList(buffer);
-    printf(buffer);
+    ESP_LOGI(TAG, "%s", buffer);
 }
 
 static int tick_inc = 1;
@@ -101,7 +101,13 @@ int fadetime;
 uint32_t get_time_ms() { return (uint32_t)(esp_timer_get_time() >> 10); }
 
 uint32_t curve(const uint32_t input) {
+    // best option if LUT uses default DALI curve
     return input * input - (input << 9) + 108000UL;
+}
+
+uint32_t curve_lin(const uint32_t input) {
+    // best option if LUT uses visually linear target curve
+    return 60000;
 }
 
 void calc_fade_increments(uint32_t looptime, int start, int finish) {
@@ -125,7 +131,7 @@ void calc_fade_increments(uint32_t looptime, int start, int finish) {
 
     // curve(90) is selected to fine tune overall fade time
     uint32_t prop_fadetime =
-        (((uint64_t)fadetime * (uint64_t)curve(avg_fade_pos)) /
+        (((uint64_t)fadetime * (uint64_t)curve_lin(avg_fade_pos)) /
          ((uint64_t)curve(90) * (uint64_t)abs(finish - start)))
         << 8;
     // ESP_LOGI(TAG, "prop fadetime %lu", prop_fadetime);
@@ -133,7 +139,7 @@ void calc_fade_increments(uint32_t looptime, int start, int finish) {
     // start));
     bool avoid_overflow = prop_fadetime > 0x7FFFFF;
     for (int i = _MIN(start, finish); i <= _MAX(start, finish); i++) {
-        tempcurve = curve(i);
+        tempcurve = curve_lin(i);
         if (avoid_overflow) {
             temp_tick_inc = 1;
             temp_tlt = ((prop_fadetime * temp_tick_inc) / tempcurve) << 8;
