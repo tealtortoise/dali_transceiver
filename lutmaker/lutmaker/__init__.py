@@ -30,7 +30,7 @@ class LED(object):
     @property
     def usable_lumens(self):
         return self.power * self.eff
-    
+
     @property
     def lumens_at_254(self):
         return self.power * self.eff / self.scale_max
@@ -61,6 +61,7 @@ class Channel(object):
         if not self.points:
             return True
         return self.points[-1][1] > 0
+
 
 COLUMNS = [
     "level",
@@ -157,7 +158,9 @@ def modify_dali_curve(inrange) -> np.ndarray:
     return low_range * (1.0 - split) + high_range * split
 
 
-def get_target_illuminances(inrange, minimum_dim: float, passthrough_nocurve: bool) -> np.ndarray:
+def get_target_illuminances(
+    inrange, minimum_dim: float, passthrough_nocurve: bool
+) -> np.ndarray:
     if passthrough_nocurve:
         return to_linear_custom(INRANGE, minimum_dim)
     mod_dali = modify_dali_curve(inrange)
@@ -180,7 +183,7 @@ def process(
     default_max_power: float = 1.0,
 ):
     warnings = []
-    
+
     mod_dali = INRANGE if passthrough_nocurve else modify_dali_curve(INRANGE)
     dalivals_float = {}
     lin_flux_target = get_target_illuminances(INRANGE, minimum_dim, passthrough_nocurve)
@@ -240,7 +243,7 @@ def process(
             channel = channels[key]
             ch_dali_max = int(to_log(channel.led.scale_max))
             # if channel.led.scale_max != 1.0:
-                # ch_dali_max = 254;
+            # ch_dali_max = 254;
             x, y = zip(*channel.points)
             # print("Processing curve ", key, x, y)
             flux_points = np.array(x, dtype=float)
@@ -249,12 +252,16 @@ def process(
             interpolated_curve = np.interp(
                 lin_flux_target, flux_points, prop_points * lamp_lumen_ratio
             )
-            raw_dali = to_log(np.clip(interpolated_curve * lin_flux_target, 0, channel.led.scale_max))
-                # 0.0,
-                # to_log(channel.scale_max_power),
+            raw_dali = to_log(
+                np.clip(interpolated_curve * lin_flux_target, 0, channel.led.scale_max)
+            )
+            # 0.0,
+            # to_log(channel.scale_max_power),
             # )
 
-            dalivals_float[key] = np.clip(raw_dali + channel_offsets[key], 0, ch_dali_max)
+            dalivals_float[key] = np.clip(
+                raw_dali + channel_offsets[key], 0, ch_dali_max
+            )
             channel_lumens = (
                 to_linear_with_minimum(dalivals_float[key], minimum=channel.driver_min)
                 * channel.led.lumens_at_254
@@ -304,11 +311,11 @@ def process(
             change[inc_needed] = change_inc
             change[dec_needed] = -change_inc
 
-            for priority in (
-                range(max_priority + 1)
-                if reverse_priority
-                else reversed(range(max_priority + 1))
-            ):
+            min_priority_this_iteration = int(
+                max_priority * (iterations - iteration) / iterations + 0.5
+            )
+            prio_range = range(min_priority_this_iteration, max_priority + 1)
+            for priority in prio_range if reverse_priority else reversed(prio_range):
                 channels_in_priority = []
                 for ch_key, ch in reversed(channels.items()):
                     if ch.priority == priority:
@@ -327,7 +334,9 @@ def process(
                     channel_offsets[ch_key][not_sat] += (change / num_channels)[not_sat]
                     diff = (
                         np.clip(
-                            dalivals_float[ch_key] + channel_offsets[ch_key], 0, prio_ch_max
+                            dalivals_float[ch_key] + channel_offsets[ch_key],
+                            0,
+                            prio_ch_max,
                         )
                         - old_vals
                     )
@@ -342,7 +351,7 @@ def process(
                 #     diff = np.clip(dalivals_float[ch_key] + channel_offsets[ch_key], 0, 254) - old_vals
                 #     change -= diff
 
-            if 0 and iteration == 0:
+            if 1 and iteration == 0:
                 lumens[group]["sum"] = group_lumens
                 lumens[group]["ideal"] = target_lumens
                 lumen_df = pd.DataFrame(
@@ -462,7 +471,7 @@ def process(
             if channels[name].requires_relay == Relay.RELAY1:
                 relay1_needed[selector] = 1
             if channels[name].requires_relay == Relay.RELAY2:
-                relay2_needed[selector] = 1        
+                relay2_needed[selector] = 1
         dalivals_float["power"] = total_powersum
     else:
         relay1_needed = np.ones(INRANGE.size, dtype=int)
@@ -473,11 +482,9 @@ def process(
             relay1_needed[1] = 0
             relay2_needed[1] = 0
         dalivals_float["power"] = lin_flux_target * default_max_power
-        
 
     dalivals_float["relay1"] = relay1_needed
     dalivals_float["relay2"] = relay2_needed
-
 
     dalivals_final_dtype = {}
     for name, ary in dalivals_float.items():
@@ -486,7 +493,7 @@ def process(
         else:
             dalivals_final_dtype[name] = ary.astype(int)
 
-    dalivals_final_dtype['level'] = INRANGE
+    dalivals_final_dtype["level"] = INRANGE
 
     df = pd.DataFrame(dalivals_final_dtype, columns=name_columns)
     df.plot(title="DALI Values")

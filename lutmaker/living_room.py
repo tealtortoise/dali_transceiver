@@ -4,7 +4,7 @@ from lutmaker import Channel, ChannelType, LED, process
 LIVING_ROOM_CHANNELS = {
     "dalie": Channel(
         friendly_name="f90",
-        points=[(0, 0.0), (0.08, 0.0), (0.16, 0.3), (0.3, 0.3), (0.5, 0.5), (0.7, 1.45), (1.0, 1.45)],
+        points=[(0, 0.0), (0.08, 0.0), (0.16, 0.3), (0.3, 0.3), (0.5, 0.6), (0.7, 1.45), (1.0, 1.45)],
         type=ChannelType.INDEPENDENT,
         led=LED(imax=450 * 2, vf=50, eff=185),
         group=0,
@@ -16,8 +16,8 @@ LIVING_ROOM_CHANNELS = {
             (0.0, 0.0),
             (0.02, 0.0),
             (0.16, 1.85),
-            (0.3, 1.75),
-            (0.7, 0.38),
+            (0.3, 2.0),
+            (0.7, 0.48),
             (1.0, 0.83),
         ],
         led=LED(vf=17, imax=650 * 5, eff=120),
