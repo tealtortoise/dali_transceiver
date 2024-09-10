@@ -174,19 +174,22 @@ function all() {
         if (event.cancelable == true) {
             return;
         }
-        send(sliderval, undefined, undefined, "slider");
+        function timeout() {
+            if (waiting) {
+                sliderval = slider.value;
+                // debug.innerHTML = "slider.e " + sliderval;
+                send(sliderval, undefined, undefined, "slidertimeout");
+                waiting = 0;
+                setTimeout(timeout, 80);
+            } else {
+                ontimeout = 0;
+            }
+        }
         if (!ontimeout) {
             debug.innerHTML = "slider.e " + sliderval + " " + event.cancelable;
+            send(sliderval, undefined, undefined, "slider");
             ontimeout = 1;
-            setTimeout(function () {
-                ontimeout = 0;
-                if (waiting) {
-                    sliderval = slider.value;
-                    // debug.innerHTML = "slider.e " + sliderval;
-                    send(sliderval, undefined, undefined, "slidertimeout");
-                    waiting = 0;
-                }
-            }, 80);
+            setTimeout(timeout, 80);
         } else {
             waiting = 1;
         }

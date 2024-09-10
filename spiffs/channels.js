@@ -111,25 +111,22 @@ function all() {
         let level_ind = document.getElementById(id + "_level");
         level_ind.innerHTML = sliderval;
         // levelind.classList.add("updating");
-        if (!ontimeout){
+        if (!ontimeout) {
             if (checked_ob[id]) send(slider_el);
             ontimeout = 1;
-            setTimeout(function() {
-                ontimeout = 0;
-                if (waiting){
-                    sliderval = slider_el.value;
+            setTimeout(() => {
+                if (waiting) {
                     if (checked_ob[id]) send(slider_el);
                     waiting = 0;
                 }
-            }, 80);
+                ontimeout = 0;
+            }, 120);
         } else {
             waiting = 1;
         }
     };
     Array.from(document.getElementsByClassName("lvlslider")).forEach((el) => {
         el.oninput = sliderChangeFn;
-
-
     });
 }
 window.onload = all;
