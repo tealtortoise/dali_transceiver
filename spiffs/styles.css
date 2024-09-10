@@ -9,6 +9,7 @@ body {
     margin: 0 auto 0 auto;
     font-weight: 400;
     font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    padding-bottom: 2em;
 }
 main {
     padding: 0 1em 0 1em;
@@ -19,6 +20,14 @@ h1 {
     font-weight: 400;
     font-size: 140%;
 }
+
+.mono {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 10pt;
+    white-space:pre;
+    overflow: auto;
+    padding-bottom: 0.7em;
+}
 span#ajaxlevel  {
     font-size: 240%;
     width: 32%;
@@ -26,6 +35,10 @@ span#ajaxlevel  {
 }
 span.updating {
     color: #e0dc70;
+}
+#override-warning {
+    font-size: 150%;
+    text-align: center;
 }
 #levelslider {
     width: 66%;
@@ -198,7 +211,7 @@ button.levelbutton:active {
     float:right;
 }
 
-button.update  {
+button.update, button.restart, button.link {
     display: block;
     width: 80%;
     font-size: 180%;
@@ -210,6 +223,19 @@ button.update  {
     padding: 0.2em;
     color: white;
     border-radius: 10em;
+}
+
+button.restart {
+    
+    background-image: linear-gradient(to right, #ad2424, #660000);
+    margin-bottom: 0.5em;
+}
+button.link {
+    background-image: linear-gradient(to right, #7e3271, #561040);
+    margin-bottom: 0em;
+}
+a {
+    text-decoration: none;
 }
 
 .red {

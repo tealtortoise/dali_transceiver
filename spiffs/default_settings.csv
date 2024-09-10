@@ -40,11 +40,12 @@ alarmtype4,1
 alarmtype5,2
 alarmtype6,2
 alarmtype7,2
-preset1,20
-preset2,84
-preset3,120
-preset4,195
-preset5,248
+preset1,30
+preset2,64
+preset3,100
+preset4,165
+preset5,228
+preset6,254
 lutfile,1
 namefile,1
 full_power,254
@@ -62,3 +63,5 @@ dalih_address,-1
 startup_level,0
 idle_intvl_ms,180000
 idle_cooldown,45000
+startup_cal1,2
+startup_cal2,2

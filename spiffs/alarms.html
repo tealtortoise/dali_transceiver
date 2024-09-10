@@ -20,23 +20,16 @@
         </nav>
     </header>
     <main>
+        <div class="channelinfo">
+            All brightness levels on this page are 0 → 254.
+        </div>
         <div class="alarmunit">
             <!-- <span>#</span> -->
-            <span>Brightness 0 → 254</span>
+            <span>Brightness</span>
             <span>Time HHMM</span>
             <span>Fade Time (sec)</span>
             <span>On</span>
             <!-- <span class="alarmnumber">1</span> -->
-            <div class="alarmtype">Universal Alarm</div>
-            <input class="alarmsetpoint" id="setpoint1" value="0">
-            <input class="alarmtime" id="alarmtime1" value="0">
-            <input class="alarmfade" id="fadetime1" value="0">
-            <div class="checkbox-wrapper-20">
-                <div class="switch">
-                    <input id="enable1" class="input" type="checkbox" />
-                    <label for="enable1" class="slider"></label>
-                </div>
-            </div>
             <!-- <span class="alarmnumber">2</span> -->
             <div class="alarmtype">Up Alarms</div>
             <input class="alarmsetpoint" id="setpoint2" value="0">
@@ -96,15 +89,20 @@
                     <label for="enable7" class="slider"></label>
                 </div>
             </div>
+            <div class="alarmtype">Universal Alarm</div>
+            <input class="alarmsetpoint" id="setpoint1" value="0">
+            <input class="alarmtime" id="alarmtime1" value="0">
+            <input class="alarmfade" id="fadetime1" value="0">
+            <div class="checkbox-wrapper-20">
+                <div class="switch">
+                    <input id="enable1" class="input" type="checkbox" />
+                    <label for="enable1" class="slider"></label>
+                </div>
+            </div>
         </div>
         <button class="update" id="update1">Update all</button>
+        <h2>Preset Levels</h2>
         <div class="settingsunit">
-            <div class="settingname">Default Fade Time (sec)</div>
-            <input class="setting" id="default_fadetime">
-            <div class="settingname">Slow Fade Time (sec)</div>
-            <input class="setting" id="slow_fadetime">
-            <div class="settingname">Full Power (default 254)</div>
-            <input class="setting" id="full_power">
             <div class="settingname">Preset 1 Brightness</div>
             <input class="setting" id="preset1">
             <div class="settingname">Preset 2 Brightness</div>
@@ -115,90 +113,131 @@
             <input class="setting" id="preset4">
             <div class="settingname">Preset 5 Brightness</div>
             <input class="setting" id="preset5">
-            <div class="settingname">DALIA Address</div>
-            <input class="setting" id="dalia_address">
-            <div class="settingname">DALIB Address</div>
-            <input class="setting" id="dalib_address">
-            <div class="settingname">DALIC Address</div>
-            <input class="setting" id="dalic_address">
-            <div class="settingname">DALID Address</div>
-            <input class="setting" id="dalid_address">
-            <div class="settingname">DALIE Address</div>
-            <input class="setting" id="dalie_address">
-            <div class="settingname">DALIF Address</div>
-            <input class="setting" id="dalif_address">
-            <div class="settingname">DALIG Address</div>
-            <input class="setting" id="dalig_address">
-            <div class="settingname">DALIH Address</div>
-            <input class="setting" id="dalih_address">
-            <div class="settingname">Lutfile number</div>
-            <input class="setting" id="lutfile">
-            <div class="settingname">Namefile number</div>
-            <input class="setting" id="namefile">
+            <div class="settingname">Preset 6 Brightness</div>
+            <input class="setting" id="preset6">
             <div class="settingname">Startup Level</div>
             <input class="setting" id="startup_level">
+        </div>
+        <h2>Timings</h2>
+        <div class="settingsunit">
+            <div class="settingname">Default Fade Time (sec)</div>
+            <input class="setting" id="default_fadetime">
+            <div class="settingname">Slow Fade Time (sec)</div>
+            <input class="setting" id="slow_fadetime">
             <div class="settingname">Idle Update Interval (s)</div>
             <input class="setting" id="idle_intvl_ms">
             <div class="settingname">Cooldown Duration (s)</div>
             <input class="setting" id="idle_cooldown">
-
         </div>
+        <h2>LUTs</h2>
+        <div class="settingsunit">
+            <div class="settingname">Full Power (default 254)</div>
+            <input class="setting" id="full_power">
+            <div class="settingname">Lutfile number</div>
+            <input class="setting" id="lutfile">
+        </div>
+        <h2>UI Labels</h2>
+        <div class="settingsunit">
+            <div class="settingname">Namefile number</div>
+            <input class="setting" id="namefile">
+        </div>
+        <h2>Analogue Voltage Curves</h2>
+        <div class="channelinfo">
+            1: Generic 0-10v Linear, 2: Generic EcoDrive, 3: GPIO PWM Log, 4: Solodrive w/cal, 5: Generic SoloDrive, 6: EcoDrive /w cal, 7: Low Volt Test.
+            MCU Restart is required.
+        </div>
+        <div class="settingsunit">
+            <div class="settingname">0-10v1 Startup Cal</div>
+            <input class="setting" id="startup_cal1">
+            <div class="settingname">0-10v2 Startup Cal</div>
+            <input class="setting" id="startup_cal2">
+        </div>
+        
+        <h2>DALI Adresses</h2>
         <div class="channelinfo">For DALI short addresses use 0 &lt;= channel &lt;= 63. For DALI groups use 100 &lt;= group &lt;= 115.
-                For DALI Broadcast use 200. -1 will disable channel.</div>
-                <div class="settingsunit">
-                    <div class="settingname">Use Relay 1</div>
+            For DALI Broadcast use 200. -1 will disable channel.</div>
+    <div class="settingsunit">
+        <div class="settingname">DALIA Address</div>
+        <input class="setting" id="dalia_address">
+        <div class="settingname">DALIB Address</div>
+        <input class="setting" id="dalib_address">
+        <div class="settingname">DALIC Address</div>
+        <input class="setting" id="dalic_address">
+        <div class="settingname">DALID Address</div>
+        <input class="setting" id="dalid_address">
+        <div class="settingname">DALIE Address</div>
+        <input class="setting" id="dalie_address">
+        <div class="settingname">DALIF Address</div>
+        <input class="setting" id="dalif_address">
+        <div class="settingname">DALIG Address</div>
+        <input class="setting" id="dalig_address">
+        <div class="settingname">DALIH Address</div>
+        <input class="setting" id="dalih_address">
 
-                    <div class="checkbox-wrapper-20">
-                        <div class="switch">
-                            <input id="configbit1" class="input" type="checkbox" />
-                            <label for="configbit1" class="slider"></label>
-                        </div>
-                    </div>
-                    <div class="settingname">Use Relay 2</div>
+    </div>
+    
+    <h2>Component Enables</h2>
+    <div class="settingsunit">
+        <div class="settingname">Use Relay 1</div>
 
-                    <div class="checkbox-wrapper-20">
-                        <div class="switch">
-                            <input id="configbit2" class="input" type="checkbox" />
-                            <label for="configbit2" class="slider"></label>
-                        </div>
-                    </div>
-                    <div class="settingname">Use DALI</div>
-                    <div class="checkbox-wrapper-20">
-                        <div class="switch">
-                            <input id="configbit3" class="input" type="checkbox" />
-                            <label for="configbit3" class="slider"></label>
-                        </div>
-                    </div>
-                    <div class="settingname">Use 0-10v 1</div>
-                    <div class="checkbox-wrapper-20">
-                        <div class="switch">
-                            <input id="configbit4" class="input" type="checkbox" />
-                            <label for="configbit4" class="slider"></label>
-                        </div>
-                    </div>
-                    <div class="settingname">Use 0-10v 2 (needs 0-10v 1 as well)</div>
-                    <div class="checkbox-wrapper-20">
-                        <div class="switch">
-                            <input id="configbit5" class="input" type="checkbox" />
-                            <label for="configbit5" class="slider"></label>
-                        </div>
-                    </div>
-                    <div class="settingname">Send ESPNOW</div>
-                    <div class="checkbox-wrapper-20">
-                        <div class="switch">
-                            <input id="configbit6" class="input" type="checkbox" />
-                            <label for="configbit6" class="slider"></label>
-                        </div>
-                    </div>
-                    <div class="settingname">Receive ESPNOW</div>
-                    <div class="checkbox-wrapper-20">
-                        <div class="switch">
-                            <input id="configbit7" class="input" type="checkbox" />
-                            <label for="configbit7" class="slider"></label>
-                        </div>
-                    </div>
-                </div>
-                <button class="update" id="update2">Update all</button>
+        <div class="checkbox-wrapper-20">
+            <div class="switch">
+                <input id="configbit1" class="input" type="checkbox" />
+                <label for="configbit1" class="slider"></label>
+            </div>
+        </div>
+        <div class="settingname">Use Relay 2</div>
+
+        <div class="checkbox-wrapper-20">
+            <div class="switch">
+                <input id="configbit2" class="input" type="checkbox" />
+                <label for="configbit2" class="slider"></label>
+            </div>
+        </div>
+        <div class="settingname">Use DALI</div>
+        <div class="checkbox-wrapper-20">
+            <div class="switch">
+                <input id="configbit3" class="input" type="checkbox" />
+                <label for="configbit3" class="slider"></label>
+            </div>
+        </div>
+        <div class="settingname">Use 0-10v 1</div>
+        <div class="checkbox-wrapper-20">
+            <div class="switch">
+                <input id="configbit4" class="input" type="checkbox" />
+                <label for="configbit4" class="slider"></label>
+            </div>
+        </div>
+        <div class="settingname">Use 0-10v 2 (needs 0-10v 1 as well)</div>
+        <div class="checkbox-wrapper-20">
+            <div class="switch">
+                <input id="configbit5" class="input" type="checkbox" />
+                <label for="configbit5" class="slider"></label>
+            </div>
+        </div>
+        <div class="settingname">Send ESPNOW</div>
+        <div class="checkbox-wrapper-20">
+            <div class="switch">
+                <input id="configbit6" class="input" type="checkbox" />
+                <label for="configbit6" class="slider"></label>
+            </div>
+        </div>
+        <div class="settingname">Receive ESPNOW</div>
+        <div class="checkbox-wrapper-20">
+            <div class="switch">
+                <input id="configbit7" class="input" type="checkbox" />
+                <label for="configbit7" class="slider"></label>
+            </div>
+        </div>
+    </div>
+    <button class="update" id="update2">Update all</button>
+    <a href="/log">
+        <button class="link">View Recent Log</button>
+    </a>
+    <a href="/luts">
+        <button class="link">View Loaded LUTs</button>
+    </a>
+    <button class="restart" id="restart">System Restart</button>
     </main>
 </body>
 

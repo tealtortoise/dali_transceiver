@@ -1,14 +1,16 @@
 "use strict";
 
 function all() {
-
+    const PRESETS = 6;
     let debug = document.getElementById("debug");
     let slider = document.getElementById("levelslider");
     let levelind = document.getElementById('ajaxlevel');
     let sppowerind = document.getElementById('sppower');
     let currentpowerind = document.getElementById('currentpower');
     let spbyteind = document.getElementById('spbyte');
+    let sppercentind = document.getElementById('sppercent');
     let currentbyteind = document.getElementById('currentbyte');
+    let currentpercentind = document.getElementById('currentpercent');
     let poweronind = document.getElementById("poweron-level");
     let offmessage_el = document.getElementById("offmessage");
     let presetbuttons = Array.from(document.getElementsByClassName("levelbutton"));
@@ -18,6 +20,9 @@ function all() {
     let levelbox = document.getElementById("levelbutton-box");
     let offbox = document.getElementById("offbutton-box");
     let onbox = document.getElementById("onbutton-box");
+    let override_warning_el = document.getElementById("override-warning");
+    let log_el = document.getElementById("log");
+    let log_header_el = document.getElementById("loghead");
     let timermessage = "Turning Power Off in 2 minutes... Alarms will NOT wake.";
     const offmessage = "Alarms will NOT wake";
 
@@ -26,11 +31,17 @@ function all() {
         return Math.floor(Math.pow(10, (byte - 1) * 3.0 / 253.0) * 10 + 0.5) / 100;
     }
 
+    function levelToPercent(level) {
+        return Math.floor(level / 2.54 + 0.5) + "%";
+
+    }
     function stylePresets(status_ob, fade) {
         let level;
         if (status_ob) {
             level = status_ob.setpoint;
             currentbyteind.innerHTML = status_ob.actual_level;
+            currentpercentind.innerHTML = levelToPercent(status_ob.actual_level);
+            sppercentind.innerHTML = levelToPercent(status_ob.setpoint);
             spbyteind.innerHTML = status_ob.setpoint;
             sppowerind.innerHTML = `${status_ob.setpoint_power.toLocaleString(undefined,
                 { minimumFractionDigits: 3 })}` + "W";
@@ -40,6 +51,9 @@ function all() {
             let percentstr = levelToPercent(status_ob.setpoint);
             levelind.innerHTML = percentstr;
             poweronind.innerHTML = percentstr;
+            log_el.innerHTML = status_ob.logstring;
+            log_header_el.innerHTML = status_ob.logheader;
+            override_warning_el.style.display = status_ob.overrides ? "block" : "none";
         } else {
             level = undefined;
         }
@@ -97,7 +111,7 @@ function all() {
     var ontimeout = 0;
     var waiting = 0;
     let preset_promises = [];
-    for (let i = 1; i <= 5; i++) {
+    for (let i = 1; i <= PRESETS; i++) {
         let uri = `/nvs/preset/${i}/`;
         preset_promises.push(get(uri).then((st) => {
             let button_el = document.getElementById("preset" + i);
@@ -110,10 +124,6 @@ function all() {
         }));
     }
 
-    function levelToPercent(level) {
-        return Math.floor(level / 2.54 + 0.5) + "%";
-
-    }
 
     function send(data, slow, uri, source) {
         // debug.innerHTML = source + (new Date(Date.now()));
@@ -346,7 +356,7 @@ function all() {
     preset_promises.push(state_promise);
 
     Promise.all(preset_promises).then((p) => {
-        stylePresets(p[5][1]);
+        stylePresets(p[PRESETS][1]);
         document.getElementsByTagName("main")[0].classList.remove("loading");
     });
 }

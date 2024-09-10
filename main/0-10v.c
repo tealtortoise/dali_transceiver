@@ -16,7 +16,7 @@
 #define MAX_LEDC_CHANNELS 6
 
 #define GENERIC_CAL_GAIN 0.8541
-#define GENERIC_CAL_OFF_VOLTAGE 0.35
+#define GENERIC_CAL_OFF_VOLTAGE 0.1
 #define GENERIC_CAL_START_VOLTAGE 1.6
 #define GENERIC_CAL_FINISH_VOLTAGE 8.9
 #define GENERIC_CAL_FULL_VOLTAGE 10.0
@@ -47,15 +47,41 @@ uint32_t get_pwm_duty(uint8_t level, uint16_t lut[]){
 
 void built_lut(uint16_t lut[], int calibration, double gain){
     int max_value = (1 << pwm_resolution) - 1;
-    lut[0] = 0;
-    lut[254] = max_value;
+    // lut[254] = max_value;
     double mult;
     switch (calibration)
     {
         case CALIBRATION_PWM_LOG:
             mult = ((double)max_value) / (pow(1.027, 254.0));
-            for (int i=1; i < 254; i++){
+            for (int i=1; i <= 254; i++){
                 lut[i] = clamp(pow(1.027, i-1) * mult - 1, 0, 0xffff);
+            }
+            lut[0] = 0;
+            break;
+        case CALIBRATION_CHARGEPUMP_TEST:
+        case CALIBRATION_GENERIC_LINEAR:
+            double max_voltage;
+            double min_voltage;
+            if (calibration == CALIBRATION_CHARGEPUMP_TEST)
+            {
+                max_voltage = 1.27;
+                min_voltage = 0.0; 
+            }
+            else
+            {
+                max_voltage = GENERIC_CAL_FULL_VOLTAGE;
+                min_voltage = GENERIC_CAL_OFF_VOLTAGE;
+            }
+            double voltage_span = max_voltage - min_voltage;
+            for (int i=0; i <= 254; i++){
+                double voltage = ((double) (i)) / 254.0 * voltage_span + min_voltage;
+                lut[i] = (uint16_t) clamp((voltage  / 10.0 * (double)max_value * gain), 0, max_value);
+                if (i < 3 || i > 251) {
+                    ESP_LOGI(TAG, "0-10v Cal Input %d -> voltage %f, lut %u", i, voltage, lut[i]);
+                }
+                if (i < 90 && i > 82) {
+                    ESP_LOGI(TAG, "0-10v Cal Input %d -> voltage %f, lut %u", i, voltage, lut[i]);
+                }
             }
             break;
         case CALIBRATION_LOOKUP_NVS:
@@ -101,9 +127,10 @@ void built_lut(uint16_t lut[], int calibration, double gain){
             }
             break;
         default:
-            for (int i=1; i < 254; i++){
+            for (int i=1; i <= 254; i++){
                 lut[i] = clamp(i * max_value / 254, 0, 0xffff);
             }
+            lut[0] = 0;
             break;
     }
 }
@@ -179,6 +206,8 @@ esp_err_t set_0_10v_level(zeroten_handle_t handle, uint8_t level) {
     if (level == 255) return ESP_ERR_INVALID_ARG;
     zeroten_handle_* zhandle = (zeroten_handle_ *) handle;
     uint32_t duty = get_pwm_duty(level, zhandle->lut);
+    
+    ESP_LOGI(TAG, "Setting duty on LEDC %i to %lu", zhandle->ledc_channel, duty);
     esp_err_t returnval = ledc_set_duty(LEDC_LOW_SPEED_MODE, zhandle->ledc_channel, duty);
     // ESP_LOGI(TAG, "level %d -> duty %lu (res %i)", level, duty, pwm_resolution );
     returnval = returnval | ledc_update_duty(LEDC_LOW_SPEED_MODE, zhandle->ledc_channel);
@@ -198,5 +227,12 @@ esp_err_t disable_pwm_channel(zeroten_handle_t handle){
 esp_err_t set_zero_duty_pwm_channel(zeroten_handle_t handle){
     // we need this as zero level may not be zero duty in LUT
     zeroten_handle_* zhandle = (zeroten_handle_ *) handle;
-    return ledc_set_duty(LEDC_LOW_SPEED_MODE, zhandle->ledc_channel, 0);
+    ESP_LOGI(TAG, "Setting zero duty on LEDC %i", zhandle->ledc_channel);
+    esp_err_t returnval = ledc_set_duty(LEDC_LOW_SPEED_MODE, zhandle->ledc_channel, 0);
+    returnval = returnval | ledc_update_duty(LEDC_LOW_SPEED_MODE, zhandle->ledc_channel);
+    if (returnval) {
+        ESP_LOGE(TAG, "0-10v LEDC set zero duty error");
+        return returnval;
+    }
+    return ESP_OK;
 }

@@ -187,6 +187,9 @@ typedef struct
     level_overrides_t *level_overrides;
     QueueHandle_t dali_command_queue;
     device_status_t *status;
+    SemaphoreHandle_t logstring_mutex;
+    char *logstring;
+    char *logheader;
 } networking_ctx_t;
 
 void build_nvs_key_for_gpio_gain(int gpio, char *keybuf);
@@ -214,6 +217,8 @@ extern SemaphoreHandle_t log_mutex;
 void initialise_logbuffer();
 
 int log_string(const char *logstring, int bytes_to_log, bool addtime);
+
+bool overrides_active(device_status_t *status);
 
 typedef struct
 {

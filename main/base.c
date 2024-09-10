@@ -148,3 +148,27 @@ int log_string(const char* logstring, int bytes_to_log, bool addtime){
     }
     return added + bytes_to_log;
 }
+
+
+bool overrides_active(device_status_t *status)
+{
+    for (int i=0; i < DALI_CHANNELS; i++){
+        if (status->level_overrides.dali[i] > -1)
+        {
+            return true;
+        }
+    }
+    if (status->level_overrides.zeroten1 > -1)
+    {
+        return true;
+    }
+    if (status->level_overrides.zeroten2 > -1)
+    {
+        return true;
+    }
+    if (status->level_overrides.espnow > -1)
+    {
+        return true;
+    }
+    return false;
+}

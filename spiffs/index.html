@@ -21,6 +21,7 @@
         </nav>
     </header>
     <main class="loading">
+    <div id="override-warning" style="display:none">CHANNEL OVERRIDES ACTIVE!</div>
     <div id="offbutton-box">
         <button class="base levelbutton grey" id="buttonoff">All Power Off<span></span></button>
         <button class="base levelbutton grey slow" id="sbuttonoff">2 Min Delay</button>
@@ -32,8 +33,8 @@
         </div>
     </div>
     <div class="levelbutton-box" id="levelbutton-box">
-        <button class="base levelbutton magenta" level="254">%s<span>100%</span></button>
-        <button class="base levelbutton magenta slow" level="254">Slow</button>
+        <button class="base levelbutton magenta" level="254" id="preset6">%s<span>100%</span></button>
+        <button class="base levelbutton magenta slow" level="254" id="spreset6">Slow</button>
         <button class="base levelbutton purple" level="240" id="preset5">%s<span></span></button>
         <button class="base levelbutton purple slow" level="240" id="spreset5">Slow</button>
         <button class="base levelbutton teal" level="220" id="preset4">%s<span></span></button>
@@ -58,20 +59,16 @@
         <span id="ajaxlevel">--</span><input type="range" min="0" max="254" value="50" class="slider" id="levelslider">
         <button id="go">Go</button>
         <div class="info">
-            Setpoint <span id="spbyte">--</span>
+            Level <span id="currentbyte">--</span> -> <span id="spbyte">--</span> 
+            (<span id="currentpercent">--</span> -> <span id="sppercent">--</span>)
         </div>
         <div class="info">
-            Current Level <span id="currentbyte">--</span>
+            LED Power <span id="currentpower">--</span> -> <span id="sppower">--</span>
         </div>
-        <div class="info">
-            Current LED Power <span id="currentpower">--</span>
-        </div>
-        <div class="info">
-            Setpoint LED Power <span id="sppower">--</span>
-        </div>
+        
+        <div class="mono"><span id="loghead"></span><br><span id="log"></span></div>
         
         <div id="debug"></div>
-        
     </div> 
 </main>
 </body>

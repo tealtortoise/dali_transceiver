@@ -423,20 +423,25 @@ void app_main(void) {
     xTaskNotifyIndexed(xTaskGetCurrentTaskHandle(), NEW_SETPOINT_NOTIFY_IDX,
                        SETPOINT_SOURCE_INIT, eSetValueWithOverwrite);
 
+    SemaphoreHandle_t logstring_mutex = xSemaphoreCreateMutex();
+
     TaskHandle_t networktask;
     networking_ctx.mainloop_task = xTaskGetCurrentTaskHandle();
     networking_ctx.dali_command_queue = NULL;
     networking_ctx.status = &status;
+    networking_ctx.logstring_mutex = logstring_mutex;
+    networking_ctx.logstring = looplog;
+    networking_ctx.logheader = looplog_headers;
     xTaskCreate(setup_networking, "setup_networking", 4096,
                 (void *)&networking_ctx, 2, &networktask);
 
     zeroten_handle_t pwm1;
     zeroten_handle_t pwm2;
     ESP_ERROR_CHECK(
-        setup_0_10v_channel(PWM_010v_GPIO, CALIBRATION_GENERIC_LOG_ELDOLED_ECO, &pwm1));
+        setup_0_10v_channel(PWM_010v_GPIO, get_setting_indexed("startup_cal",1), &pwm1));
     ESP_ERROR_CHECK(
-        setup_0_10v_channel(PWM_010v2_GPIO, CALIBRATION_GENERIC_LOG_ELDOLED_ECO, &pwm2));
-
+        setup_0_10v_channel(PWM_010v2_GPIO, get_setting_indexed("startup_cal",2), &pwm2));
+    // vTaskDelay(pdMS_TO_TICKS(5000));
     setup_button_interrupts(&status, pwm1, pwm2);
 
     dali_transceiver_handle_t dali_transceiver = setup_dali(&networking_ctx);
@@ -449,6 +454,7 @@ void app_main(void) {
     //     .status = &status};
     // int resistor_level;
     // setup_adc(adcconfig);
+
 
     BaseType_t received;
     esp_err_t sent;
@@ -744,17 +750,18 @@ void app_main(void) {
                 }
                 set_0_10v_level(pwm2, zeroten2_lvl_to_send);
             } else {
-                set_zero_duty_pwm_channel(pwm2);
+                ESP_ERROR_CHECK(set_zero_duty_pwm_channel(pwm2));
             }
         } else {
             // we can't use channel 2 without channel 1 so stop both
-            set_zero_duty_pwm_channel(pwm1);
-            set_zero_duty_pwm_channel(pwm2);
+            ESP_ERROR_CHECK(set_zero_duty_pwm_channel(pwm1));
+            ESP_ERROR_CHECK(set_zero_duty_pwm_channel(pwm2));
         }
 
         // DALI
 
-        // if we're using DALI use mutex to make sure we're uninterruped by any
+        // if we're using DALI use mutex to make sure we dont interrupt any
+        // if we're using DALI use mutex to make sure we dont interrupt any
         // dali config commands from the REST API
         if ((configbits & CONFIGBIT_USE_DALI) &&
             dali_take_mutex(dali_transceiver, 0)) {
@@ -787,64 +794,98 @@ void app_main(void) {
         /////
         // logging for tick
         /////
-        levellog_count += 1;
 
-        looplog[0] = 0;
-        looplog_headers[0] = 0;
-        strcat(looplog_headers, "Lvl-> SP PWR | SRCE N |");
-        sprintf(looplog, "%3.1u->%3.1d %s | %s %1.i |", status.actual_level,
-                status.setpoint, (status.power_on) ? " ON" : "OFF",
-                source_str[status.setpoint_source & 0xF], (int)new_setpoint);
-
-        if (configbits & CONFIGBIT_USE_0_10v1)
+        if (xSemaphoreTake(logstring_mutex, pdMS_TO_TICKS(10)))
         {
-            snprintf(looplog_template, 8, "    %3.1i", zeroten1_lvl_to_send);
-            strcat(looplog, looplog_template);
-            strcat(looplog_headers, " 0-10v1");
-            if (configbits & CONFIGBIT_USE_0_10v2)
+            levellog_count += 1;
+
+            looplog[0] = 0;
+            looplog_headers[0] = 0;
+            strcat(looplog_headers, "Lvl-> SP PWR | SRCE N |");
+            sprintf(looplog, "%3.1u->%3.1d %s | %s %1.i |", status.actual_level,
+                    status.setpoint, (status.power_on) ? " ON" : "OFF",
+                    source_str[status.setpoint_source & 0xF], (int)new_setpoint);
+            if (overrides_active(&status))
             {
-                snprintf(looplog_template, 8, "    %3.1i", zeroten2_lvl_to_send);
-                strcat(looplog, looplog_template);
-                strcat(looplog_headers, " 0-10v2");
+                strcat(looplog_headers, " OVRIDE |");
+                strcat(looplog,         " ACTIVE |");
             }
-        }
-        int used = 0;
-        for (int i = 0; i < DALI_CHANNELS; i++) {
-            if ((configbits & CONFIGBIT_USE_DALI) && dali_addresses[i] != -1) {
-                snprintf(looplog_template, 8, "   %3.1i", dali_levels_to_send[i]);
+            if (configbits & CONFIGBIT_USE_0_10v1)
+            {
+                snprintf(looplog_template, 8, "  %3.1i", zeroten1_lvl_to_send);
                 strcat(looplog, looplog_template);
-                strcpy(looplog_template, " DALIX");
-                looplog_template[5] = 'A' + i;
-                strcat(looplog_headers, looplog_template);
+                strcat(looplog_headers, " 10v1");
+                if (configbits & CONFIGBIT_USE_0_10v2)
+                {
+                    snprintf(looplog_template, 8, "  %3.1i", zeroten2_lvl_to_send);
+                    strcat(looplog, looplog_template);
+                    strcat(looplog_headers, " 10v2");
+                }
             }
-        }
-        if (configbits & CONFIGBIT_TRANSMIT_ESPNOW)
-        {
-            strcat(looplog_headers, " ESPNOW");
-            snprintf(looplog_template, 8, "    %3.1i", espnow_lvl_to_send);
-            strcat(looplog, looplog_template);
-        }
+            int used = 0;
+            for (int i = 0; i < DALI_CHANNELS; i++) {
+                if ((configbits & CONFIGBIT_USE_DALI) && dali_addresses[i] != -1) {
+                    snprintf(looplog_template, 8, " %3.1i", dali_levels_to_send[i]);
+                    strcat(looplog, looplog_template);
+                    strcpy(looplog_template, " DAX");
+                    looplog_template[3] = 'A' + i;
+                    strcat(looplog_headers, looplog_template);
+                }
+            }
+            if (configbits & CONFIGBIT_TRANSMIT_ESPNOW)
+            {
+                strcat(looplog_headers, " ESPN");
+                snprintf(looplog_template, 8, "  %3.1i", espnow_lvl_to_send);
+                strcat(looplog, looplog_template);
+            }
 
-        if (configbits & CONFIGBIT_USE_RELAY1)
-        {
-            strcat(looplog_headers, " RLY1");
-            snprintf(looplog_template, 8, "  %3.1i", relay1_lvl_to_send);
+            if (configbits & CONFIGBIT_USE_RELAY1)
+            {
+                strcat(looplog_headers, " RY1");
+                snprintf(looplog_template, 8, " %3.1i", relay1_lvl_to_send);
+                strcat(looplog, looplog_template);
+            }
+            if (configbits & CONFIGBIT_USE_RELAY2)
+            {
+                strcat(looplog_headers, " RY2");
+                snprintf(looplog_template, 8, " %3.1i", relay2_lvl_to_send);
+                strcat(looplog, looplog_template);
+            }
+            char* powerfmt;
+            if (level_el.power < 10.0)
+            {
+                powerfmt = " | %5.3f";
+            }
+            else if (level_el.power < 100.0)
+            {
+                powerfmt = " | %5.2f";
+            }
+            else
+            {
+                powerfmt = " | %5.1f";
+            }
+            snprintf(looplog_template, 255, powerfmt, level_el.power);
             strcat(looplog, looplog_template);
-        }
-        if (configbits & CONFIGBIT_USE_RELAY2)
-        {
-            strcat(looplog_headers, " RLY2");
-            snprintf(looplog_template, 8, "  %3.1i", relay2_lvl_to_send);
+            char* fadefmt;
+            if (fadetime < 1000000)
+            {
+                fadefmt = " %5.1f";
+            }
+            else
+            {
+                fadefmt = " %5.0f";
+            }
+            snprintf(looplog_template, 255, fadefmt, ((double) fadetime) / 1000.0);
             strcat(looplog, looplog_template);
+
+            snprintf(looplog_template, 255, " %6.1lu %4.1i  %3.1lu",
+                        tlt_array[status.actual_level],
+                        ((int)actual_looptime),
+                        idle_reawake_interval >> 10);
+            strcat(looplog, looplog_template);
+            strcat(looplog_headers, " |   Pwr  Fade    TLT   LT Wake");
+            xSemaphoreGive(logstring_mutex);
         }
-        snprintf(looplog_template, 255, "  %5.3g %7.1i %6.1lu %4.1i  %3.1lu",
-                    level_el.power,
-                    fadetime,
-                    tlt_array[status.actual_level],
-                    ((int)actual_looptime),
-                    idle_reawake_interval >> 10);
-        strcat(looplog, looplog_template);
-        strcat(looplog_headers, "    Pwr    Fade    TLT   LT Wake");
 
         if (!(levellog_count & 7))
         {

@@ -197,6 +197,22 @@ static esp_err_t nvs_put_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
+static void generate_json(char *buffer, networking_ctx_t *ctx)
+{
+    if (xSemaphoreTake(ctx->logstring_mutex, pdMS_TO_TICKS(100)))
+    {
+        sprintf(buffer, "{\"setpoint\":%d,\"actual_level\":%d,\"actual_power\":%f,\"setpoint_power\":%f,\"logstring\":\"%s\",\"logheader\":\"%s\",\"overrides\":%s}",
+            ctx->status->setpoint,
+            ctx->status->actual_level,
+            ctx->status->lut[ctx->status->actual_level].power,
+            ctx->status->lut[ctx->status->setpoint].power,
+            ctx->logstring,
+            ctx->logheader,
+            overrides_active(ctx->status) ? "true" : "false");
+        xSemaphoreGive(ctx->logstring_mutex);
+    }
+}
+
 static esp_err_t current_setpoint_handler(httpd_req_t *req)
 {
     parse_uri(req->uri);
@@ -205,11 +221,7 @@ static esp_err_t current_setpoint_handler(httpd_req_t *req)
         networking_ctx_t *ctx = httpd_get_global_user_ctx(req->handle);
         if (strcmp(substrings[1], "all-json") == 0)
         {
-            sprintf(httpd_temp_buffer, "{\"setpoint\":%d,\"actual_level\":%d,\"actual_power\":%f,\"setpoint_power\":%f}",
-                ctx->status->setpoint,
-                ctx->status->actual_level,
-                ctx->status->lut[ctx->status->actual_level].power,
-                ctx->status->lut[ctx->status->setpoint].power);
+            generate_json(httpd_temp_buffer, ctx);
         }
         else
         {
@@ -243,11 +255,7 @@ static esp_err_t current_setpoint_handler(httpd_req_t *req)
             xTaskNotifyIndexed(ctx->mainloop_task, NEW_SETPOINT_NOTIFY_IDX, SETPOINT_SOURCE_REST, eSetValueWithOverwrite);
             ESP_LOGI(TAG, "Set new setpoint %i", data);
             
-            sprintf(httpd_temp_buffer, "{\"setpoint\":%d,\"actual_level\":%d,\"actual_power\":%f,\"setpoint_power\":%f}",
-                ctx->status->setpoint,
-                ctx->status->actual_level,
-                ctx->status->lut[ctx->status->actual_level].power,
-                ctx->status->lut[ctx->status->setpoint].power);
+            generate_json(httpd_temp_buffer, ctx);
         }
         else
         {
@@ -631,6 +639,7 @@ static esp_err_t view_luts(httpd_req_t *req)
 
 static esp_err_t restart(httpd_req_t *req)
 {
+    httpd_resp_send(req, "", HTTPD_RESP_USE_STRLEN);
     esp_restart();
     return ESP_OK;
 }

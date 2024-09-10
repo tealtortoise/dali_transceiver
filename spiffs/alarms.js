@@ -130,15 +130,15 @@ function all() {
                 return;
             }
 
-            send(`/nvs/alarmmin/${alarmnum}/`, min, alarmtime_el);
-            send(`/nvs/alarmhour/${alarmnum}/`, hour, alarmtime_el);
-            send(`/nvs/alarmfade/${alarmnum}/`, undefined, fadetime_el, (st) => {
+            promises.push(send(`/nvs/alarmmin/${alarmnum}/`, min, alarmtime_el));
+            promises.push(send(`/nvs/alarmhour/${alarmnum}/`, hour, alarmtime_el));
+            promises.push(send(`/nvs/alarmfade/${alarmnum}/`, undefined, fadetime_el, (st) => {
                 return st * 1000;
-            });
-            send(`/nvs/alarmsetpoint/${alarmnum}/`, setpoint, setpoint_el);
-            send(`/nvs/alarmenable/${alarmnum}/`, enabled, enable_el);
+            }));
+            promises.push(send(`/nvs/alarmsetpoint/${alarmnum}/`, setpoint, setpoint_el));
+            promises.push(send(`/nvs/alarmenable/${alarmnum}/`, enabled, enable_el));
             
-            if (i > 5) continue;
+            if (i > 6) continue;
             let preset_el = getEl("preset" + i);
             let preset = preset_el.value;
             
@@ -148,7 +148,7 @@ function all() {
             else if (preset > 254) {
                 preset = 254;
             }
-            send(`/nvs/preset/${i}/`, preset, preset_el);
+            promises.push(send(`/nvs/preset/${i}/`, preset, preset_el));
         }
         let default_fadetime_el = getEl("default_fadetime");
         let default_fadetime = default_fadetime_el.value;
@@ -172,6 +172,8 @@ function all() {
         promises.push(pushhelper("full_power", _ => {return Math.min(Math.max(0, _), 512)}));
         promises.push(pushhelper("lutfile", _ => {return Math.max(0, _)}));
         promises.push(pushhelper("namefile", _ => {return Math.max(0, _)}));
+        promises.push(pushhelper("startup_cal1", _ => {return Math.max(0, _)}));
+        promises.push(pushhelper("startup_cal2", _ => {return Math.max(0, _)}));
         promises.push(pushhelper("idle_intvl_ms",  _ => {return Math.max(0, _) * 1000}));
         promises.push(pushhelper("idle_cooldown",  _ => {return Math.max(0, _) * 1000}));
         promises.push(pushhelper("startup_level",  _ => {return Math.max(0, _)}));
@@ -179,7 +181,7 @@ function all() {
         for (let i = 0; i < NUM_DALI_CHANNELS; i++) {
             let channel_el = getEl("dali" + String.fromCharCode(97 + i) + "_address");
             let channel = channel_el.value;
-            send("/nvs/" + channel_el.id + "/", channel, channel_el);
+            promises.push(send("/nvs/" + channel_el.id + "/", channel, channel_el));
         }
         let configbits = 0;
         for (let bit = 0; bit <= 6; bit++) {
@@ -197,10 +199,25 @@ function all() {
                 }
             }));
         }
-        Promise.all(promises).then(() => {
-            console.log("All done");
-            getEl("update1").innerHTML = "Updated!";
-            getEl("update2").innerHTML = "Updated!";
+        Promise.all(promises).then((ar) => {
+            let anychanged = false;
+
+            ar.forEach((item) => {
+                if (item) {
+                    anychanged = true;
+                }
+            });
+            if (!anychanged) return;
+            console.log("All done", ar);
+            getEl("update1").innerHTML = "Update complete!";
+            getEl("update2").innerHTML = "Update complete!";
+            window.setTimeout(() => {
+                getEl("update1").innerHTML = "Update all";
+                getEl("update2").innerHTML = "Update all";
+                Array.from(document.getElementsByTagName("input")).forEach((el) => {
+                    el.classList.remove("saved");
+                });
+            }, 3500);
 
         })
     }
@@ -238,7 +255,7 @@ function all() {
             time_el.setAttribute("serverval", pad(hour) + pad(min));
         });
         
-        if (i>5) continue;
+        if (i>6) continue;
         uri = `/nvs/preset/${i}/`;
         get(uri, getEl("preset" + i));
     }
@@ -257,6 +274,8 @@ function all() {
     get("/nvs/full_power/", getEl("full_power"));
     get("/nvs/lutfile/", getEl("lutfile"));
     get("/nvs/namefile/", getEl("namefile"));
+    get("/nvs/startup_cal1/", getEl("startup_cal1"));
+    get("/nvs/startup_cal2/", getEl("startup_cal2"));
     get("/nvs/startup_level/", getEl("startup_level"));
     get("/nvs/idle_intvl_ms/", getEl("idle_intvl_ms"), st => {
         if (st >= 0){
@@ -286,7 +305,7 @@ function all() {
     });
 
 
-    let buttons = Array.from(document.getElementsByTagName("button"));
+    let buttons = Array.from(document.getElementsByClassName("update"));
     buttons.forEach((button_el) => {
         console.log("addedonclick");
         button_el.onclick = buttonclick;
@@ -326,13 +345,34 @@ function all() {
         input_el.onchange = markModified;
     });
     inputs.forEach((input_el) => {
-        input_el.addEventListener("keypress", function(event) {
-            // If the user presses the "Enter" key on the keyboard
-            if (event.key === "Enter") {
+        input_el.addEventListener("blur", function(event) {
+            if (1 || event.key === "Enter") {
                 document.getElementById("update1").click();
             }
         }) 
     });
+
+    function restart(){
+        let options = {
+            method:"POST",
+            body:""
+        }
+        fetch("/restart", options);
+        let reloadtimeleft = 10;
+        document.getElementById("restart").innerHTML = `Restarting. Reload in ${reloadtimeleft}s`;
+        function reloadtimer(){
+            reloadtimeleft -= 1;
+            if (reloadtimeleft < 1){
+                
+                window.location = window.location;
+            } else {
+                document.getElementById("restart").innerHTML = `Restarting. Reload in ${reloadtimeleft}s`;
+                window.setTimeout(reloadtimer, 1000);
+            }
+        }
+        window.setTimeout(reloadtimer, 1000);
+    }
+    document.getElementById("restart").addEventListener("click", restart);
 }
 
 window.onload = all;

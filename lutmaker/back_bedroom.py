@@ -160,12 +160,13 @@ LESSTHRIVE_CHANNELS = {
 }
 
 F90_PROP = 1.0
-F90_PROP_START = 0.2
+F90_PROP_START = 0.5
 FADE = 0.04
 F90_PRIORITY = 1
-F90_START = 0.30
+F90_START = 0.25
 F90_INC = 0.12
-F90_INC2 = 0.30
+F90_INC2 = 0.25
+F90_INC3 = 0.35
 
 F90_TWOSTART_CHANNELS = {
     "dalia": Channel(
@@ -214,13 +215,6 @@ F90_TWOSTART_CHANNELS = {
     "zeroten1": Channel(
         friendly_name="5000k F90 3",
         type=ChannelType.INDEPENDENT,
-        # points=[
-        #     (0.0, 0.0),
-        #     (0.60 - FADE, 0.0),
-        #     (0.60001 - FADE, F90_PROP_START),
-        #     (0.60 + FADE, F90_PROP),
-        #     (1.0, F90_PROP),
-        # ],
         points=[
             (0.0, 0.0),
             (F90_START + F90_INC2, 0.0),
@@ -234,29 +228,22 @@ F90_TWOSTART_CHANNELS = {
         requires_relay=Relay.RELAY2,
         priority=F90_PRIORITY,
     ),
-    # "dalie": Channel(
-    #     friendly_name="5000k F90 4",
-    #     type=ChannelType.INDEPENDENT,
-    #     points=[
-    #         (0.0, 0.0),
-    #         (F90_START - FADE, 0.0),
-    #         (F90_START + 0.001 - FADE, F90_PROP_START),
-    #         (F90_START + FADE, F90_PROP),
-    #         (1.0, F90_PROP),
-    #     ],
-        # points=[
-        #     (0.0, 0.0),
-        #     (0.57 - FADE, 0.0),
-        #     (0.57001 - FADE, F90_PROP_START),
-        #     (0.57 + FADE, F90_PROP),
-        #     (1.0, F90_PROP),
-        # ],
-    #     led=LED(imax=950, vf=51, eff=189),
-    #     group=0,
-    #     driver_min=0.01,
-    #     requires_relay=Relay.RELAY2,
-    #     priority=F90_PRIORITY,
-    # ),
+    "zeroten2": Channel(
+        friendly_name="5000k F90 4",
+        type=ChannelType.INDEPENDENT,
+        points=[
+            (0.0, 0.0),
+            (F90_START + F90_INC3, 0.0),
+            (F90_START + F90_INC3 + 0.001, F90_PROP_START * 0.15),
+            (F90_START + F90_INC3 + FADE, F90_PROP),
+            (1.0, F90_PROP),
+        ],
+        led=LED(imax=1050, vf=49, eff=195),
+        group=0,
+        driver_min=0.01,
+        requires_relay=Relay.RELAY2,
+        priority=F90_PRIORITY,
+    ),
 }
 process(channels=F90_TWOSTART_CHANNELS,
         minimum_dim = 0.0004,

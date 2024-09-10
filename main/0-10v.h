@@ -6,12 +6,13 @@
 #include "esp_err.h"
 #include "driver/ledc.h"
 
-#define CALIBRATION_LINEAR 1 // simple linear 0-10v ( not implemented )
+#define CALIBRATION_GENERIC_LINEAR 1 // simple generic linear 0-10v
 #define CALIBRATION_GENERIC_LOG_ELDOLED_ECO 2 // 0-10v output designed for eldoled 1% driver programmed with log curve
 #define CALIBRATION_GENERIC_LOG_ELDOLED_SOLO 5 // 0-10v output designed for eldoled 0.1% driver programmed with log curve
-#define CALIBRATION_PWM_LOG 3 // logarithmic output designed for directly modulating LED down to 0.1%
+#define CALIBRATION_PWM_LOG 3 // logarithmic output designed for directly modulating LED attached to GPIO down to 0.1%
 #define CALIBRATION_LOOKUP_NVS 4 // As generic eldoled but with gain calibration if stored in flash
 #define CALIBRATION_LOOKUP_NVS_ECODRIVE 6 // As generic eldoled but with gain calibration if stored in flash
+#define CALIBRATION_CHARGEPUMP_TEST 7 // Very low duty LUT designed to test minimum duty needed for charge pump operation
 
 typedef struct {
     uint16_t lut[255];
