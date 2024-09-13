@@ -73,26 +73,34 @@ button.nav {
     width: 100%;
     padding: 0.2em 0.4em 0.2em 0.4em;
     border-radius: 0.4em;
-    /* border-color: white; */
-    /* border-width: 0.1em; */
-    /* box-shadow: 0px 0px 5px 5px rgba(0, 0, 0, 0.171); */
     border: none;
     color: white;
     font-size: 120%;
     font-family: inherit;
+    background-image: linear-gradient(270deg, #000000c9, #000000a6);
+}
+.green button.nav {
     
-    background-image: linear-gradient(to right, #281b2a, #432f5f);
+    /* background-image: linear-gradient(270deg, #000000c9, #000000a6); */
 }
-
-button.nav.selected {
-    background-image: linear-gradient(to right, #5a1f63, #6d3db2);
+.addblack button.nav.selected {
+    background-image: linear-gradient(270deg, #00000077, #00000044);
 }
+.addgreen button.nav.selected {
+    background-image: linear-gradient(270deg, #00600077, #00600044);
+}
+.addred button.nav.selected {
+    background-image: linear-gradient(270deg, #30000077, #30000044);
+}
+/* .green button.nav.selected {
+    background-image: linear-gradient(to right, #1f6320, #3db256);
+} */
 
 header a{
     display: block;
     width: 100%;
 }
-div.levelbutton-box {
+div.levelbox {
     margin: 1em 0em;
     display: grid;
     row-gap: 4px;
@@ -140,7 +148,7 @@ button.levelbutton.slow {
     font-size: 100%;
 }
 
-button.levelbutton.selected span{
+button.levelbutton.selected span.percent{
     color: white !important;
     text-shadow: 1px 1px 5px black !important;
 }
@@ -154,7 +162,7 @@ h2#fadetitle {
     margin: 0;
 }
 div.fadespeed-box {
-    margin: 1em 0em;
+    margin: 1em 2em;
     display: grid;
     row-gap: 4px;
     grid-template-columns: 2fr 2fr 2fr 2fr;
@@ -203,7 +211,7 @@ button.levelbutton:active {
     border: solid white 2px;
 }
 
-.levelbutton span {
+.levelbutton span.percent {
     padding-left: 0.5em;
     font-size: 80%;
     color: rgb(255 255 255 / 51%);
@@ -216,13 +224,22 @@ button.update, button.restart, button.link {
     width: 80%;
     font-size: 180%;
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background-image: linear-gradient(to right, #523971, #40337c);
+    background-image: linear-gradient(270deg, #00000077, #00000044);
     /* border: white solid 3px; */
     border: none;
     margin: 1em auto 2em auto;
     padding: 0.2em;
     color: white;
     border-radius: 10em;
+}
+.addgrey button.update {
+    background-image: linear-gradient(270deg, #00000077, #00000044);
+}
+.addgreen button.update {
+    background-image: linear-gradient(270deg, #00600077, #00600044);
+}
+.addred button.update {
+    background-image: linear-gradient(270deg, #60000077, #60000044);
 }
 
 button.restart {
@@ -238,26 +255,115 @@ a {
     text-decoration: none;
 }
 
+.addred button.one {
+    background-image: linear-gradient(270deg, #30000099, #30000077);
+}
+.addred button.two {
+    background-image: linear-gradient(270deg, #30000088, #30000066);
+}
+.addred button.three {
+    background-image: linear-gradient(270deg, #30000077, #30000055);
+}
+.addred button.four {
+    background-image: linear-gradient(270deg, #30000066, #30000044);
+}
+.addred button.five {
+    background-image: linear-gradient(270deg, #30000055, #30000033);
+}
+.addred button.six {
+    background-image: linear-gradient(270deg, #30000044, #30000022);
+}
+.addred button.seven {
+    background-image: linear-gradient(270deg, #30000033, #30000011);
+}
+.addgreen button.one {
+    background-image: linear-gradient(270deg, #006000aa, #00600077);
+}
+.addgreen button.two {
+    background-image: linear-gradient(270deg, #00600099, #00600066);
+}
+.addgreen button.three {
+    background-image: linear-gradient(270deg, #00600088, #00600055);
+}
+.addgreen button.four {
+    background-image: linear-gradient(270deg, #00600077, #00600044);
+}
+.addgreen button.five {
+    background-image: linear-gradient(270deg, #00600066, #00600033);
+}
+.addgreen button.six {
+    background-image: linear-gradient(270deg, #00600055, #00600022);
+}
+.addgreen button.seven {
+    background-image: linear-gradient(270deg, #00600044, #00600011);
+}
+
+.addblue button.one {
+    background-image: linear-gradient(270deg, #002050aa, #00205077);
+}
+.addblue button.two {
+    background-image: linear-gradient(270deg, #00205099, #00205066);
+}
+.addblue button.three {
+    background-image: linear-gradient(270deg, #00205088, #00205055);
+}
+.addblue button.four {
+    background-image: linear-gradient(270deg, #00205077, #00205044);
+}
+.addblue button.five {
+    background-image: linear-gradient(270deg, #00205066, #00205033);
+}
+.addblue button.six {
+    background-image: linear-gradient(270deg, #00205055, #00205022);
+}
+.addblue button.seven {
+    background-image: linear-gradient(270deg, #00205044, #00205011);
+}
+.addblack button.one {
+    background-image: linear-gradient(270deg, #000000aa, #00000077);
+}
+.addblack button.two {
+    background-image: linear-gradient(270deg, #00000099, #00000066);
+}
+.addblack button.three {
+    background-image: linear-gradient(270deg, #00000088, #00000055);
+}
+.addblack button.four {
+    background-image: linear-gradient(270deg, #00000077, #00000044);
+}
+.addblack button.five {
+    background-image: linear-gradient(270deg, #00000066, #00000033);
+}
+.addblack button.six {
+    background-image: linear-gradient(270deg, #00000055, #00000022);
+}
+.addblack button.seven {
+    background-image: linear-gradient(270deg, #00000044, #00000011);
+}
+
 .red {
     /* background-color: rgb(235, 47, 57); */
     background-image: linear-gradient(to right, #a71414, #e03753);
 }
-.purple {
-    /* background-color: rgb(156, 68, 228); */
-    
-    background-image: linear-gradient(to right, #622d95, #956ec9);
+.purple button, .purple input {
+    background-color: #7028b7;
 }
-.teal {
-    /* background-color: rgb(14, 193, 124); */
-    background-image: linear-gradient(to right, #3655ac, #17adac);
+.teal button, .teal input {
+    background-color: #12b4c6;
 }
-.green {
-    /* background-color: rgb(175, 212, 8); */
-    background-image: linear-gradient(to right, #25874a, #36ac65);
+.green button, .green input{
+    background-color: #2e9b41;
 }
-.magenta {
+.lime button, .lime input {
+    background-color: #8dbc07;
+}
+.blue button, .blue input {
+    background-color: #532db4;
+}
+.magenta button, .magenta input {
     /* background-color: rgb(212, 8, 124); */
-    background-image: linear-gradient(to right, #8b1672, #ba3995);
+    background-color: #b02a86;
+    /* background-image: linear-gradient(to right, #8b1672, #ba3995); */
 }
 .orange {
     background-image: linear-gradient(to right, #cb3604, #ad8a21);
@@ -266,7 +372,10 @@ a {
     background-image: linear-gradient(to right, #717529, #acb419);
 }
 .grey {
-    background-image: linear-gradient(to right, #474747, #6c6c6c);
+    background-image: linear-gradient(270deg, #00000077, #00000044);
+}
+.addgreen .grey {
+    background-image: linear-gradient(270deg, #00600077, #00600044);
 }
 .lightgrey {
     background-image: linear-gradient(to right, #a6a6a6, #cecece);
@@ -276,6 +385,10 @@ a {
     color: black !important;
 }
 
+button .num {
+    font-size: 90%;
+    margin-right: 0.5em;
+}
 div.alarmtype {
     grid-column: 1 / 5;
 }
@@ -303,16 +416,26 @@ div.alarmtype {
 input {
     border: none;
 }
+.addblack input:not([type]), input[type="text"] {
+    background-image: linear-gradient(to right, #00000052, #00000099);
+}
+.addgreen input:not([type]), input[type="text"] {
+    background-image: linear-gradient(to right, #00600052, #00600099);
+}
+.addred input:not([type]), input[type="text"] {
+    background-image: linear-gradient(to right, #30000052, #30000099);
+}
+
 input:not([type]), input[type="text"] {
     display: block;
     width: 100%;
     font-size: 110%;
     text-align: center;
-    background-image: linear-gradient(to right, #523971, #40337c);
     /* background-color: rgb(0, 0, 0); */
     color: #ffffff;
     border:black solid 2px;
 }
+
 input.modified {
     border: rgb(161 82 255) solid 2px;
 }
@@ -336,11 +459,11 @@ input.error {
     --switch-shift: var(--slider-height);
     --transition: all 0.2s ease;
 
-    --switch-on-color: #9d0ed5;
-    --slider-on-color: #6b216c;
+    --switch-on-color: #ffffff;
+    --slider-on-color: #d1d1d1;
 
-    --switch-off-color: #512b58;
-    --slider-off-color: #4f4f4f;
+    --switch-off-color: #787878;
+    --slider-off-color: #d1d1d1;
     margin: -0.5em 0 0.1em 0;
 }
 

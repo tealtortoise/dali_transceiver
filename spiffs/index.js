@@ -17,7 +17,7 @@ function all() {
     let fadebuttons = Array.from(document.getElementsByClassName("fadebutton"));
 
     let currentfade_el = document.getElementById("currentfadeinner");
-    let levelbox = document.getElementById("levelbutton-box");
+    let levelbox = document.getElementById("levelbox");
     let offbox = document.getElementById("offbutton-box");
     let onbox = document.getElementById("onbutton-box");
     let override_warning_el = document.getElementById("override-warning");
@@ -119,7 +119,7 @@ function all() {
             if (st >= 0) {
                 button_el.setAttribute("level", st);
                 slutton_el.setAttribute("level", st);
-                button_el.childNodes[1].innerHTML = levelToPercent(st);
+                button_el.childNodes[2].innerHTML = levelToPercent(st);
             }
         }));
     }
@@ -203,8 +203,7 @@ function all() {
     function setUIPowerOff(timeout) {
         powerStatus = false;
         if (!timeout) offmessage_el.innerHTML = offmessage;
-        let box = document.getElementById("levelbutton-box");
-        box.style.opacity = "0.6";
+        levelbox.style.opacity = "0.6";
         let offbox = document.getElementById("offbutton-box");
         let onbox = document.getElementById("onbutton-box");
         offbox.style.display = "none";
@@ -212,8 +211,7 @@ function all() {
     }
     function setUIPowerOn() {
         powerStatus = true;
-        let box = document.getElementById("levelbutton-box");
-        box.style.opacity = "1.0";
+        levelbox.style.opacity = "1.0";
         let offbox = document.getElementById("offbutton-box");
         let onbox = document.getElementById("onbutton-box");
         onbox.style.display = "none";
