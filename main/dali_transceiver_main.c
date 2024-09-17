@@ -579,6 +579,10 @@ void app_main(void) {
                                          start_of_fade_level, status.setpoint);
                     looptime_outside_tolerance_count = 0;
                 }
+                else
+                {
+                    idle_start_time = current_time;
+                }
                 break;
             };
             if (current_time > reawake_time) break;

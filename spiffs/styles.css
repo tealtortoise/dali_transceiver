@@ -340,10 +340,41 @@ a {
 .addblack button.seven {
     background-image: linear-gradient(270deg, #00000044, #00000011);
 }
+.purplegreen button.one {
+    background-color: #b02a86;
+    background-image: linear-gradient(270deg, #00000044, #00000011);
+}
+.purplegreen button.two {
+    background-color: #8dbc07;
+    background-image: linear-gradient(270deg, #00000044, #00000011);
+}
+.purplegreen button.three {
+    background-color: #b02a86;
+    background-image: linear-gradient(270deg, #00000044, #00000011);
+}
+.purplegreen button.four {
+    background-color: #8dbc07;
+    background-image: linear-gradient(270deg, #00000044, #00000011);
+}
+.purplegreen button.five {
+    background-color: #b02a86;
+    background-image: linear-gradient(270deg, #00000044, #00000011);
+}
+.purplegreen button.six {
+    background-color: #8dbc07;
+    background-image: linear-gradient(270deg, #00000044, #00000011);
+}
+.purplegreen button.seven {
+    background-color: #b02a86;
+    background-image: linear-gradient(270deg, #00000044, #00000011);
+}
 
 .red {
     /* background-color: rgb(235, 47, 57); */
     background-image: linear-gradient(to right, #a71414, #e03753);
+}
+.purplegreen button, .purplegreen input {
+    background-color: #8dbc07;
 }
 .purple button, .purple input {
     background-color: #7028b7;

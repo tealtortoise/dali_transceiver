@@ -207,7 +207,7 @@ esp_err_t set_0_10v_level(zeroten_handle_t handle, uint8_t level) {
     zeroten_handle_* zhandle = (zeroten_handle_ *) handle;
     uint32_t duty = get_pwm_duty(level, zhandle->lut);
     
-    ESP_LOGI(TAG, "Setting duty on LEDC %i to %lu", zhandle->ledc_channel, duty);
+    ESP_LOGD(TAG, "Setting duty on LEDC %i to %lu", zhandle->ledc_channel, duty);
     esp_err_t returnval = ledc_set_duty(LEDC_LOW_SPEED_MODE, zhandle->ledc_channel, duty);
     // ESP_LOGI(TAG, "level %d -> duty %lu (res %i)", level, duty, pwm_resolution );
     returnval = returnval | ledc_update_duty(LEDC_LOW_SPEED_MODE, zhandle->ledc_channel);
@@ -227,7 +227,7 @@ esp_err_t disable_pwm_channel(zeroten_handle_t handle){
 esp_err_t set_zero_duty_pwm_channel(zeroten_handle_t handle){
     // we need this as zero level may not be zero duty in LUT
     zeroten_handle_* zhandle = (zeroten_handle_ *) handle;
-    ESP_LOGI(TAG, "Setting zero duty on LEDC %i", zhandle->ledc_channel);
+    ESP_LOGD(TAG, "Setting zero duty on LEDC %i", zhandle->ledc_channel);
     esp_err_t returnval = ledc_set_duty(LEDC_LOW_SPEED_MODE, zhandle->ledc_channel, 0);
     returnval = returnval | ledc_update_duty(LEDC_LOW_SPEED_MODE, zhandle->ledc_channel);
     if (returnval) {
