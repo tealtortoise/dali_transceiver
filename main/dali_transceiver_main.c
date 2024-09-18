@@ -617,18 +617,23 @@ void app_main(void) {
                     memcpy(min_level_array, &status.lut[0], sizeof(level_t));
                     break;
                 }
+
+                // get test level
+                int next_lvl_unclamped = lvl + sign * (int)tick_inc_array[lvl];
+                lvl = flexclamp(next_lvl_unclamped, status.actual_level,
+                                status.setpoint);
+
+                if (loops < 2)
+                {
+                    // we need to advance one level regardless of timing
+                    continue;
+                }
+
                 ESP_LOGD(
                     TAG,
                     "Looking at lvl %d. Adding %lu to acc (%lu). Ticking %d",
                     lvl, tlt_array[lvl], time_acc, tick_inc_array[lvl]);
 
-                // check to see if we've gone far enough ahead
-                time_acc += tlt_array[lvl];
-                if (time_acc > BALLAST_WAKE_LOOKAHEAD_MS) break;
-                // get test level
-                int next_lvl_unclamped = lvl + sign * (int)tick_inc_array[lvl];
-                lvl = flexclamp(next_lvl_unclamped, status.actual_level,
-                                status.setpoint);
 
                 // get iterable copy so we avoid type punning shenanigans
                 uint8_t future_level_array[sizeof(level_t)];
@@ -641,6 +646,10 @@ void app_main(void) {
                         // ensure channel does not switch completely off
                         min_level_array[ch] = 1;
                 }
+                
+                // check to see if we've gone far enough ahead
+                time_acc += tlt_array[lvl];
+                if (time_acc > BALLAST_WAKE_LOOKAHEAD_MS) break;
             }
 
             // prepare next loop
@@ -781,11 +790,13 @@ void app_main(void) {
                 }
             }
             if (dali_broadcast >= 0) {
+                // do single broadcast
                 dali_levels_to_send[dali_broadcast] =
                     transmit_setlevel_dali_channel(
                         dali_transceiver, dali_broadcast,
                         level_el.dali_lvl[dali_broadcast], force_resend);
             } else {
+                // send each channel separately
                 for (int i = 0; i < DALI_CHANNELS; i++) {
                     dali_levels_to_send[i] = transmit_setlevel_dali_channel(
                         dali_transceiver, i, level_el.dali_lvl[i],
@@ -814,6 +825,8 @@ void app_main(void) {
                 strcat(looplog_headers, " OVRIDE |");
                 strcat(looplog,         " ACTIVE |");
             }
+
+            // strcat 0-10v data
             if (configbits & CONFIGBIT_USE_0_10v1)
             {
                 snprintf(looplog_template, 8, "  %3.1i", zeroten1_lvl_to_send);
@@ -827,6 +840,8 @@ void app_main(void) {
                 }
             }
             int used = 0;
+
+            // strcat DALI data
             for (int i = 0; i < DALI_CHANNELS; i++) {
                 if ((configbits & CONFIGBIT_USE_DALI) && dali_addresses[i] != -1) {
                     snprintf(looplog_template, 8, " %3.1i", dali_levels_to_send[i]);
