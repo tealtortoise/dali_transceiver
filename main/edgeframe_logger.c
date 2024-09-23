@@ -53,39 +53,35 @@ void IRAM_ATTR input_edgelog_isr(void *params)
     gptimer_get_raw_count(ctx->timer, (uint64_t *)&ctx->edgeframe_tempcount);
     switch (ctx->edgeframe_isr_state)
     {
-    case EDGEFRAME_STATE_IDLE:
-    {
-        // gptimer_get_raw_count(ctx.timer, &edgeframe_startcount);
-        // edgeframe_lastcount = 0;
-        gptimer_set_raw_count(ctx->timer, 0);
-        gptimer_start(ctx->timer);
-        ctx->edgeframe_template.edges[0].edgetype = 1 - (uint8_t)ctx->invert;
-        ctx->edgeframe_template.edges[0].time = 0;
-        ctx->edgeframe_isr_numedges = 1;
-        ctx->edgeframe_isr_state = EDGEFRAME_STATE_LOGGING;
-
-        break;
-    }
-    case EDGEFRAME_STATE_LOGGING:
-    {
-        if (ctx->edgeframe_isr_numedges > 60)
+        case EDGEFRAME_STATE_IDLE:
         {
-            // too long
+            gptimer_set_raw_count(ctx->timer, 0);
+            gptimer_start(ctx->timer);
+            ctx->edgeframe_template.edges[0].edgetype = 1 - (uint8_t)ctx->invert;
+            ctx->edgeframe_template.edges[0].time = 0;
+            ctx->edgeframe_isr_numedges = 1;
+            ctx->edgeframe_isr_state = EDGEFRAME_STATE_LOGGING;
             break;
         }
-        int level = gpio_get_level(ctx->gpio_pin);
-        ctx->edgeframe_template.edges[ctx->edgeframe_isr_numedges].edgetype = ctx->invert ? 1 - level : level;
-        ctx->edgeframe_template.edges[ctx->edgeframe_isr_numedges].time = ctx->edgeframe_tempcount; // - edgeframe_startcount;
+        case EDGEFRAME_STATE_LOGGING:
+        {
+            if (ctx->edgeframe_isr_numedges >= DALI_MAX_EDGEFRAME_LENGTH)
+            {
+                // too long
+                break;
+            }
+            int level = gpio_get_level(ctx->gpio_pin);
+            ctx->edgeframe_template.edges[ctx->edgeframe_isr_numedges].edgetype = ctx->invert ? 1 - level : level;
+            ctx->edgeframe_template.edges[ctx->edgeframe_isr_numedges].time = ctx->edgeframe_tempcount; // - edgeframe_startcount;
 
-        gptimer_alarm_config_t alarm_config = {
-            .alarm_count = ctx->edgeframe_tempcount + ctx->timeout,
-            .flags.auto_reload_on_alarm = false,
-        };
-        ESP_ERROR_CHECK(gptimer_set_alarm_action(ctx->timer, &alarm_config));
-        ctx->edgeframe_isr_numedges += 1;
-        // edgeframe_lastcount = edgeframe_tempcount;
-        break;
-    }
+            gptimer_alarm_config_t alarm_config = {
+                .alarm_count = ctx->edgeframe_tempcount + ctx->timeout,
+                .flags.auto_reload_on_alarm = false,
+            };
+            ESP_ERROR_CHECK(gptimer_set_alarm_action(ctx->timer, &alarm_config));
+            ctx->edgeframe_isr_numedges += 1;
+            break;
+        }
     }
 }
 

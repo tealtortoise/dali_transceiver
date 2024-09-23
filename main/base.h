@@ -44,7 +44,7 @@
 #define ALARM_TYPE_UP_ONLY 1
 #define ALARM_TYPE_DOWN_ONLY 2
 
-
+#define DALI_MAX_EDGEFRAME_LENGTH 40
 
 #define DALI_CHANNELS 8
 
@@ -123,7 +123,7 @@ typedef struct
 
 typedef struct
 {
-    edge_t edges[64];
+    edge_t edges[DALI_MAX_EDGEFRAME_LENGTH];
     uint8_t length;
 } edgeframe;
 

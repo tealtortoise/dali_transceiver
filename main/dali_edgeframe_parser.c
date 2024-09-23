@@ -34,8 +34,13 @@ bool check_if_full_period(uint16_t time)
     return time < DALI_TIMING_IDEA_HALF_BIT_US * 2 + DALI_TIMING_TOLERANCE_US && time > DALI_TIMING_IDEA_HALF_BIT_US * 2 - DALI_TIMING_TOLERANCE_US;
 }
 
-int get_frame_type_from_duration(uint16_t duration)
+static int get_frame_type(edgeframe frame)
 {
+    if (frame.length >= DALI_MAX_EDGEFRAME_LENGTH)
+    {
+        return DALI_MANGLED_FRAME;
+    }
+    uint16_t duration = frame.edges[frame.length - 1].time;
     if ((duration > DALI_FORWARD_FRAME_DURATION - DALI_FRAME_DURATION_TOLERANCE) && (duration < DALI_FORWARD_FRAME_DURATION + DALI_FRAME_DURATION_TOLERANCE))
     {
         return DALI_FORWARD_FRAME_TYPE;
@@ -69,8 +74,7 @@ void edgeframe_queue_log_task(void *params)
         received = xQueueReceive(edgeinputqueue, &receivedframe, pdMS_TO_TICKS(2500));
         if (!received)
             continue;
-        frame_duration = receivedframe.edges[receivedframe.length - 1].time;
-        outputframe.type = get_frame_type_from_duration(frame_duration);
+        outputframe.type = get_frame_type(receivedframe);
 
         // ESP_LOGI(TAG, "FP! %d %u", outputframe.type, frame_duration);
         switch (outputframe.type)
@@ -102,6 +106,11 @@ void edgeframe_queue_log_task(void *params)
             uint16_t last_valid_bit_elapsed;
             uint16_t last_edge_elapsed = 0;
             bool error = false;
+            if (receivedframe.length > DALI_MAX_EDGEFRAME_LENGTH)
+            {
+                ESP_LOGE(TAG, "Edgeframe length error '%d'. This shouldn't be possible.", receivedframe.length);
+                continue;
+            }
             for (uint8_t i = 0; i < receivedframe.length; i++)
             {
                 if (debug)

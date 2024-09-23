@@ -227,12 +227,19 @@ uint8_t transmit_setlevel_dali_channel(dali_transceiver_handle_t transceiver,
 
 static char tinybuffer[1];
 static SemaphoreHandle_t printf_mutex;
+static const char* logmemerror = "Unable to allocate memory for logging";
 
 int buffer_vprint(const char *format, va_list args) {
     int strsize;
     strsize = vsnprintf(tinybuffer, 0, format, args);
     if (1) {
         char *tempbuf = malloc(strsize + 2);
+        if (tempbuf == NULL)
+        {
+            log_string(logmemerror, strlen(logmemerror), true);
+            fputs(logmemerror, stdout);
+            return 1;
+        }
         vsnprintf(tempbuf, strsize + 1, format, args);
         if (tempbuf[strsize - 1] != '\n') {
             tempbuf[strsize - 1] = '\n';
@@ -279,7 +286,7 @@ dali_transceiver_handle_t setup_dali(networking_ctx_t *networking_ctx) {
     transceiver_config.invert_output = DALI_DONT_INVERT;
     transceiver_config.transmit_queue_size_frames = 1;
     transceiver_config.receive_queue_size_frames = 16;
-    transceiver_config.enable_receiving = false;
+    transceiver_config.enable_receiving = true;
     transceiver_config.receive_gpio_pin = RX_GPIO;
     transceiver_config.transmit_gpio_pin = TX_GPIO;
     transceiver_config.parser_config.forward_frame_action =
@@ -442,7 +449,7 @@ void app_main(void) {
     ESP_ERROR_CHECK(
         setup_0_10v_channel(PWM_010v2_GPIO, get_setting_indexed("startup_cal",2), &pwm2));
     // vTaskDelay(pdMS_TO_TICKS(5000));
-    setup_button_interrupts(&status, pwm1, pwm2);
+    ESP_ERROR_CHECK(setup_button_interrupts(&status, pwm1, pwm2));
 
     dali_transceiver_handle_t dali_transceiver = setup_dali(&networking_ctx);
 

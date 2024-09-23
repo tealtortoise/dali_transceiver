@@ -2,13 +2,6 @@ from lutmaker import Channel, ChannelType, LED, process
 
 
 LIVING_ROOM_CHANNELS = {
-    "dalie": Channel(
-        friendly_name="f90",
-        points=[(0, 0.0), (0.08, 0.0), (0.16, 0.3), (0.3, 0.3), (0.5, 0.6), (0.7, 1.45), (1.0, 1.45)],
-        type=ChannelType.INDEPENDENT,
-        led=LED(imax=450 * 2, vf=50, eff=185),
-        group=0,
-    ),
     "dalia": Channel(
         friendly_name="hexagons",
         type=ChannelType.INDEPENDENT,
@@ -16,11 +9,11 @@ LIVING_ROOM_CHANNELS = {
             (0.0, 0.0),
             (0.02, 0.0),
             (0.16, 1.85),
-            (0.3, 2.0),
+            (0.3, 1.2),
             (0.7, 0.48),
             (1.0, 0.83),
         ],
-        led=LED(vf=17, imax=650 * 5, eff=120),
+        led=LED(vf=17.5, imax=600 * 5, eff=120),
         group=0,
     ),
     "espnow": Channel(
@@ -60,6 +53,20 @@ LIVING_ROOM_CHANNELS = {
         led=LED(imax=650, vf=33, eff=130),
         group=0,
         night_only=True,
+    ),
+    "dalie": Channel(
+        friendly_name="F90L",
+        points=[(0, 0.0), (0.08, 0.0), (0.16, 0.4), (0.3, 0.4), (0.5, 1.2), (0.7, 2), (1.0, 2.0)],
+        type=ChannelType.INDEPENDENT,
+        led=LED(imax=600, vf=50, eff=185),
+        group=0,
+    ),
+    "dalif": Channel(
+        friendly_name="F90R",
+        points=[(0, 0.0), (0.08, 0.0), (0.16, 0.2), (0.3, 0.2), (0.5, 0.6), (0.7, 0.6), (1.0, 1.0)],
+        type=ChannelType.INDEPENDENT,
+        led=LED(imax=500, vf=50, eff=185),
+        group=0,
     ),
 }
 

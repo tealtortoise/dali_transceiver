@@ -16,10 +16,10 @@
 #define MAX_LEDC_CHANNELS 6
 
 #define GENERIC_CAL_GAIN 0.8541
-#define GENERIC_CAL_OFF_VOLTAGE 0.1
+#define GENERIC_CAL_OFF_VOLTAGE 0.12
 #define GENERIC_CAL_START_VOLTAGE 1.6
 #define GENERIC_CAL_FINISH_VOLTAGE 8.9
-#define GENERIC_CAL_FULL_VOLTAGE 10.0
+#define GENERIC_CAL_FULL_VOLTAGE 10.1
 
 static const char *TAG = "0-10v driver";
 
@@ -73,8 +73,8 @@ void built_lut(uint16_t lut[], int calibration, double gain){
                 min_voltage = GENERIC_CAL_OFF_VOLTAGE;
             }
             double voltage_span = max_voltage - min_voltage;
-            for (int i=0; i <= 254; i++){
-                double voltage = ((double) (i)) / 254.0 * voltage_span + min_voltage;
+            for (int i=1; i <= 254; i++){
+                double voltage = ((double) (i - 1)) / 253.0 * voltage_span + min_voltage;
                 lut[i] = (uint16_t) clamp((voltage  / 10.0 * (double)max_value * gain), 0, max_value);
                 if (i < 3 || i > 251) {
                     ESP_LOGI(TAG, "0-10v Cal Input %d -> voltage %f, lut %u", i, voltage, lut[i]);
@@ -83,6 +83,7 @@ void built_lut(uint16_t lut[], int calibration, double gain){
                     ESP_LOGI(TAG, "0-10v Cal Input %d -> voltage %f, lut %u", i, voltage, lut[i]);
                 }
             }
+            lut[0] = 0;
             break;
         case CALIBRATION_LOOKUP_NVS:
         case CALIBRATION_LOOKUP_NVS_ECODRIVE:
@@ -96,6 +97,10 @@ void built_lut(uint16_t lut[], int calibration, double gain){
             for (int i=0; i < 255; i++){
                 if (i == 0)
                 {
+                    voltage = 0;
+                }
+                else if (i == 1)
+                {
                     voltage = GENERIC_CAL_OFF_VOLTAGE;
                 }
                 else if (i == 254)
@@ -106,7 +111,7 @@ void built_lut(uint16_t lut[], int calibration, double gain){
                 {
                     if (calibration == CALIBRATION_GENERIC_LOG_ELDOLED_ECO || calibration == CALIBRATION_LOOKUP_NVS_ECODRIVE)
                     {
-                        // Less than 86 give min voltage to emulate DALI 1% curve
+                        // Less than 86 give min voltage to match DALI behaviour
                         x = ((double) _MAX(i, 85) - 85.0) / (254.0 - 85.0);
                     }
                     else
@@ -177,12 +182,11 @@ esp_err_t setup_0_10v_channel(uint8_t gpio_pin, int calibration, zeroten_handle_
         char key[24];
         build_nvs_key_for_gpio_gain(gpio_pin, key);
         ESP_LOGI(TAG, "NVS Key '%s'", key);
-        int64_t channelgain_intrep;
+        int64_t channelgain_intcast;
         double channelgain;
-        esp_err_t err = nvs_get_i64(nvs_handle_, key, &channelgain_intrep);
+        esp_err_t err = nvs_get_i64(nvs_handle_, key, &channelgain_intcast);
         if (err == ESP_OK) {
-            memcpy(&channelgain, &channelgain_intrep, sizeof(double));
-            // channelgain = *(double*) &channelgain_intrep;
+            memcpy(&channelgain, &channelgain_intcast, sizeof(double));
             ESP_LOGI(TAG, "Found gain %f in NVS for GPIO %d", channelgain, gpio_pin);
             gain = channelgain;
         }
@@ -193,6 +197,10 @@ esp_err_t setup_0_10v_channel(uint8_t gpio_pin, int calibration, zeroten_handle_
     }
 
     zeroten_handle_ *handlestruct = malloc(sizeof(zeroten_handle_));
+    if (handlestruct == NULL)
+    {
+        return ESP_ERR_NO_MEM;
+    }
     handlestruct->ledc_channel = channelnum;
     handlestruct->pwm_resolution = pwm_resolution;
     handlestruct->gpio_pin = gpio_pin;

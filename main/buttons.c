@@ -193,13 +193,18 @@ void button_monitor_task(void *params){
     }
 }
 
-void setup_button_interrupts(device_status_t* status, zeroten_handle_t pwm1, zeroten_handle_t pwm2){
+esp_err_t setup_button_interrupts(device_status_t* status, zeroten_handle_t pwm1, zeroten_handle_t pwm2){
     uint8_t buttons[] = {BUT1_GPIO, BUT2_GPIO, BUT3_GPIO};
     for (int i =0; i <= 2; i++){
         gpio_set_intr_type(buttons[i], GPIO_INTR_NEGEDGE);
     }
 
     button_task_ctx_t *task_ctx = malloc(sizeof(button_task_ctx_t));
+    
+    if (task_ctx == NULL)
+    {
+        return ESP_ERR_NO_MEM;
+    }
     task_ctx->mainloop_task = status->mainloop_task;
     task_ctx->status = status;
     task_ctx->pwm1 = pwm1;
@@ -210,5 +215,5 @@ void setup_button_interrupts(device_status_t* status, zeroten_handle_t pwm1, zer
     ESP_ERROR_CHECK(gpio_isr_handler_add(BUT1_GPIO, button1_isr, (void*) status));
     ESP_ERROR_CHECK(gpio_isr_handler_add(BUT2_GPIO, button2_isr, (void*) status));
     ESP_ERROR_CHECK(gpio_isr_handler_add(BUT3_GPIO, button3_isr, (void*) status));
-
+    return ESP_OK;
 };

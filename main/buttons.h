@@ -7,7 +7,7 @@
 #include "base.h"
 #include "0-10v.h"
 
-void setup_button_interrupts(device_status_t* status, zeroten_handle_t pwm1, zeroten_handle_t pwm2);
+esp_err_t setup_button_interrupts(device_status_t* status, zeroten_handle_t pwm1, zeroten_handle_t pwm2);
 
 #endif // ifndef BUTTONS_H
 
