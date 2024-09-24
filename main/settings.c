@@ -1,4 +1,4 @@
-
+#include <math.h>
 #include "settings.h"
 #include <string.h>
 #include <stdint.h>
@@ -247,12 +247,14 @@ esp_err_t setup_nvs_spiffs_settings(){
 static char lutfilename[128];
 
 void fill_luts_fallback(level_t lut[]){
-    size_t levet_t_size = sizeof(level_t);
-    for (int row = 0; row <= 254; row++){
-        for (int column = 0; column < levet_t_size; column++){
-            uint8_t * byt = (size_t) lut + levet_t_size * row + column;
-            *byt = (uint8_t) row;
+    for (uint8_t row = 0; row <= 254; row++){
+        uint8_t temp[sizeof(level_t)];
+        for (int column = 0; column < sizeof(level_t); column++)
+        {
+            temp[column] = row;
         }
+        memcpy(&lut[row], &temp, sizeof(level_t));
+        lut[row].power = pow10((row - 1) * 3 / 253.0) * 0.1;
     }
 }
 

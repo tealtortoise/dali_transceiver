@@ -380,7 +380,6 @@ esp_err_t file_uploader(httpd_req_t *req)
     httpd_resp_send(req, httpd_temp_buffer, HTTPD_RESP_USE_STRLEN);
     if (strncmp(filename, "/spiffs/levellut", 16) == 0)
     {
-
         networking_ctx_t *ctx = httpd_get_global_user_ctx(req->handle);
         read_level_luts(ctx->status->lut);
     }

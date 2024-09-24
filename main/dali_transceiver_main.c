@@ -86,7 +86,7 @@ void setup_networking(void *params) {
 }
 
 void list_tasks() {
-    char buffer[4096];
+    char buffer[2048];
     vTaskList(buffer);
     ESP_LOGI(TAG, "%s", buffer);
 }
@@ -187,7 +187,9 @@ int count_dali_channels() {
     return count;
 }
 
-int estimate_looptime() { return _MAX(count_dali_channels() * 25 - 5, 10); }
+int estimate_looptime() {
+    return _MAX(count_dali_channels() * 25 - 5, 10);
+}
 
 uint8_t transmit_setlevel_dali_channel(dali_transceiver_handle_t transceiver,
                                        int channel_num, int level,
@@ -286,7 +288,7 @@ dali_transceiver_handle_t setup_dali(networking_ctx_t *networking_ctx) {
     transceiver_config.invert_output = DALI_DONT_INVERT;
     transceiver_config.transmit_queue_size_frames = 1;
     transceiver_config.receive_queue_size_frames = 16;
-    transceiver_config.enable_receiving = true;
+    transceiver_config.enable_receiving = false;
     transceiver_config.receive_gpio_pin = RX_GPIO;
     transceiver_config.transmit_gpio_pin = TX_GPIO;
     transceiver_config.parser_config.forward_frame_action =
@@ -517,6 +519,7 @@ void app_main(void) {
     int looptime_outside_tolerance_count = 0;
 
     ESP_LOGI(TAG, "Starting main loop...");
+    list_tasks();
     while (1) {
         //
         // do loop timing housekeeping
@@ -712,11 +715,15 @@ void app_main(void) {
             idlecount += 1;
             idle_sends += 1;
             if (!(idlecount & 0x3F)) {
-                // log RAM situation every 1000 loops
+                // log RAM situation every 64 idles
                 ESP_LOGI(TAG, "Min free heap %i",
                          heap_caps_get_minimum_free_size(MALLOC_CAP_8BIT));
                 ESP_LOGI(TAG, "Free heap %i",
                          heap_caps_get_free_size(MALLOC_CAP_8BIT));
+            }
+            if (!(idlecount & 0xFF)) {
+                // log tasks every 256 idles
+                list_tasks();
             }
         }
 
