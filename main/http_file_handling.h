@@ -11,7 +11,7 @@
 
 #define MAX_SAFE_INFIX_FILE_SIZE 512
 
-#define MAX_INFIX_REPLACEMENTS 10
+#define MAX_INFIX_REPLACEMENTS 11
 
 static char httpd_temp_buffer[BUF_SIZE];
 static char httpd_temp_file_buffer[BUF_SIZE];

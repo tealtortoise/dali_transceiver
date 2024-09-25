@@ -1,5 +1,6 @@
 ## IDF Component Manager Manifest File
 dependencies:
+  espressif/qrcode: "*"
   espressif/led_strip: "^2.5.4"
   ## Required IDF version
   idf:

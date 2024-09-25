@@ -170,16 +170,30 @@ esp_err_t setup_nvs_spiffs_settings(){
     nvs_type_t nvstype;
     BaseType_t mutex_taken;
     bool nvs_updated = false;
-    // ESP_LOGW(TAG, "Resetting NVS!!!");
-    // nvs_close(nvs_handle_);
-    // ESP_ERROR_CHECK(nvs_flash_erase());
-    // ESP_ERROR_CHECK(nvs_flash_init());
-    // ESP_ERROR_CHECK(nvs_open("nvs", NVS_READWRITE, &nvs_handle_));
-    bool force_update = get_and_log_buttons() == 5;
-    if (force_update) {
-        ESP_LOGW(TAG, "Resetting NVS!!!");
+    bool erase_wifi_nvs = get_and_log_buttons() & 1;
+    bool erase_settings_nvs = get_and_log_buttons() & 4;
+
+    // erase_wifi_nvs = true;
+    if (erase_wifi_nvs) {
+        ESP_LOGW(TAG, "Resetting default (WiFi) NVS!!!");
         nvs_flash_erase();
     }
+    if (erase_settings_nvs) {
+        ESP_LOGW(TAG, "Resetting Settings NVS!!!");
+        nvs_flash_erase_partition("nvs2");
+    }
+    if (erase_settings_nvs | erase_wifi_nvs)
+    {
+        ESP_LOGW(TAG, "Restarting in 5 seconds...");
+        for (int i = 0; i < 25; i++)
+        {
+            gpio_set_level(LED1_GPIO, (i & 4) > 0);
+            gpio_set_level(LED2_GPIO, ((i + 2) & 4) > 0);
+            vTaskDelay(pdMS_TO_TICKS(200));
+        }
+        esp_restart();
+    }
+
     while (1){
         commapos = -1;
         out = fgets(linebuffer, 64, settingfile);
@@ -200,7 +214,7 @@ esp_err_t setup_nvs_spiffs_settings(){
         sscanf(linebuffer + commapos + 1, "%i", &outputint);
         ESP_LOGI(TAG,"Key %s = %i",key,outputint);
         key_find_result = nvs_find_key(nvs_handle_, key, &nvstype);
-        if (key_find_result == ESP_OK && !force_update)
+        if (key_find_result == ESP_OK)
         {
             ESP_LOGI(TAG, "Key '%s' already in NVS", key);
             mutex_taken = xSemaphoreTake(nvs_mutex, pdMS_TO_TICKS(5000));
@@ -216,13 +230,7 @@ esp_err_t setup_nvs_spiffs_settings(){
         }
         else
         {   
-            if (force_update) {
-                ESP_LOGI(TAG, "Force updating '%s' -> setting to %i", key, outputint);
-            }
-            else
-            {
-                ESP_LOGI(TAG, "Couldn't find key '%s' -> setting to %i", key, outputint);
-            }
+            ESP_LOGI(TAG, "Couldn't find key '%s' -> setting to %i", key, outputint);
             mutex_taken = xSemaphoreTake(nvs_mutex, pdMS_TO_TICKS(5000));
             if (mutex_taken == pdTRUE){
                 ESP_ERROR_CHECK(nvs_set_i32(nvs_handle_, key, outputint));

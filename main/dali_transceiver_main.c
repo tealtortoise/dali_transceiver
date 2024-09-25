@@ -30,7 +30,7 @@
 // #include "dali_rmt_receiver.c"
 // #ifdef IS_PRIMARY
 #include "http_server.h"
-#include "wifi.h"
+#include "ble_wifi_prov.h"
 // #endif // IS_PRIMARY
 #include "adc.h"
 #include "base.h"
@@ -77,7 +77,7 @@ static __NOINIT_ATTR device_status_t status;
 void setup_networking(void *params) {
     // vTaskDelay(5000);
     networking_ctx_t *ctx = (networking_ctx_t *)params;
-    setup_wifi(ctx);
+    wifi_provision(ctx);
     setup_sntp(ctx->status);
     setup_httpserver(ctx);
     while (1) {
@@ -100,7 +100,7 @@ int fadetime;
 
 uint32_t get_time_ms() { return (uint32_t)(esp_timer_get_time() >> 10); }
 
-uint32_t curve(const uint32_t input) {
+uint32_t fadecurve(const uint32_t input) {
     // best option if LUT uses default DALI curve
     return input * input - (input << 9) + 108000UL;
 }
@@ -132,7 +132,7 @@ void calc_fade_increments(uint32_t looptime, int start, int finish) {
     // curve(90) is selected to fine tune overall fade time
     uint32_t prop_fadetime =
         (((uint64_t)fadetime * (uint64_t)curve_lin(avg_fade_pos)) /
-         ((uint64_t)curve(90) * (uint64_t)abs(finish - start)))
+         ((uint64_t)fadecurve(90) * (uint64_t)abs(finish - start)))
         << 8;
     // ESP_LOGI(TAG, "prop fadetime %lu", prop_fadetime);
     // uint32_t prop_fadetime = ((fadetime * 1000) / (1000  * abs(finish -
@@ -443,7 +443,7 @@ void app_main(void) {
     networking_ctx.logheader = looplog_headers;
     xTaskCreate(setup_networking, "setup_networking", 4096,
                 (void *)&networking_ctx, 2, &networktask);
-
+    xTaskNotifyWaitIndexed(PROVISIONING_DONE_INDEX, 0, 0, NULL, portMAX_DELAY);
     zeroten_handle_t pwm1;
     zeroten_handle_t pwm2;
     ESP_ERROR_CHECK(
