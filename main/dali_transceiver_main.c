@@ -62,8 +62,6 @@ static const char *TAG = "main";
 static const char *source_str[] = {"REST", " ADC", "ESPN", "BUTN",
                                    "ALRM", "RAND", "INIT"};
 
-static const char *spaces = "   ";
-
 #define LOOPLOG_LENGTH 256
 
 static char looplog[LOOPLOG_LENGTH];
@@ -73,6 +71,98 @@ static char looplog_template[256];
 nvs_handle_t mainloop_nvs_handle;
 
 static __NOINIT_ATTR device_status_t status;
+
+static SemaphoreHandle_t logstring_mutex;
+
+static esp_reset_reason_t reset_reason;
+static networking_ctx_t networking_ctx;
+static TaskHandle_t networktask;
+
+static dali_transceiver_handle_t dali_transceiver;
+
+static zeroten_handle_t pwm1;
+static zeroten_handle_t pwm2;
+
+static int tick_sign;
+static BaseType_t received;
+static uint32_t recv_value;
+static uint32_t reftime;
+static uint64_t reawake_time = 0;
+static int default_fadetime;
+
+static int fade_remaining = 0;
+
+static uint8_t level_el_array[sizeof(level_t)];
+static int dali_broadcast;
+static uint32_t current_time;
+static uint32_t actual_looptime;
+static int random_looptime = 1;
+static uint8_t local_setpoint;
+
+static uint16_t full_power;
+static int zeroten1_lvl_to_send = 0;
+static int zeroten2_lvl_to_send = 0;
+static int dali_levels_to_send[DALI_CHANNELS] = {0};
+static int espnow_lvl_to_send = 0;
+static int relay1_lvl_to_send = 0;
+static int relay2_lvl_to_send = 0;
+static int lookahead;
+static int idlecount = 0;
+static int levellog_count = 0;
+static bool force_resend = false;
+static device_status_t old_status;
+static bool new_setpoint;
+static uint32_t idle_reawake_interval = 1000;
+
+static uint32_t max_idle_reawake_interval = 1000;
+static uint32_t cooldown_duration;
+static int idle_sends = 0;
+static uint32_t idle_start_time;
+
+static uint8_t min_level_array[sizeof(level_t)] = {0};
+static uint8_t start_of_fade_level = 0;
+static int looptime_outside_tolerance_count = 0;
+static int startup_setpoint_lvl;
+
+static level_t current_level_el;
+
+static char tinybuffer[1];
+static char vprint_buffer[1024];
+static SemaphoreHandle_t printf_mutex;
+static const char *logmemerror = "Unable to allocate memory for logging";
+
+int buffer_vprint(const char *format, va_list args)
+{
+    if (xSemaphoreTake(printf_mutex, pdMS_TO_TICKS(200)))
+    {
+        int strsize;
+        strsize = vsnprintf(tinybuffer, 0, format, args);
+        if (1)
+        {
+            char *tempbuf = malloc(strsize + 2);
+            if (tempbuf == NULL)
+            {
+                log_string(logmemerror, strlen(logmemerror), true);
+                fputs(logmemerror, stdout);
+                xSemaphoreGive(printf_mutex);
+                return 1;
+            }
+            vsnprintf(tempbuf, strsize + 1, format, args);
+            if (tempbuf[strsize - 1] != '\n')
+            {
+                tempbuf[strsize - 1] = '\n';
+                tempbuf[strsize] = 0;
+            }
+            int ret = log_string(tempbuf, strsize, true);
+            fputs(tempbuf, stdout);
+            free(tempbuf);
+            
+            xSemaphoreGive(printf_mutex);
+            return ret;
+        }
+    }
+    return 0;
+}
 
 void setup_networking(void *params)
 {
@@ -97,7 +187,6 @@ void list_tasks()
 static int tick_inc = 1;
 static uint8_t tick_inc_array[255] = {1};
 static uint32_t tlt_array[255] = {100};
-static uint64_t calcreftime;
 
 int fadetime;
 
@@ -144,7 +233,6 @@ void calc_fade_increments(uint32_t looptime, int start, int finish)
     uint32_t intermediate_tick_inc;
     uint32_t looptime_ms = looptime;
     uint32_t temp_tlt;
-    uint64_t starttime = esp_timer_get_time();
     uint32_t tempcurve;
     uint32_t avg_fade_pos = (start + finish) >> 1;
 
@@ -221,11 +309,10 @@ int estimate_looptime()
     return _MAX(count_dali_channels() * 25 - 5, 10);
 }
 
-uint8_t
-transmit_setlevel_dali_channel(dali_transceiver_handle_t transceiver,
-                               int channel_num,
-                               int level,
-                               bool force_send)
+uint8_t transmit_setlevel_dali_channel(dali_transceiver_handle_t transceiver,
+                                       int channel_num,
+                                       int level,
+                                       bool force_send)
 {
     int address = dali_addresses[channel_num];
     int override = status.level_overrides.dali[channel_num];
@@ -267,37 +354,6 @@ transmit_setlevel_dali_channel(dali_transceiver_handle_t transceiver,
     return 0;
 }
 
-static char tinybuffer[1];
-static SemaphoreHandle_t printf_mutex;
-static const char *logmemerror = "Unable to allocate memory for logging";
-
-int buffer_vprint(const char *format, va_list args)
-{
-    int strsize;
-    strsize = vsnprintf(tinybuffer, 0, format, args);
-    if (1)
-    {
-        char *tempbuf = malloc(strsize + 2);
-        if (tempbuf == NULL)
-        {
-            log_string(logmemerror, strlen(logmemerror), true);
-            fputs(logmemerror, stdout);
-            return 1;
-        }
-        vsnprintf(tempbuf, strsize + 1, format, args);
-        if (tempbuf[strsize - 1] != '\n')
-        {
-            tempbuf[strsize - 1] = '\n';
-            tempbuf[strsize] = 0;
-        }
-        int ret = log_string(tempbuf, strsize, true);
-        fputs(tempbuf, stdout);
-        free(tempbuf);
-        return ret;
-    }
-    return 0;
-}
-
 void random_setpointer_task(void *params)
 {
     device_status_t *status = (device_status_t *)params;
@@ -319,8 +375,7 @@ void random_setpointer_task(void *params)
     }
 }
 
-static void
-print_sha256(const uint8_t *image_hash, const char *label)
+static void print_sha256(const uint8_t *image_hash, const char *label)
 {
     char hash_print[HASH_LEN * 2 + 1];
     hash_print[HASH_LEN * 2] = 0;
@@ -331,8 +386,7 @@ print_sha256(const uint8_t *image_hash, const char *label)
     ESP_LOGI(TAG, "%s: %s", label, hash_print);
 }
 
-dali_transceiver_handle_t
-setup_dali(networking_ctx_t *networking_ctx)
+dali_transceiver_handle_t setup_dali(networking_ctx_t *networking_ctx)
 {
     dali_transceiver_config_t transceiver_config =
         dali_transceiver_sensible_default_config;
@@ -410,8 +464,7 @@ void check_partitions()
     }
 }
 
-level_t
-get_level_el(uint8_t level, device_status_t status, uint16_t full_power)
+level_t get_level_el(uint8_t level, device_status_t status, uint16_t full_power)
 {
     if (status.actual_level == 0)
     {
@@ -424,15 +477,412 @@ get_level_el(uint8_t level, device_status_t status, uint16_t full_power)
     }
 }
 
-static networking_ctx_t networking_ctx;
+void initialise_status_struct()
+{
+    status.setpoint = startup_setpoint_lvl;
+    status.fadetime_ms = USE_DEFAULT_FADETIME;
+    status.setpoint_source = SETPOINT_SOURCE_INIT;
+    status.power_on = 1;
+    status.actual_level = startup_setpoint_lvl;
+    for (int i = 0; i < DALI_CHANNELS; i++)
+    {
+        status.level_overrides.dali[i] = -1;
+    }
+    status.level_overrides.espnow = -1;
+    status.level_overrides.zeroten1 = -1;
+    status.level_overrides.zeroten2 = -1;
+    status.stale_flag = 0;
+}
+
+void looptime_housekeeping()
+{
+    actual_looptime = (get_time_ms() - reftime);
+    if (fade_remaining != 0 && actual_looptime > MINIMUM_TARGET_LOOPTIME)
+    {
+        if (actual_looptime >
+                (tlt_array[status.actual_level] + LOOPTIME_TOLERANCE) ||
+            actual_looptime <
+                (tlt_array[status.actual_level] - LOOPTIME_TOLERANCE))
+        {
+            looptime_outside_tolerance_count += 1;
+        }
+        if (looptime_outside_tolerance_count >=
+            LOOPTIMES_OUT_OF_TOLERANCE_NEEDED)
+        {
+            // calc_tickinc_and_looptime(actual_looptime, status.setpoint -
+            // start_of_fade_level);
+            calc_fade_increments(
+                actual_looptime, start_of_fade_level, status.setpoint);
+
+            looptime_outside_tolerance_count = 0;
+        }
+    }
+}
+
+void process_new_setpoint()
+{
+    old_status = status;
+    status.setpoint = clamp(status.setpoint, 0, 254);
+
+    // signal new setpoint
+    gpio_set_level(LED1_GPIO, 1);
+    start_of_fade_level = status.actual_level;
+    full_power = clamp(get_setting("full_power"), 0, 512);
+    max_idle_reawake_interval =
+        _uMAX(((uint32_t)get_setting("idle_intvl_ms")), 200UL);
+    cooldown_duration =
+        _uMAX(((uint32_t)get_setting("idle_cooldown")), 0UL);
+    new_setpoint = true;
+    // ESP_LOGI(TAG, "Received new setpoint: %d, fade: %lu source
+    // %s", status.setpoint, status.fadetime_ms,
+    // source_str[status.setpoint_source]);
+    random_looptime = (rand() & 127);
+    tick_inc = 1;
+    configbits = get_setting("configbits");
+    switch (status.fadetime_ms)
+    {
+    case USE_DEFAULT_FADETIME:
+        fadetime = get_setting("default_fade");
+        break;
+    case USE_SLOW_FADETIME:
+        fadetime = get_setting("slow_fade");
+        break;
+    default:
+        fadetime = status.fadetime_ms;
+        break;
+    }
+    if (fadetime < 8)
+        // it's basically no fade lets avoid any divide by zeros
+        fadetime = 8;
+
+    if (status.setpoint != status.actual_level)
+    {
+        calc_fade_increments(estimate_looptime(), start_of_fade_level, status.setpoint);
+        looptime_outside_tolerance_count = 0;
+    }
+    else
+    {
+        idle_start_time = current_time;
+    }
+}
+
+void lookahead_for_reawake()
+{
+    uint32_t time_acc = 0;
+    int lvl = status.actual_level;
+    int loops = 0;
+    while (lvl != status.setpoint && status.fadetime_ms > 0)
+    {
+        loops += 1;
+        if (loops > 255)
+        {
+            ESP_LOGE(TAG,
+                     "Something went wrong in fade search loop. Loop "
+                     "count timeout.");
+            // zero array
+            memcpy(min_level_array, &status.lut[0], sizeof(level_t));
+            break;
+        }
+
+        // get test level
+        int next_lvl_unclamped = lvl + tick_sign * (int)tick_inc_array[lvl];
+        lvl = flexclamp(next_lvl_unclamped, status.actual_level, status.setpoint);
+
+        if (loops < 2)
+        {
+            // we need to advance one level regardless of timing
+            continue;
+        }
+
+        ESP_LOGD(TAG,
+                 "Looking at lvl %d. Adding %lu to acc (%lu). Ticking %d",
+                 lvl,
+                 tlt_array[lvl],
+                 time_acc,
+                 tick_inc_array[lvl]);
+
+        // get iterable copy so we avoid type punning shenanigans
+        uint8_t future_level_array[sizeof(level_t)];
+        level_t future_el = get_level_el(lvl, status, full_power);
+        memcpy(future_level_array, &future_el, sizeof(level_t));
+
+        // iterate over array to check for used channels
+        for (int ch = 0; ch < sizeof(level_t); ch++)
+        {
+            if (future_level_array[ch] > 0)
+                // ensure channel does not switch completely off
+                min_level_array[ch] = 1;
+        }
+
+        // check to see if we've gone far enough ahead
+        time_acc += tlt_array[lvl];
+        if (time_acc > BALLAST_WAKE_LOOKAHEAD_MS)
+            break;
+    }
+}
+
+void calculate_reawake_intervals()
+{
+    if ((reftime - idle_start_time) < cooldown_duration)
+    {
+        idle_reawake_interval = _uMIN(IDLE_UPDATE_INTERVAL_DURING_COOLDOWN_MS,
+                                      max_idle_reawake_interval);
+    }
+    else
+    {
+        idle_reawake_interval =
+            _uMIN(MAX_IDLE_UPDATE_INTERVAL_AFTER_COOLDOWN_MS,
+                  max_idle_reawake_interval);
+    }
+
+    reawake_time = reftime + (uint64_t)idle_reawake_interval;
+    ESP_LOGD(TAG,
+             "Idle reawake %lu reftime %lu idle_start %lu cd %lu",
+             idle_reawake_interval,
+             reftime,
+             idle_start_time,
+             cooldown_duration);
+
+    if (configbits & CONFIGBIT_RECEIVE_ESPNOW)
+    {
+        // we don't want double awakening if we're receiving regular
+        // updates so we add a bit extra to accommodate network latency
+        reawake_time += IDLE_UPDATE_INTERVAL_ADDITION_US_RECV_ESPNOW;
+    }
+}
+
+void maybe_log_heap_info()
+{
+    if (!(idlecount & 0x3F))
+    {
+        // log RAM situation every 64 idles
+        ESP_LOGI(TAG,
+                 "Min free heap %i",
+                 heap_caps_get_minimum_free_size(MALLOC_CAP_8BIT));
+        ESP_LOGI(TAG, "Free heap %i", heap_caps_get_free_size(MALLOC_CAP_8BIT));
+    }
+    if (!(idlecount & 0xFF))
+    {
+        // log tasks every 256 idles
+        list_tasks();
+    }
+}
+
+void manage_zeroten_channel_sends()
+{
+
+    if (configbits & CONFIGBIT_USE_0_10v1)
+    {
+        int16_t override = status.level_overrides.zeroten1;
+        zeroten1_lvl_to_send =
+            (override == -1) ? current_level_el.zeroten1_lvl : override;
+        if (!status.power_on)
+        {
+            zeroten1_lvl_to_send = 0;
+        }
+        set_0_10v_level(pwm1, zeroten1_lvl_to_send);
+
+        if (configbits & CONFIGBIT_USE_0_10v2)
+        {
+            int16_t override = status.level_overrides.zeroten2;
+            zeroten2_lvl_to_send =
+                (override == -1) ? current_level_el.zeroten2_lvl : override;
+            if (!status.power_on)
+            {
+                zeroten2_lvl_to_send = 0;
+            }
+            set_0_10v_level(pwm2, zeroten2_lvl_to_send);
+        }
+        else
+        {
+            ESP_ERROR_CHECK(set_zero_duty_pwm_channel(pwm2));
+        }
+    }
+    else
+    {
+        // we can't use channel 2 without channel 1 so stop both
+        ESP_ERROR_CHECK(set_zero_duty_pwm_channel(pwm1));
+        ESP_ERROR_CHECK(set_zero_duty_pwm_channel(pwm2));
+    }
+}
+
+void manage_espnow_sends()
+{
+    if (espnowtask != NULL && (configbits & CONFIGBIT_TRANSMIT_ESPNOW))
+    {
+        espnow_lvl_to_send = (status.level_overrides.espnow == -1)
+                                 ? current_level_el.espnow_lvl
+                                 : status.level_overrides.espnow;
+        if (!status.power_on)
+            espnow_lvl_to_send = 0;
+
+        xTaskNotifyIndexed(espnowtask,
+                           LIGHT_LEVEL_NOTIFY_INDEX,
+                           espnow_lvl_to_send,
+                           eSetValueWithOverwrite);
+    }
+}
+
+void manage_dali_sends()
+{
+    // if we're using DALI use mutex to make sure we dont interrupt any
+    // dali config commands from the REST API
+    if ((configbits & CONFIGBIT_USE_DALI) && dali_take_mutex(dali_transceiver, 0))
+    {
+        // check for any DALI broadcast commands -> we don't need to bother
+        // with short addresses
+        dali_broadcast = -1;
+        for (int i = 0; i < DALI_CHANNELS; i++)
+        {
+            ESP_LOGD(TAG, "DALI Channel %i address is %i", i, dali_addresses[i]);
+            if (dali_addresses[i] == 200)
+            {
+                dali_broadcast = i;
+                break;
+            }
+        }
+        if (dali_broadcast >= 0)
+        {
+            // do single broadcast
+            dali_levels_to_send[dali_broadcast] =
+                transmit_setlevel_dali_channel(dali_transceiver,
+                                               dali_broadcast,
+                                               current_level_el.dali_lvl[dali_broadcast],
+                                               force_resend);
+        }
+        else
+        {
+            // send each channel separately
+            for (int i = 0; i < DALI_CHANNELS; i++)
+            {
+                dali_levels_to_send[i] = transmit_setlevel_dali_channel(
+                    dali_transceiver, i, current_level_el.dali_lvl[i], force_resend);
+            }
+        }
+        dali_give_mutex(dali_transceiver);
+    }
+}
+
+void log_current_status()
+{
+    if (xSemaphoreTake(logstring_mutex, pdMS_TO_TICKS(10)))
+    {
+        levellog_count += 1;
+
+        looplog[0] = 0;
+        looplog_headers[0] = 0;
+        strcat(looplog_headers, "Lvl-> SP PWR | SRCE N |");
+        sprintf(looplog,
+                "%3.1u->%3.1d %s | %s %1.i |",
+                status.actual_level,
+                status.setpoint,
+                (status.power_on) ? " ON" : "OFF",
+                source_str[status.setpoint_source & 0xF],
+                (int)new_setpoint);
+        if (overrides_active(&status))
+        {
+            strcat(looplog_headers, " OVRIDE |");
+            strcat(looplog, " ACTIVE |");
+        }
+
+        // strcat 0-10v data
+        if (configbits & CONFIGBIT_USE_0_10v1)
+        {
+            snprintf(looplog_template, 8, "  %3.1i", zeroten1_lvl_to_send);
+            strcat(looplog, looplog_template);
+            strcat(looplog_headers, " 10v1");
+            if (configbits & CONFIGBIT_USE_0_10v2)
+            {
+                snprintf(looplog_template, 8, "  %3.1i", zeroten2_lvl_to_send);
+                strcat(looplog, looplog_template);
+                strcat(looplog_headers, " 10v2");
+            }
+        }
+
+        // strcat DALI data
+        for (int i = 0; i < DALI_CHANNELS; i++)
+        {
+            if ((configbits & CONFIGBIT_USE_DALI) && dali_addresses[i] != -1)
+            {
+                snprintf(looplog_template, 8, " %3.1i", dali_levels_to_send[i]);
+                strcat(looplog, looplog_template);
+                strcpy(looplog_template, " DAX");
+                looplog_template[3] = 'A' + i;
+                strcat(looplog_headers, looplog_template);
+            }
+        }
+        if (configbits & CONFIGBIT_TRANSMIT_ESPNOW)
+        {
+            strcat(looplog_headers, " ESPN");
+            snprintf(looplog_template, 8, "  %3.1i", espnow_lvl_to_send);
+            strcat(looplog, looplog_template);
+        }
+
+        if (configbits & CONFIGBIT_USE_RELAY1)
+        {
+            strcat(looplog_headers, " RY1");
+            snprintf(looplog_template, 8, " %3.1i", relay1_lvl_to_send);
+            strcat(looplog, looplog_template);
+        }
+        if (configbits & CONFIGBIT_USE_RELAY2)
+        {
+            strcat(looplog_headers, " RY2");
+            snprintf(looplog_template, 8, " %3.1i", relay2_lvl_to_send);
+            strcat(looplog, looplog_template);
+        }
+        char *powerfmt;
+        if (current_level_el.power < 10.0)
+        {
+            powerfmt = " | %5.3f";
+        }
+        else if (current_level_el.power < 100.0)
+        {
+            powerfmt = " | %5.2f";
+        }
+        else
+        {
+            powerfmt = " | %5.1f";
+        }
+        snprintf(looplog_template, 255, powerfmt, current_level_el.power);
+        strcat(looplog, looplog_template);
+        char *fadefmt;
+        if (fadetime < 1000000)
+        {
+            fadefmt = " %5.1f";
+        }
+        else
+        {
+            fadefmt = " %5.0f";
+        }
+        snprintf(looplog_template, 255, fadefmt, ((double)fadetime) / 1000.0);
+        strcat(looplog, looplog_template);
+
+        snprintf(looplog_template,
+                 255,
+                 " %6.1lu %4.1i  %3.1lu",
+                 tlt_array[status.actual_level],
+                 ((int)actual_looptime),
+                 idle_reawake_interval >> 10);
+        strcat(looplog, looplog_template);
+        strcat(looplog_headers, " |   Pwr  Fade    TLT   LT Wake");
+        xSemaphoreGive(logstring_mutex);
+    }
+
+    if (!(levellog_count & 7))
+    {
+        // log headers every 8 lines
+        ESP_LOGI(TAG, "%s", looplog_headers);
+    }
+    ESP_LOGI(TAG, "%s", looplog);
+}
 
 void app_main(void)
 {
-    esp_reset_reason_t reason = esp_reset_reason();
+    reset_reason = esp_reset_reason();
     configure_gpio();
     bool stale = (status.stale_flag == STATUS_STALE_FLAG);
     bool reinit =
-        stale || ((reason != ESP_RST_DEEPSLEEP) && (reason != ESP_RST_SW));
+        stale || ((reset_reason != ESP_RST_DEEPSLEEP) && (reset_reason != ESP_RST_SW));
     if (reinit)
     {
         initialise_logbuffer();
@@ -461,9 +911,10 @@ void app_main(void)
     ESP_LOGI(TAG, "Read DIP Switch address: %d", dip_address);
 
     setup_relays(get_setting("configbits"));
-    int startup_setpoint_lvl = get_setting("startup_level");
+    startup_setpoint_lvl = get_setting("startup_level");
 
     status.mainloop_task = xTaskGetCurrentTaskHandle();
+
     if (reinit)
     {
         if (stale)
@@ -476,19 +927,7 @@ void app_main(void)
                      "Fresh start up detected, loading startup level %i from NVS",
                      startup_setpoint_lvl);
         }
-        status.setpoint = startup_setpoint_lvl;
-        status.fadetime_ms = USE_DEFAULT_FADETIME;
-        status.setpoint_source = SETPOINT_SOURCE_INIT;
-        status.power_on = 1;
-        status.actual_level = startup_setpoint_lvl;
-        for (int i = 0; i < DALI_CHANNELS; i++)
-        {
-            status.level_overrides.dali[i] = -1;
-        }
-        status.level_overrides.espnow = -1;
-        status.level_overrides.zeroten1 = -1;
-        status.level_overrides.zeroten2 = -1;
-        status.stale_flag = 0;
+        initialise_status_struct();
     }
     else
     {
@@ -504,9 +943,8 @@ void app_main(void)
                        SETPOINT_SOURCE_INIT,
                        eSetValueWithOverwrite);
 
-    SemaphoreHandle_t logstring_mutex = xSemaphoreCreateMutex();
+    logstring_mutex = xSemaphoreCreateMutex();
 
-    TaskHandle_t networktask;
     networking_ctx.mainloop_task = xTaskGetCurrentTaskHandle();
     networking_ctx.dali_command_queue = NULL;
     networking_ctx.status = &status;
@@ -519,17 +957,18 @@ void app_main(void)
                 (void *)&networking_ctx,
                 2,
                 &networktask);
+
+    // If we don't have Wifi provisioned we can't start as we'll run out of heap unless the BT stack is released
     xTaskNotifyWaitIndexed(PROVISIONING_DONE_INDEX, 0, 0, NULL, portMAX_DELAY);
-    zeroten_handle_t pwm1;
-    zeroten_handle_t pwm2;
+
     ESP_ERROR_CHECK(setup_0_10v_channel(
         PWM_010v_GPIO, get_setting_indexed("startup_cal", 1), &pwm1));
     ESP_ERROR_CHECK(setup_0_10v_channel(
         PWM_010v2_GPIO, get_setting_indexed("startup_cal", 2), &pwm2));
-    // vTaskDelay(pdMS_TO_TICKS(5000));
+
     ESP_ERROR_CHECK(setup_button_interrupts(&status, pwm1, pwm2));
 
-    dali_transceiver_handle_t dali_transceiver = setup_dali(&networking_ctx);
+    dali_transceiver = setup_dali(&networking_ctx);
 
     // light_adc_config_t adcconfig = {
     //     .notify_task = xTaskGetCurrentTaskHandle(),
@@ -540,151 +979,47 @@ void app_main(void)
     // int resistor_level;
     // setup_adc(adcconfig);
 
-    BaseType_t received;
-    esp_err_t sent;
-    int firsttime = 1;
     ESP_LOGI(TAG, "Preparing main loop");
-    uint32_t recv_value;
-    uint32_t reftime = get_time_ms();
-    uint64_t reawake_time = 0;
+    reftime = get_time_ms();
     ESP_LOGI(TAG, "Getting settings from NVS...");
 
-    int default_fadetime = get_setting("default_fade");
+    default_fadetime = get_setting("default_fade");
     configbits = get_setting("configbits");
-    int looptime = MIN_EST_LOOPTIME_MS;
 
-    int updates_performed = 0;
-    int fade_remaining = 0;
+    local_setpoint = status.setpoint;
 
-    bool at_setpoint;
-    uint8_t level_el_array[sizeof(level_t)];
-    int dali_broadcast;
-    level_t future_el;
-    uint32_t current_time;
-    uint32_t actual_looptime;
-    int random_looptime = 1;
-    uint8_t local_setpoint = status.setpoint;
+    full_power = get_setting("full_power");
+    old_status = status;
+    cooldown_duration = get_setting("idle_cooldown");
+    idle_start_time = reftime;
 
     ESP_LOGI(TAG, "Getting DALI addresses");
     get_dali_addresses();
-    uint16_t full_power = get_setting("full_power");
-    int zeroten1_lvl_to_send = 0;
-    int zeroten2_lvl_to_send = 0;
-    int dali_levels_to_send[DALI_CHANNELS] = {0};
-    int espnow_lvl_to_send = 0;
-    int relay1_lvl_to_send = 0;
-    int relay2_lvl_to_send = 0;
-    int lookahead;
-    int idlecount = 0;
-    int levellog_count = 0;
-    bool force_resend = false;
-    device_status_t old_status = status;
-    int max_lookahead;
-    bool new_setpoint;
-    int minlevelbits = 0;
-    uint32_t idle_reawake_interval = 1000;
-    uint32_t cooldown_reawake_interval = 1000;
-    uint32_t max_idle_reawake_interval = 1000;
-    uint32_t cooldown_duration = get_setting("idle_cooldown");
-    int idle_sends = 0;
-    uint32_t idle_start_time = reftime;
-    int future_level;
-    uint8_t min_level_array[sizeof(level_t)] = {0};
-    uint8_t start_of_fade_level = 0;
-    int looptime_outside_tolerance_count = 0;
+
+    list_tasks();
 
     ESP_LOGI(TAG, "Starting main loop...");
-    list_tasks();
     while (1)
     {
         //
         // do loop timing housekeeping
         //
-        actual_looptime = (get_time_ms() - reftime);
-        if (fade_remaining != 0 && actual_looptime > MINIMUM_TARGET_LOOPTIME)
-        {
-            if (actual_looptime >
-                    (tlt_array[status.actual_level] + LOOPTIME_TOLERANCE) ||
-                actual_looptime <
-                    (tlt_array[status.actual_level] - LOOPTIME_TOLERANCE))
-            {
-                looptime_outside_tolerance_count += 1;
-            }
-            if (looptime_outside_tolerance_count >=
-                LOOPTIMES_OUT_OF_TOLERANCE_NEEDED)
-            {
-                // calc_tickinc_and_looptime(actual_looptime, status.setpoint -
-                // start_of_fade_level);
-                calc_fade_increments(
-                    actual_looptime, start_of_fade_level, status.setpoint);
+        looptime_housekeeping();
 
-                looptime_outside_tolerance_count = 0;
-            }
-        }
         while (1)
         {
-            // s
-            //  spin until next tick or new setpoint received
-            //
-
-            received =
-                xTaskNotifyWaitIndexed(NEW_SETPOINT_NOTIFY_IDX, 0, 0, &recv_value, 1);
+            received = xTaskNotifyWaitIndexed(NEW_SETPOINT_NOTIFY_IDX, 0, 0, &recv_value, 1);
             current_time = get_time_ms();
             force_resend = received;
             if (received == pdTRUE)
             {
-                old_status = status;
-                status.setpoint = clamp(status.setpoint, 0, 254);
-
-                // signal new setpoint
-                gpio_set_level(LED1_GPIO, 1);
-                start_of_fade_level = status.actual_level;
-                full_power = clamp(get_setting("full_power"), 0, 512);
-                max_idle_reawake_interval =
-                    _uMAX(((uint32_t)get_setting("idle_intvl_ms")), 200UL);
-                cooldown_duration =
-                    _uMAX(((uint32_t)get_setting("idle_cooldown")), 0UL);
-                new_setpoint = true;
-                // ESP_LOGI(TAG, "Received new setpoint: %d, fade: %lu source
-                // %s", status.setpoint, status.fadetime_ms,
-                // source_str[status.setpoint_source]);
-                random_looptime = (rand() & 127);
-                tick_inc = 1;
-                configbits = get_setting("configbits");
-                switch (status.fadetime_ms)
-                {
-                case USE_DEFAULT_FADETIME:
-                    fadetime = get_setting("default_fade");
-                    break;
-                case USE_SLOW_FADETIME:
-                    fadetime = get_setting("slow_fade");
-                    break;
-                default:
-                    fadetime = status.fadetime_ms;
-                }
-                if (fadetime < 8)
-                    // it's basically no fade lets avoid any divide by zeros
-                    fadetime = 8;
-
-                if (status.setpoint != status.actual_level)
-                {
-                    calc_fade_increments(
-                        estimate_looptime(), start_of_fade_level, status.setpoint);
-                    looptime_outside_tolerance_count = 0;
-                }
-                else
-                {
-                    idle_start_time = current_time;
-                }
+                process_new_setpoint();
                 break;
             };
             if (current_time > reawake_time)
                 break;
         };
 
-        /////
-        // process tick -> move actual_level fading towards setpoint
-        /////
         reftime = get_time_ms();
 
         // reset lookahead array to be paranoid
@@ -696,60 +1031,8 @@ void app_main(void)
             // process fade tick
             //
 
-            // look ahead to rewake ballasts ahead of time
-            int end_lookahead_level;
-            uint32_t time_acc = 0;
-            int sign = fade_remaining > 0 ? 1 : -1;
-            int lvl = status.actual_level;
-            int loops = 0;
-            while (lvl != status.setpoint && status.fadetime_ms > 0)
-            {
-                loops += 1;
-                if (loops > 255)
-                {
-                    ESP_LOGE(TAG,
-                             "Something went wrong in fade search loop. Loop "
-                             "count timeout.");
-                    // zero array
-                    memcpy(min_level_array, &status.lut[0], sizeof(level_t));
-                    break;
-                }
-
-                // get test level
-                int next_lvl_unclamped = lvl + sign * (int)tick_inc_array[lvl];
-                lvl = flexclamp(next_lvl_unclamped, status.actual_level, status.setpoint);
-
-                if (loops < 2)
-                {
-                    // we need to advance one level regardless of timing
-                    continue;
-                }
-
-                ESP_LOGD(TAG,
-                         "Looking at lvl %d. Adding %lu to acc (%lu). Ticking %d",
-                         lvl,
-                         tlt_array[lvl],
-                         time_acc,
-                         tick_inc_array[lvl]);
-
-                // get iterable copy so we avoid type punning shenanigans
-                uint8_t future_level_array[sizeof(level_t)];
-                level_t future_el = get_level_el(lvl, status, full_power);
-                memcpy(future_level_array, &future_el, sizeof(level_t));
-
-                // iterate over array to check for used channels
-                for (int ch = 0; ch < sizeof(level_t); ch++)
-                {
-                    if (future_level_array[ch] > 0)
-                        // ensure channel does not switch completely off
-                        min_level_array[ch] = 1;
-                }
-
-                // check to see if we've gone far enough ahead
-                time_acc += tlt_array[lvl];
-                if (time_acc > BALLAST_WAKE_LOOKAHEAD_MS)
-                    break;
-            }
+            tick_sign = fade_remaining > 0 ? 1 : -1;
+            lookahead_for_reawake();
 
             // prepare next loop
             reawake_time = reftime + tlt_array[status.actual_level];
@@ -758,7 +1041,8 @@ void app_main(void)
 
             // tick increment
             int act = status.actual_level;
-            int inc = (int)tick_inc_array[status.actual_level] * sign;
+            int inc = (int)tick_inc_array[status.actual_level] * tick_sign;
+
             // we need to make sure we never overshoot
             status.actual_level = flexclamp(act + inc, act, status.setpoint);
         }
@@ -774,282 +1058,40 @@ void app_main(void)
             force_resend = true;
 
             configbits = get_setting("configbits");
+            calculate_reawake_intervals();
 
-            // calculate reawake intervals
-            if ((reftime - idle_start_time) < cooldown_duration)
-            {
-                idle_reawake_interval = _uMIN(IDLE_UPDATE_INTERVAL_DURING_COOLDOWN_MS,
-                                              max_idle_reawake_interval);
-            }
-            else
-            {
-                idle_reawake_interval =
-                    _uMIN(MAX_IDLE_UPDATE_INTERVAL_AFTER_COOLDOWN_MS,
-                          max_idle_reawake_interval);
-            }
-            // set reawake time
-            reawake_time = reftime + (uint64_t)idle_reawake_interval;
-            ESP_LOGD(TAG,
-                     "Idle reawake %lu reftime %lu idle_start %lu cd %lu",
-                     idle_reawake_interval,
-                     reftime,
-                     idle_start_time,
-                     cooldown_duration);
-
-            if (configbits & CONFIGBIT_RECEIVE_ESPNOW)
-            {
-                // we don't want double awakening if we're receiving regular
-                // updates so we add a bit extra to accommodate network latency
-                reawake_time += IDLE_UPDATE_INTERVAL_ADDITION_US_RECV_ESPNOW;
-            }
-
-            // reset min_level array
-            memcpy(min_level_array, &status.lut[0], sizeof(level_t));
-            // refresh local data from NVS
+            memcpy(min_level_array, &status.lut[0], sizeof(level_t)); // zero it out
             get_dali_addresses();
             full_power = clamp(get_setting("full_power"), 0, 512);
 
             idlecount += 1;
             idle_sends += 1;
-            if (!(idlecount & 0x3F))
-            {
-                // log RAM situation every 64 idles
-                ESP_LOGI(TAG,
-                         "Min free heap %i",
-                         heap_caps_get_minimum_free_size(MALLOC_CAP_8BIT));
-                ESP_LOGI(TAG, "Free heap %i", heap_caps_get_free_size(MALLOC_CAP_8BIT));
-            }
-            if (!(idlecount & 0xFF))
-            {
-                // log tasks every 256 idles
-                list_tasks();
-            }
+            maybe_log_heap_info();
         }
 
-        /////
-        // process sends for tick
-        /////
-        level_t level_el = get_level_el(status.actual_level, status, full_power);
+        current_level_el = get_level_el(status.actual_level, status, full_power);
 
         // ensure minimum levels
-        memcpy(level_el_array, &level_el, sizeof(level_t));
+        memcpy(level_el_array, &current_level_el, sizeof(level_t));
         for (int ch = 0; ch < sizeof(level_t); ch++)
         {
             if (level_el_array[ch] < min_level_array[ch])
                 level_el_array[ch] = min_level_array[ch];
         }
-        memcpy(&level_el, &level_el_array, sizeof(level_t));
+        memcpy(&current_level_el, &level_el_array, sizeof(level_t));
 
         // RELAYS
-        relay1_lvl_to_send = status.power_on ? level_el.relay1 : 0;
-        relay2_lvl_to_send = status.power_on ? level_el.relay2 : 0;
+        relay1_lvl_to_send = status.power_on ? current_level_el.relay1 : 0;
+        relay2_lvl_to_send = status.power_on ? current_level_el.relay2 : 0;
         manage_relay_timeouts(configbits, relay1_lvl_to_send, relay2_lvl_to_send);
 
-        // ESPNOW
-        if (espnowtask != NULL && (configbits & CONFIGBIT_TRANSMIT_ESPNOW))
-        {
-            espnow_lvl_to_send = (status.level_overrides.espnow == -1)
-                                     ? level_el.espnow_lvl
-                                     : status.level_overrides.espnow;
-            if (!status.power_on)
-                espnow_lvl_to_send = 0;
+        manage_espnow_sends();
 
-            xTaskNotifyIndexed(espnowtask,
-                               LIGHT_LEVEL_NOTIFY_INDEX,
-                               espnow_lvl_to_send,
-                               eSetValueWithOverwrite);
-        }
+        manage_zeroten_channel_sends();
 
-        // 0-10V
-        if (configbits & CONFIGBIT_USE_0_10v1)
-        {
-            int16_t override = status.level_overrides.zeroten1;
-            zeroten1_lvl_to_send =
-                (override == -1) ? level_el.zeroten1_lvl : override;
-            if (!status.power_on)
-            {
-                zeroten1_lvl_to_send = 0;
-            }
-            set_0_10v_level(pwm1, zeroten1_lvl_to_send);
+        manage_dali_sends();
 
-            if (configbits & CONFIGBIT_USE_0_10v2)
-            {
-                int16_t override = status.level_overrides.zeroten2;
-                zeroten2_lvl_to_send =
-                    (override == -1) ? level_el.zeroten2_lvl : override;
-                if (!status.power_on)
-                {
-                    zeroten2_lvl_to_send = 0;
-                }
-                set_0_10v_level(pwm2, zeroten2_lvl_to_send);
-            }
-            else
-            {
-                ESP_ERROR_CHECK(set_zero_duty_pwm_channel(pwm2));
-            }
-        }
-        else
-        {
-            // we can't use channel 2 without channel 1 so stop both
-            ESP_ERROR_CHECK(set_zero_duty_pwm_channel(pwm1));
-            ESP_ERROR_CHECK(set_zero_duty_pwm_channel(pwm2));
-        }
-
-        // DALI
-
-        // if we're using DALI use mutex to make sure we dont interrupt any
-        // if we're using DALI use mutex to make sure we dont interrupt any
-        // dali config commands from the REST API
-        if ((configbits & CONFIGBIT_USE_DALI) &&
-            dali_take_mutex(dali_transceiver, 0))
-        {
-            // check for any DALI broadcast commands -> we don't need to bother
-            // with short addresses
-            dali_broadcast = -1;
-            for (int i = 0; i < DALI_CHANNELS; i++)
-            {
-                ESP_LOGD(TAG, "DALI Channel %i address is %i", i, dali_addresses[i]);
-                if (dali_addresses[i] == 200)
-                {
-                    dali_broadcast = i;
-                    break;
-                }
-            }
-            if (dali_broadcast >= 0)
-            {
-                // do single broadcast
-                dali_levels_to_send[dali_broadcast] =
-                    transmit_setlevel_dali_channel(dali_transceiver,
-                                                   dali_broadcast,
-                                                   level_el.dali_lvl[dali_broadcast],
-                                                   force_resend);
-            }
-            else
-            {
-                // send each channel separately
-                for (int i = 0; i < DALI_CHANNELS; i++)
-                {
-                    dali_levels_to_send[i] = transmit_setlevel_dali_channel(
-                        dali_transceiver, i, level_el.dali_lvl[i], force_resend);
-                }
-            }
-            dali_give_mutex(dali_transceiver);
-        }
-
-        /////
-        // logging for tick
-        /////
-
-        if (xSemaphoreTake(logstring_mutex, pdMS_TO_TICKS(10)))
-        {
-            levellog_count += 1;
-
-            looplog[0] = 0;
-            looplog_headers[0] = 0;
-            strcat(looplog_headers, "Lvl-> SP PWR | SRCE N |");
-            sprintf(looplog,
-                    "%3.1u->%3.1d %s | %s %1.i |",
-                    status.actual_level,
-                    status.setpoint,
-                    (status.power_on) ? " ON" : "OFF",
-                    source_str[status.setpoint_source & 0xF],
-                    (int)new_setpoint);
-            if (overrides_active(&status))
-            {
-                strcat(looplog_headers, " OVRIDE |");
-                strcat(looplog, " ACTIVE |");
-            }
-
-            // strcat 0-10v data
-            if (configbits & CONFIGBIT_USE_0_10v1)
-            {
-                snprintf(looplog_template, 8, "  %3.1i", zeroten1_lvl_to_send);
-                strcat(looplog, looplog_template);
-                strcat(looplog_headers, " 10v1");
-                if (configbits & CONFIGBIT_USE_0_10v2)
-                {
-                    snprintf(looplog_template, 8, "  %3.1i", zeroten2_lvl_to_send);
-                    strcat(looplog, looplog_template);
-                    strcat(looplog_headers, " 10v2");
-                }
-            }
-            int used = 0;
-
-            // strcat DALI data
-            for (int i = 0; i < DALI_CHANNELS; i++)
-            {
-                if ((configbits & CONFIGBIT_USE_DALI) && dali_addresses[i] != -1)
-                {
-                    snprintf(looplog_template, 8, " %3.1i", dali_levels_to_send[i]);
-                    strcat(looplog, looplog_template);
-                    strcpy(looplog_template, " DAX");
-                    looplog_template[3] = 'A' + i;
-                    strcat(looplog_headers, looplog_template);
-                }
-            }
-            if (configbits & CONFIGBIT_TRANSMIT_ESPNOW)
-            {
-                strcat(looplog_headers, " ESPN");
-                snprintf(looplog_template, 8, "  %3.1i", espnow_lvl_to_send);
-                strcat(looplog, looplog_template);
-            }
-
-            if (configbits & CONFIGBIT_USE_RELAY1)
-            {
-                strcat(looplog_headers, " RY1");
-                snprintf(looplog_template, 8, " %3.1i", relay1_lvl_to_send);
-                strcat(looplog, looplog_template);
-            }
-            if (configbits & CONFIGBIT_USE_RELAY2)
-            {
-                strcat(looplog_headers, " RY2");
-                snprintf(looplog_template, 8, " %3.1i", relay2_lvl_to_send);
-                strcat(looplog, looplog_template);
-            }
-            char *powerfmt;
-            if (level_el.power < 10.0)
-            {
-                powerfmt = " | %5.3f";
-            }
-            else if (level_el.power < 100.0)
-            {
-                powerfmt = " | %5.2f";
-            }
-            else
-            {
-                powerfmt = " | %5.1f";
-            }
-            snprintf(looplog_template, 255, powerfmt, level_el.power);
-            strcat(looplog, looplog_template);
-            char *fadefmt;
-            if (fadetime < 1000000)
-            {
-                fadefmt = " %5.1f";
-            }
-            else
-            {
-                fadefmt = " %5.0f";
-            }
-            snprintf(looplog_template, 255, fadefmt, ((double)fadetime) / 1000.0);
-            strcat(looplog, looplog_template);
-
-            snprintf(looplog_template,
-                     255,
-                     " %6.1lu %4.1i  %3.1lu",
-                     tlt_array[status.actual_level],
-                     ((int)actual_looptime),
-                     idle_reawake_interval >> 10);
-            strcat(looplog, looplog_template);
-            strcat(looplog_headers, " |   Pwr  Fade    TLT   LT Wake");
-            xSemaphoreGive(logstring_mutex);
-        }
-
-        if (!(levellog_count & 7))
-        {
-            // log headers every 8 lines
-            ESP_LOGI(TAG, "%s", looplog_headers);
-        }
-        ESP_LOGI(TAG, "%s", looplog);
+        log_current_status();
 
         new_setpoint = false;
     }

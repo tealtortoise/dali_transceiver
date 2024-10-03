@@ -8,6 +8,8 @@ static const char* TAG = "GPIO_UTILS";
 #define RELAY_TURNOFF_DELAY_S 20
 #define RELAY_LOCKOUT_TIME_S 5
 
+static const int OUTPUT_PINS[] = {LED1_GPIO, LED2_GPIO, PWM_010v_GPIO, PWM_010v2_GPIO, RELAY1_GPIO, RELAY2_GPIO, TX_GPIO};
+static const char* OUTPUT_PIN_NAMES[] = {"LED1", "LED2", "PWM1", "PWM2", "RELAY1", "RELAY2", "DALI TX"};
 
 inline int32_t _MAX(int32_t a, int32_t b) { return((a) > (b) ? a : b); }
 inline int32_t _MIN(int32_t a, int32_t b) { return((a) < (b) ? a : b); }

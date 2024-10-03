@@ -74,7 +74,7 @@ esp_err_t set_setting(const char* name, int value) {
 
 int get_setting_indexed(const char* name, int element) {
     char keybuffer[16];
-    int out;
+    int32_t out;
     esp_err_t success = 1;
     // BaseType_t mutex_taken = xSemaphoreTake(nvs_mutex, pdMS_TO_TICKS(5000));
     // if (mutex_taken == pdTRUE){
@@ -82,7 +82,7 @@ int get_setting_indexed(const char* name, int element) {
         ESP_ERROR_CHECK(generate_key_indexed(keybuffer, name, element));
         success = nvs_get_i32(nvs_handle_, keybuffer, &out);
         if (success == ESP_OK){
-            ESP_LOGD(TAG, "Read %s -> %i", keybuffer, out);
+            ESP_LOGD(TAG, "Read %s -> %ld", keybuffer, out);
         }
         // xSemaphoreGive(nvs_mutex);
         if (success == ESP_OK){
@@ -164,7 +164,7 @@ esp_err_t setup_nvs_spiffs_settings(){
     FILE *settingfile = fopen("/spiffs/default_settings.csv", "r");
     int commapos = -1;
     char* out; 
-    int existing_int;
+    int32_t existing_int;
 
     esp_err_t key_find_result;
     nvs_type_t nvstype;

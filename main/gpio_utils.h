@@ -37,8 +37,6 @@
 #define NOT_PRESSED_MESSAGE "Not Pressed"
 
 #define OUTPUT_PIN_COUNT 7
-static const int OUTPUT_PINS[] = {LED1_GPIO, LED2_GPIO, PWM_010v_GPIO, PWM_010v2_GPIO, RELAY1_GPIO, RELAY2_GPIO, TX_GPIO};
-static const char* OUTPUT_PIN_NAMES[] = {"LED1", "LED2", "PWM1", "PWM2", "RELAY1", "RELAY2", "DALI TX"};
 #define OUTPIUT_PIN_MAP ((1 << LED1_GPIO) | (1 << LED2_GPIO) | (1 << PWM_010v_GPIO) | (1 << PWM_010v2_GPIO) | (1 << TX_GPIO) | (1 << RELAY1_GPIO) | (1 << RELAY2_GPIO))
 #define INPUT_PIN_MAP ((1 << RX_GPIO) | (1 << AIN_GPIO) | (1 << EXT1_GPIO))
 #define INPUT_WPU_PIN_MAP ((1 << BUT1_GPIO) | (1 << BUT2_GPIO) | (1 << BUT3_GPIO) | (1 << DIP1_GPIO) | (1 << DIP2_GPIO)  | (1 << DIP3_GPIO) | (1 << DIP4_GPIO))
