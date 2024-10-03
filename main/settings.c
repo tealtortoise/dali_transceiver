@@ -170,7 +170,7 @@ esp_err_t setup_nvs_spiffs_settings(){
     nvs_type_t nvstype;
     BaseType_t mutex_taken;
     bool nvs_updated = false;
-    bool erase_wifi_nvs = get_and_log_buttons() & 1;
+    bool erase_wifi_nvs = get_and_log_buttons() & 2;
     bool erase_settings_nvs = get_and_log_buttons() & 4;
 
     // erase_wifi_nvs = true;
@@ -185,11 +185,11 @@ esp_err_t setup_nvs_spiffs_settings(){
     if (erase_settings_nvs | erase_wifi_nvs)
     {
         ESP_LOGW(TAG, "Restarting in 5 seconds...");
-        for (int i = 0; i < 25; i++)
+        for (int i = 0; i < 50; i++)
         {
-            gpio_set_level(LED1_GPIO, (i & 4) > 0);
-            gpio_set_level(LED2_GPIO, ((i + 2) & 4) > 0);
-            vTaskDelay(pdMS_TO_TICKS(200));
+            gpio_set_level(LED1_GPIO, (i & 2) > 0);
+            gpio_set_level(LED2_GPIO, ((i + 1) & 2) > 0);
+            vTaskDelay(pdMS_TO_TICKS(100));
         }
         esp_restart();
     }
@@ -264,6 +264,7 @@ void fill_luts_fallback(level_t lut[]){
         memcpy(&lut[row], &temp, sizeof(level_t));
         lut[row].power = pow10((row - 1) * 3 / 253.0) * 0.1;
     }
+    lut[0].power = 0.0;
 }
 
 esp_err_t read_level_luts(level_t lut[]){

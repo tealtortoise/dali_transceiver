@@ -265,9 +265,7 @@ esp_err_t dali_assign_short_addresses(dali_transceiver_handle_t handle, int star
         return response;
     }
     bool oldstate = start_receiver(handle, true);
-    // dali_take_mutex(handle, pdMS_TO_TICKS(5000));
-    dali_transceiver_t *transceiver = (dali_transceiver_t *)handle;
-    // bool oldstate = transceiver->
+    
     esp_err_t response = _dali_assign_short_addresses(handle, start_address, assign_all);
     if (response != ESP_OK)
     {
@@ -280,13 +278,13 @@ esp_err_t dali_assign_short_addresses(dali_transceiver_handle_t handle, int star
     {
         stop_receiver_and_clear_queues(handle);
     }
-    // dali_give_mutex(handle);
     return response;
 }
 
 void dali_command_monitor_task(void *params)
 {
     dali_transceiver_t *transceiver = (dali_transceiver_t *)params;
+    dali_transceiver_handle_t handle = (dali_transceiver_handle_t) transceiver;
     BaseType_t received;
     dali_command_t command;
     esp_err_t err;
@@ -306,7 +304,7 @@ void dali_command_monitor_task(void *params)
             case DALI_COMMAND_COMMISSION:
                 ESP_LOGI(TAG, "Received COMMISSION command...");
                 vTaskSuspend(transceiver->mainloop_task);
-                err = dali_assign_short_addresses(transceiver, command.value, (command.command == DALI_COMMAND_COMMISSION));
+                err = dali_assign_short_addresses(handle, command.value, (command.command == DALI_COMMAND_COMMISSION));
                 vTaskResume(transceiver->mainloop_task);
                 if (err)
                     ESP_LOGE(TAG, "Commissioning returned error %i", err);
@@ -316,25 +314,25 @@ void dali_command_monitor_task(void *params)
                 break;
             case DALI_COMMAND_SET_POWER_ON_LEVEL:
                 ESP_LOGI(TAG, "Received SET_POWER_ON_LEVEL command...");
-                err = dali_set_power_on_level(transceiver, command.address, command.value);
+                err = dali_set_power_on_level(handle, command.address, command.value);
                 retr.err = err;
                 retr.value = 0;
                 break;
             case DALI_COMMAND_GET_POWER_ON_LEVEL:
                 ESP_LOGI(TAG, "Received GET_POWER_ON_LEVEL command...");
-                err = dali_get_power_on_level(transceiver, command.address, &retr_8);
+                err = dali_get_power_on_level(handle, command.address, &retr_8);
                 retr.err = err;
                 retr.value = retr_8;
                 break;
             case DALI_COMMAND_SET_FAILSAFE_LEVEL:
                 ESP_LOGI(TAG, "Received SET_FAILSAFE_LEVEL command...");
-                err = dali_set_system_failure_level(transceiver, command.address, command.value);
+                err = dali_set_system_failure_level(handle, command.address, command.value);
                 retr.err = err;
                 retr.value = 0;
                 break;
             case DALI_COMMAND_SET_FADE_TIME:
                 ESP_LOGI(TAG, "Received SET_FADE_TIME command...");
-                err = dali_set_fade_time(transceiver, command.address, command.value);
+                err = dali_set_fade_time(handle, command.address, command.value);
                 retr.err = err;
                 retr.value = 0;
                 break;
@@ -342,7 +340,7 @@ void dali_command_monitor_task(void *params)
             {
                 ESP_LOGI(TAG, "Received GET_FADE_TIME command...");
                 uint8_t returned_fadetime;
-                err = dali_query_fade_time(transceiver, command.address, &returned_fadetime);
+                err = dali_query_fade_time(handle, command.address, &returned_fadetime);
                 retr.err = err;
                 retr.value = returned_fadetime;
                 break;
@@ -350,7 +348,7 @@ void dali_command_monitor_task(void *params)
             case DALI_COMMAND_ADD_TO_GROUP:
             {
                 ESP_LOGI(TAG, "Received ADD_TO_GROUP command...");
-                err = dali_set_group(transceiver, command.address, command.value);
+                err = dali_set_group(handle, command.address, command.value);
                 retr.err = err;
                 retr.value = 0;
                 break;
@@ -358,7 +356,7 @@ void dali_command_monitor_task(void *params)
             case DALI_COMMAND_RESET_DEVICE:
             {
                 ESP_LOGI(TAG, "Received RESET_DEVICE command...");
-                err = dali_reset_device(transceiver, command.address);
+                err = dali_reset_device(handle, command.address);
                 retr.err = err;
                 retr.value = 0;
                 break;

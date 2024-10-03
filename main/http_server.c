@@ -202,13 +202,13 @@ static void generate_json(char *buffer, networking_ctx_t *ctx)
     if (xSemaphoreTake(ctx->logstring_mutex, pdMS_TO_TICKS(100)))
     {
         sprintf(buffer, "{\"setpoint\":%d,\"actual_level\":%d,\"actual_power\":%f,\"setpoint_power\":%f,\"logstring\":\"%s\",\"logheader\":\"%s\",\"overrides\":%s}",
-            ctx->status->setpoint,
-            ctx->status->actual_level,
-            ctx->status->lut[ctx->status->actual_level].power,
-            ctx->status->lut[ctx->status->setpoint].power,
-            ctx->logstring,
-            ctx->logheader,
-            overrides_active(ctx->status) ? "true" : "false");
+                ctx->status->setpoint,
+                ctx->status->actual_level,
+                ctx->status->lut[ctx->status->actual_level].power,
+                ctx->status->lut[ctx->status->setpoint].power,
+                ctx->logstring,
+                ctx->logheader,
+                overrides_active(ctx->status) ? "true" : "false");
         xSemaphoreGive(ctx->logstring_mutex);
     }
 }
@@ -254,7 +254,7 @@ static esp_err_t current_setpoint_handler(httpd_req_t *req)
             // uint32_t setpoint_struct_as_int = *((uint32_t*) &setp);
             xTaskNotifyIndexed(ctx->mainloop_task, NEW_SETPOINT_NOTIFY_IDX, SETPOINT_SOURCE_REST, eSetValueWithOverwrite);
             ESP_LOGI(TAG, "Set new setpoint %i", data);
-            
+
             generate_json(httpd_temp_buffer, ctx);
         }
         else

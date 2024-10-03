@@ -385,4 +385,3 @@ esp_err_t file_uploader(httpd_req_t *req)
     }
     return ESP_OK;
 }
-
