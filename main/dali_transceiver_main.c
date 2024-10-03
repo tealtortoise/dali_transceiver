@@ -42,18 +42,16 @@
 #include "settings.h"
 #include "uart.h"
 
-#define MIN_EST_LOOPTIME_MS 50
-
 #define LOOPTIME_TOLERANCE 20
 #define LOOPTIMES_OUT_OF_TOLERANCE_NEEDED 2
 
-#define IDLE_UPDATE_INTERVAL_DURING_COOLDOWN_MS (800)
+#define IDLE_UPDATE_INTERVAL_DURING_COOLDOWN_MS (800UL)
 #define MAX_IDLE_UPDATE_INTERVAL_AFTER_COOLDOWN_MS (60UL * 60UL * 1000UL)
 #define MINIMUM_TARGET_LOOPTIME 15
 
-#define BALLAST_WAKE_LOOKAHEAD_MS 1600
+#define BALLAST_WAKE_LOOKAHEAD_MS 1600UL
 
-#define IDLE_UPDATE_INTERVAL_ADDITION_US_RECV_ESPNOW (500)
+#define IDLE_UPDATE_INTERVAL_ADDITION_US_RECV_ESPNOW (500ULL)
 
 #define HASH_LEN 32 /* SHA-256 digest length */
 
@@ -86,7 +84,7 @@ static zeroten_handle_t pwm2;
 static int tick_sign;
 static BaseType_t received;
 static uint32_t recv_value;
-static uint32_t reftime;
+static uint64_t reftime;
 static uint64_t reawake_time = 0;
 static int default_fadetime;
 
@@ -94,12 +92,18 @@ static int fade_remaining = 0;
 
 static uint8_t level_el_array[sizeof(level_t)];
 static int dali_broadcast;
-static uint32_t current_time;
+static uint64_t current_time;
 static uint32_t actual_looptime;
 static int random_looptime = 1;
 static uint8_t local_setpoint;
 
 static uint16_t full_power;
+
+static int dali_addresses[DALI_CHANNELS];
+static char dali_address_key_buffer[] = "dalix_address";
+static uint8_t existing_dali_levels[DALI_CHANNELS];
+static uint8_t already_off[DALI_CHANNELS] = {0};
+
 static int zeroten1_lvl_to_send = 0;
 static int zeroten2_lvl_to_send = 0;
 static int dali_levels_to_send[DALI_CHANNELS] = {0};
@@ -117,7 +121,7 @@ static uint32_t idle_reawake_interval = 1000;
 static uint32_t max_idle_reawake_interval = 1000;
 static uint32_t cooldown_duration;
 static int idle_sends = 0;
-static uint32_t idle_start_time;
+static uint64_t idle_start_time;
 
 static uint8_t min_level_array[sizeof(level_t)] = {0};
 static uint8_t start_of_fade_level = 0;
@@ -126,42 +130,27 @@ static int startup_setpoint_lvl;
 
 static level_t current_level_el;
 
-static char tinybuffer[1];
 static char vprint_buffer[1024];
 static SemaphoreHandle_t printf_mutex;
-static const char *logmemerror = "Unable to allocate memory for logging";
 
 int buffer_vprint(const char *format, va_list args)
 {
-    if (xSemaphoreTake(printf_mutex, pdMS_TO_TICKS(200)))
+    if (xSemaphoreTake(printf_mutex, pdMS_TO_TICKS(150)))
     {
-        int strsize;
-        strsize = vsnprintf(tinybuffer, 0, format, args);
-        if (1)
+        int len = vsnprintf(vprint_buffer, 1023, format, args);
+        if (vprint_buffer[len - 1] != '\n')
         {
-            char *tempbuf = malloc(strsize + 2);
-            if (tempbuf == NULL)
-            {
-                log_string(logmemerror, strlen(logmemerror), true);
-                fputs(logmemerror, stdout);
-                xSemaphoreGive(printf_mutex);
-                return 1;
-            }
-            vsnprintf(tempbuf, strsize + 1, format, args);
-            if (tempbuf[strsize - 1] != '\n')
-            {
-                tempbuf[strsize - 1] = '\n';
-                tempbuf[strsize] = 0;
-            }
-            int ret = log_string(tempbuf, strsize, true);
-            fputs(tempbuf, stdout);
-            free(tempbuf);
-            
-            xSemaphoreGive(printf_mutex);
-            return ret;
+            vprint_buffer[len - 1] = '\n';
+            vprint_buffer[len] = 0;
         }
+        int ret = log_string(vprint_buffer, len, true);
+        fputs(vprint_buffer, stdout);
+
+        xSemaphoreGive(printf_mutex);
+        return ret;
     }
-    return 0;
+    fputs("VPrint Mutex timed out!", stderr);
+    return 1;
 }
 
 void setup_networking(void *params)
@@ -190,21 +179,18 @@ static uint32_t tlt_array[255] = {100};
 
 int fadetime;
 
-uint32_t
-get_time_ms()
+uint64_t get_time_ms()
 {
-    return (uint32_t)(esp_timer_get_time() >> 10);
+    return (uint64_t)esp_timer_get_time() >> 10;
 }
 
-uint32_t
-fadecurve(const uint32_t input)
+uint32_t fadecurve(const uint32_t input)
 {
     // best option if LUT uses default DALI curve
     return input * input - (input << 9) + 108000UL;
 }
 
-uint32_t
-curve_lin(const uint32_t input)
+uint32_t curve_lin(const uint32_t input)
 {
     // best option if LUT uses visually linear target curve
     return 60000;
@@ -272,12 +258,6 @@ void calc_fade_increments(uint32_t looptime, int start, int finish)
     // starttime);
 }
 
-static int dali_addresses[DALI_CHANNELS];
-static char dali_address_key_buffer[] = "dalix_address";
-static uint8_t existing_dali_levels[DALI_CHANNELS];
-
-static uint8_t already_off[] = {0, 0, 0, 0, 0, 0};
-
 void get_dali_addresses()
 {
     for (int i = 0; i < DALI_CHANNELS; i++)
@@ -317,9 +297,13 @@ uint8_t transmit_setlevel_dali_channel(dali_transceiver_handle_t transceiver,
     int address = dali_addresses[channel_num];
     int override = status.level_overrides.dali[channel_num];
     if (override != -1)
+    {
         level = status.level_overrides.dali[channel_num];
+    }
     if (!status.power_on)
+    {
         level = 0;
+    }
     already_off[channel_num] = (level == 0);
     if (address == -1)
     {
@@ -341,8 +325,7 @@ uint8_t transmit_setlevel_dali_channel(dali_transceiver_handle_t transceiver,
     }
     if (address >= 100 && address <= 115)
     {
-        dali_set_level_group_noblock(
-            transceiver, address - 100, level, pdMS_TO_TICKS(130));
+        dali_set_level_group_noblock(transceiver, address - 100, level, pdMS_TO_TICKS(130));
         return level;
     }
     if (address == 200)
@@ -359,7 +342,7 @@ void random_setpointer_task(void *params)
     device_status_t *status = (device_status_t *)params;
     int mult = (rand() & 0xF);
     uint8_t setpoint;
-    while (1)
+    while (true)
     {
         mult = (rand() & 0xF);
         setpoint = (rand() & 0xFF);
@@ -388,8 +371,7 @@ static void print_sha256(const uint8_t *image_hash, const char *label)
 
 dali_transceiver_handle_t setup_dali(networking_ctx_t *networking_ctx)
 {
-    dali_transceiver_config_t transceiver_config =
-        dali_transceiver_sensible_default_config;
+    dali_transceiver_config_t transceiver_config = dali_transceiver_sensible_default_config;
     transceiver_config.invert_input = DALI_DONT_INVERT;
     transceiver_config.invert_output = DALI_DONT_INVERT;
     transceiver_config.transmit_queue_size_frames = 1;
@@ -403,10 +385,8 @@ dali_transceiver_handle_t setup_dali(networking_ctx_t *networking_ctx)
         DALI_PARSER_ACTION_LOG_AND_RECORD;
 
     dali_transceiver_handle_t dali_transceiver;
-    ESP_ERROR_CHECK(
-        dali_setup_transceiver(transceiver_config, &dali_transceiver));
-    networking_ctx->dali_command_queue =
-        dali_setup_command_queue(dali_transceiver);
+    ESP_ERROR_CHECK(dali_setup_transceiver(transceiver_config, &dali_transceiver));
+    networking_ctx->dali_command_queue = dali_setup_command_queue(dali_transceiver);
     dali_broadcast_level_noblock(dali_transceiver, 0);
     return dali_transceiver;
 }
@@ -637,7 +617,7 @@ void calculate_reawake_intervals()
 
     reawake_time = reftime + (uint64_t)idle_reawake_interval;
     ESP_LOGD(TAG,
-             "Idle reawake %lu reftime %lu idle_start %lu cd %lu",
+             "Idle reawake %lu reftime %llu idle_start %llu cd %lu",
              idle_reawake_interval,
              reftime,
              idle_start_time,
@@ -666,6 +646,19 @@ void maybe_log_heap_info()
         // log tasks every 256 idles
         list_tasks();
     }
+}
+
+void ensure_minimum_levels()
+{
+    memcpy(level_el_array, &current_level_el, sizeof(level_t));
+    for (int ch = 0; ch < sizeof(level_t); ch++)
+    {
+        if (level_el_array[ch] < min_level_array[ch])
+        {
+            level_el_array[ch] = min_level_array[ch];
+        }
+    }
+    memcpy(&current_level_el, &level_el_array, sizeof(level_t));
 }
 
 void manage_zeroten_channel_sends()
@@ -999,29 +992,22 @@ void app_main(void)
     list_tasks();
 
     ESP_LOGI(TAG, "Starting main loop...");
-    while (1)
+    while (true)
     {
-        //
-        // do loop timing housekeeping
-        //
         looptime_housekeeping();
-
-        while (1)
+        do
         {
             received = xTaskNotifyWaitIndexed(NEW_SETPOINT_NOTIFY_IDX, 0, 0, &recv_value, 1);
             current_time = get_time_ms();
-            force_resend = received;
+            force_resend = received == pdTRUE;
             if (received == pdTRUE)
             {
                 process_new_setpoint();
                 break;
-            };
-            if (current_time > reawake_time)
-                break;
-        };
+            }
+        } while (current_time < reawake_time);
 
         reftime = get_time_ms();
-
         // reset lookahead array to be paranoid
         memcpy(min_level_array, &status.lut[0], sizeof(level_t));
 
@@ -1030,27 +1016,21 @@ void app_main(void)
         {
             // process fade tick
             //
-
             tick_sign = fade_remaining > 0 ? 1 : -1;
             lookahead_for_reawake();
-
-            // prepare next loop
-            reawake_time = reftime + tlt_array[status.actual_level];
+            reawake_time = reftime + (uint64_t)tlt_array[status.actual_level];
             idle_sends = 0;
             idle_start_time = reftime;
 
             // tick increment
             int act = status.actual_level;
             int inc = (int)tick_inc_array[status.actual_level] * tick_sign;
-
             // we need to make sure we never overshoot
             status.actual_level = flexclamp(act + inc, act, status.setpoint);
         }
         else
         {
             // we're at setpoint
-            //
-
             // signal end of fade
             gpio_set_level(LED1_GPIO, 0);
 
@@ -1071,14 +1051,7 @@ void app_main(void)
 
         current_level_el = get_level_el(status.actual_level, status, full_power);
 
-        // ensure minimum levels
-        memcpy(level_el_array, &current_level_el, sizeof(level_t));
-        for (int ch = 0; ch < sizeof(level_t); ch++)
-        {
-            if (level_el_array[ch] < min_level_array[ch])
-                level_el_array[ch] = min_level_array[ch];
-        }
-        memcpy(&current_level_el, &level_el_array, sizeof(level_t));
+        ensure_minimum_levels();
 
         // RELAYS
         relay1_lvl_to_send = status.power_on ? current_level_el.relay1 : 0;

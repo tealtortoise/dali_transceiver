@@ -56,5 +56,5 @@ void setup_rgb_led(device_status_t *status)
     ESP_ERROR_CHECK(led_strip_new_rmt_device(&strip_config, &rmt_config, &led_strip));
     led_strip_set_pixel(led_strip, 0, 0, 0, 0);
     led_strip_refresh(led_strip);
-    xTaskCreate(rgb_led_task, "RGBLED", 4096, (void*) status, 1, NULL);
+    xTaskCreate(rgb_led_task, "RGBLED", 2048, (void*) status, 1, NULL);
 }

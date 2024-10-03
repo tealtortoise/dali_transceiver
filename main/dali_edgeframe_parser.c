@@ -250,6 +250,6 @@ QueueHandle_t start_dali_parser(QueueHandle_t edgequeue, dali_parser_config_t co
     // if (sendsuccess != pdTRUE) ESP_LOGE(PTAG, "Dali output queue full");
     ESP_LOGI(TAG, "Starting parsing and logging task");
     xTaskCreate((void *)edgeframe_queue_log_task, "edgeframe_queue_log_task",
-                16000, pass, 15, NULL);
+                4096, pass, 15, NULL);
     return daliframequeue;
 }
